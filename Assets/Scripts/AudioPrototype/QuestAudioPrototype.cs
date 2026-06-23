@@ -16,6 +16,10 @@ namespace TsukiVox.AudioPrototype
         private const float MinimumMonitorVolume = 0f;
         private const float MaximumMonitorVolume = 1.4f;
         private const float HotInputLevel = 0.95f;
+        private const float UnityInputMeterGain = 36f;
+        private const float UnityOutputMeterGain = 24f;
+        private const float NativeMeterGain = 22f;
+        private const float MeterDisplayCurve = 0.62f;
 
         [Header("Signal Chain")]
         [SerializeField] private AudioSource monitorSource;
@@ -36,11 +40,13 @@ namespace TsukiVox.AudioPrototype
         [SerializeField] private Button previousPresetButton;
         [SerializeField] private Button nextPresetButton;
         [SerializeField] private Toggle monitorToggle;
+        [SerializeField] private Toggle nativeToggle;
         [SerializeField] private Toggle safetyToggle;
 
         [Header("Runtime Defaults")]
-        [SerializeField, Range(0f, MaximumMonitorVolume)] private float monitorVolume = 0.9f;
+        [SerializeField, Range(0f, MaximumMonitorVolume)] private float monitorVolume = 1f;
         [SerializeField] private bool safetyLimiterEnabled = true;
+        [SerializeField] private bool preferNativeOboeBackend = false;
         [SerializeField] private bool requestLowLatencyAudio = true;
         [SerializeField] private PrototypePreset initialPreset = PrototypePreset.KtvRoom;
 
@@ -53,10 +59,16 @@ namespace TsukiVox.AudioPrototype
         private string activeDevice;
         private float smoothedInputLevel;
         private float smoothedOutputLevel;
+        private float safetyInputLevel;
+        private float safetyOutputLevel;
         private int lastReadPosition;
         private bool isMonitoring;
         private bool isWaitingForPermission;
         private bool isSafetyReducingGain;
+        private bool monitorOutputEnabled = true;
+        private NativeAudioBackend activeBackend = NativeAudioBackend.UnityMicrophone;
+        private TsukiVoxNativeStats nativeStats;
+        private string backendNote = "Backend not started.";
         private double estimatedMicrophoneLagMs;
         private string audioConfigurationNote = "Audio configuration not requested yet.";
 
@@ -93,10 +105,12 @@ namespace TsukiVox.AudioPrototype
             EnsureAudioListener();
             ConfigureLowLatencyAudio();
             WireUi();
+            EnsureQuestUiInteraction();
             currentPreset = initialPreset;
             ApplyPreset(currentPreset);
             ApplyMonitorVolume(monitorVolume);
             ApplySafetyState(safetyLimiterEnabled);
+            ApplyNativePreference(preferNativeOboeBackend);
             RefreshUi();
         }
 
@@ -171,6 +185,11 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
+            if (TryStartNativeMonitoring())
+            {
+                return;
+            }
+
             if (Microphone.devices.Length == 0)
             {
                 SetStatus("No microphone device is visible to Unity.");
@@ -194,8 +213,10 @@ namespace TsukiVox.AudioPrototype
             {
                 monitorSource.Stop();
                 monitorSource.clip = null;
+                monitorSource.mute = false;
             }
 
+            NativeOboeDryMonitor.Stop();
             if (!string.IsNullOrEmpty(activeDevice) && Microphone.IsRecording(activeDevice))
             {
                 Microphone.End(activeDevice);
@@ -207,8 +228,13 @@ namespace TsukiVox.AudioPrototype
             estimatedMicrophoneLagMs = 0;
             smoothedInputLevel = 0;
             smoothedOutputLevel = 0;
+            safetyInputLevel = 0;
+            safetyOutputLevel = 0;
             isMonitoring = false;
             isSafetyReducingGain = false;
+            activeBackend = NativeAudioBackend.UnityMicrophone;
+            nativeStats = default;
+            backendNote = "Backend stopped.";
             SetStatus("Stopped.");
             RefreshUi();
         }
@@ -261,7 +287,7 @@ namespace TsukiVox.AudioPrototype
 
         private void EnsureAudioListener()
         {
-            if (FindObjectOfType<AudioListener>() != null)
+            if (FindAnyObjectByType<AudioListener>() != null)
             {
                 return;
             }
@@ -275,6 +301,11 @@ namespace TsukiVox.AudioPrototype
 
             var listenerObject = new GameObject("Fallback Audio Listener");
             listenerObject.AddComponent<AudioListener>();
+        }
+
+        private void EnsureQuestUiInteraction()
+        {
+            QuestUiPointer.EnsureScenePointer();
         }
 
         private void ConfigureLowLatencyAudio()
@@ -318,8 +349,14 @@ namespace TsukiVox.AudioPrototype
 
             if (monitorToggle != null)
             {
-                monitorToggle.SetIsOnWithoutNotify(true);
+                monitorToggle.SetIsOnWithoutNotify(monitorOutputEnabled);
                 monitorToggle.onValueChanged.AddListener(SetMonitorOutputEnabled);
+            }
+
+            if (nativeToggle != null)
+            {
+                nativeToggle.SetIsOnWithoutNotify(preferNativeOboeBackend);
+                nativeToggle.onValueChanged.AddListener(ApplyNativePreference);
             }
 
             if (safetyToggle != null)
@@ -392,12 +429,46 @@ namespace TsukiVox.AudioPrototype
 
             monitorSource.clip = microphoneClip;
             monitorSource.loop = true;
+            monitorSource.mute = !monitorOutputEnabled;
             monitorSource.timeSamples = 0;
             monitorSource.Play();
             isMonitoring = true;
+            activeBackend = NativeAudioBackend.UnityMicrophone;
+            backendNote = "Unity Microphone backend.";
             lastReadPosition = Microphone.GetPosition(activeDevice);
-            SetStatus("Monitoring. Keep headset volume low while tuning.");
+            SetStatus(vocalProcessorEnabled
+                ? "Unity monitoring with KTV reverb/echo active. Keep headset volume low while tuning."
+                : "Unity dry monitoring. Keep headset volume low while tuning.");
             RefreshUi();
+        }
+
+        private bool TryStartNativeMonitoring()
+        {
+            if (!preferNativeOboeBackend || !NativeOboeDryMonitor.IsAvailable)
+            {
+                return false;
+            }
+
+            if (NativeOboeDryMonitor.TryStart(monitorVolume, !monitorOutputEnabled, out var error))
+            {
+                if (monitorSource != null)
+                {
+                    monitorSource.Stop();
+                    monitorSource.clip = null;
+                }
+
+                isMonitoring = true;
+                activeBackend = NativeAudioBackend.NativeOboeDryMonitor;
+                backendNote = "Native Oboe Dry backend. Unity reverb and echo are bypassed.";
+                estimatedMicrophoneLagMs = 0;
+                SetStatus("Native Oboe dry monitoring. Use Unity backend for audible KTV reverb.");
+                RefreshUi();
+                return true;
+            }
+
+            backendNote = $"Native Oboe failed: {error}";
+            SetStatus($"{backendNote} Falling back to Unity microphone.");
+            return false;
         }
 
         private void ApplyPreset(PrototypePreset preset)
@@ -408,19 +479,19 @@ namespace TsukiVox.AudioPrototype
             {
                 case PrototypePreset.DryReference:
                     ConfigureFilters(false, 80f, 18000f, AudioReverbPreset.Off, 0f, 1f);
-                    ApplyMonitorVolume(0.1f);
+                    ApplyMonitorVolume(0.35f);
                     break;
                 case PrototypePreset.KtvRoom:
                     ConfigureFilters(true, 80f, 16000f, AudioReverbPreset.Hallway, 64f, 0.82f);
-                    ApplyMonitorVolume(0.9f);
+                    ApplyMonitorVolume(1f);
                     break;
                 case PrototypePreset.StrongKtv:
                     ConfigureFilters(true, 75f, 15000f, AudioReverbPreset.Arena, 92f, 1.1f);
-                    ApplyMonitorVolume(1.05f);
+                    ApplyMonitorVolume(1.15f);
                     break;
                 case PrototypePreset.SafeSmallRoom:
                     ConfigureFilters(true, 100f, 13500f, AudioReverbPreset.Room, 42f, 0.52f);
-                    ApplyMonitorVolume(0.65f);
+                    ApplyMonitorVolume(0.75f);
                     break;
             }
 
@@ -516,18 +587,48 @@ namespace TsukiVox.AudioPrototype
                 monitorSource.volume = monitorVolume;
             }
 
+            if (activeBackend == NativeAudioBackend.NativeOboeDryMonitor)
+            {
+                NativeOboeDryMonitor.SetGain(monitorVolume);
+            }
+
             monitorVolumeSlider?.SetValueWithoutNotify(monitorVolume);
         }
 
         private void SetMonitorOutputEnabled(bool enabled)
         {
+            monitorOutputEnabled = enabled;
             if (monitorSource == null)
             {
+                NativeOboeDryMonitor.SetMuted(!monitorOutputEnabled);
+                SetStatus(enabled ? "Monitor output enabled." : "Monitor output muted.");
                 return;
             }
 
             monitorSource.mute = !enabled;
+            if (activeBackend == NativeAudioBackend.NativeOboeDryMonitor)
+            {
+                NativeOboeDryMonitor.SetMuted(!enabled);
+            }
+
             SetStatus(enabled ? "Monitor output enabled." : "Monitor output muted.");
+        }
+
+        private void ApplyNativePreference(bool enabled)
+        {
+            preferNativeOboeBackend = enabled;
+            nativeToggle?.SetIsOnWithoutNotify(preferNativeOboeBackend);
+
+            if (!isMonitoring)
+            {
+                SetStatus(enabled
+                    ? "Native Oboe selected: dry, lowest-latency AB path without Unity effects."
+                    : "Unity microphone selected: KTV preset effects are active.");
+                return;
+            }
+
+            StopMonitoring();
+            StartMonitoring();
         }
 
         private void ApplySafetyState(bool enabled)
@@ -547,21 +648,46 @@ namespace TsukiVox.AudioPrototype
                 if (position >= SpectrumSize)
                 {
                     microphoneClip.GetData(microphoneSamples, position - SpectrumSize);
-                    smoothedInputLevel = Mathf.Lerp(smoothedInputLevel, CalculateRms(microphoneSamples) * 10f, 0.22f);
+                    var inputLevel = CalculateRms(microphoneSamples);
+                    safetyInputLevel = Mathf.Lerp(safetyInputLevel, inputLevel, 0.22f);
+                    smoothedInputLevel = Mathf.Lerp(
+                        smoothedInputLevel,
+                        ToMeterDisplayLevel(inputLevel, UnityInputMeterGain),
+                        0.22f);
                 }
             }
             else
             {
-                smoothedInputLevel = Mathf.Lerp(smoothedInputLevel, 0f, 0.12f);
+                var inputLevel = GetNativeInputLevel();
+                safetyInputLevel = Mathf.Lerp(safetyInputLevel, inputLevel, 0.22f);
+                smoothedInputLevel = Mathf.Lerp(
+                    smoothedInputLevel,
+                    ToMeterDisplayLevel(inputLevel, NativeMeterGain),
+                    0.22f);
             }
 
-            if (monitorSource != null && monitorSource.isPlaying)
+            if (activeBackend == NativeAudioBackend.NativeOboeDryMonitor)
+            {
+                var outputLevel = GetNativeOutputLevel();
+                safetyOutputLevel = Mathf.Lerp(safetyOutputLevel, outputLevel, 0.22f);
+                smoothedOutputLevel = Mathf.Lerp(
+                    smoothedOutputLevel,
+                    ToMeterDisplayLevel(outputLevel, NativeMeterGain),
+                    0.22f);
+            }
+            else if (monitorSource != null && monitorSource.isPlaying)
             {
                 monitorSource.GetOutputData(outputSamples, 0);
-                smoothedOutputLevel = Mathf.Lerp(smoothedOutputLevel, CalculateRms(outputSamples) * 16f, 0.22f);
+                var outputLevel = CalculateRms(outputSamples);
+                safetyOutputLevel = Mathf.Lerp(safetyOutputLevel, outputLevel, 0.22f);
+                smoothedOutputLevel = Mathf.Lerp(
+                    smoothedOutputLevel,
+                    ToMeterDisplayLevel(outputLevel, UnityOutputMeterGain),
+                    0.22f);
             }
             else
             {
+                safetyOutputLevel = Mathf.Lerp(safetyOutputLevel, 0f, 0.12f);
                 smoothedOutputLevel = Mathf.Lerp(smoothedOutputLevel, 0f, 0.12f);
             }
 
@@ -571,6 +697,13 @@ namespace TsukiVox.AudioPrototype
 
         private void UpdateEstimatedLag()
         {
+            if (activeBackend == NativeAudioBackend.NativeOboeDryMonitor)
+            {
+                estimatedMicrophoneLagMs = 0;
+                NativeOboeDryMonitor.TryGetStats(out nativeStats);
+                return;
+            }
+
             if (!isMonitoring || string.IsNullOrEmpty(activeDevice) || microphoneClip == null)
             {
                 estimatedMicrophoneLagMs = 0;
@@ -592,12 +725,23 @@ namespace TsukiVox.AudioPrototype
 
         private void ApplySafetyLimiter()
         {
-            if (!safetyLimiterEnabled || monitorSource == null)
+            if (!safetyLimiterEnabled)
             {
                 return;
             }
 
-            var hot = smoothedInputLevel > HotInputLevel || smoothedOutputLevel > HotInputLevel;
+            if (activeBackend == NativeAudioBackend.NativeOboeDryMonitor)
+            {
+                ApplyNativeSafetyLimiter();
+                return;
+            }
+
+            if (monitorSource == null)
+            {
+                return;
+            }
+
+            var hot = safetyInputLevel > HotInputLevel || safetyOutputLevel > HotInputLevel;
             if (hot)
             {
                 isSafetyReducingGain = true;
@@ -605,7 +749,23 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
-            if (isSafetyReducingGain && smoothedInputLevel < 0.45f && smoothedOutputLevel < 0.45f)
+            if (isSafetyReducingGain && safetyInputLevel < 0.45f && safetyOutputLevel < 0.45f)
+            {
+                isSafetyReducingGain = false;
+            }
+        }
+
+        private void ApplyNativeSafetyLimiter()
+        {
+            var hot = safetyInputLevel > HotInputLevel || safetyOutputLevel > HotInputLevel;
+            if (hot)
+            {
+                isSafetyReducingGain = true;
+                ApplyMonitorVolume(Mathf.Max(0.04f, monitorVolume * 0.92f));
+                return;
+            }
+
+            if (isSafetyReducingGain && safetyInputLevel < 0.45f && safetyOutputLevel < 0.45f)
             {
                 isSafetyReducingGain = false;
             }
@@ -631,6 +791,11 @@ namespace TsukiVox.AudioPrototype
             if (safetyToggle != null)
             {
                 safetyToggle.SetIsOnWithoutNotify(safetyLimiterEnabled);
+            }
+
+            if (nativeToggle != null)
+            {
+                nativeToggle.SetIsOnWithoutNotify(preferNativeOboeBackend);
             }
         }
 
@@ -658,7 +823,21 @@ namespace TsukiVox.AudioPrototype
             metricsBuilder.Append(" Hz  Device ");
             metricsBuilder.Append(string.IsNullOrEmpty(activeDevice) ? "none" : activeDevice);
             metricsBuilder.Append("\nProcessor ");
-            metricsBuilder.Append(vocalProcessorEnabled ? "gate/comp/limiter" : "bypassed");
+            metricsBuilder.Append(activeBackend == NativeAudioBackend.NativeOboeDryMonitor
+                ? "native dry soft limiter"
+                : (vocalProcessorEnabled ? "gate/comp/limiter + reverb/echo" : "bypassed"));
+            metricsBuilder.Append("\nBackend ");
+            metricsBuilder.Append(activeBackend == NativeAudioBackend.NativeOboeDryMonitor ? "Native Oboe Dry" : "Unity Microphone");
+
+            if (activeBackend == NativeAudioBackend.NativeOboeDryMonitor)
+            {
+                AppendNativeMetrics();
+            }
+            else if (!string.IsNullOrEmpty(backendNote))
+            {
+                metricsBuilder.Append("\n");
+                metricsBuilder.Append(backendNote);
+            }
 
             if (isSafetyReducingGain)
             {
@@ -666,6 +845,41 @@ namespace TsukiVox.AudioPrototype
             }
 
             metricsText.text = metricsBuilder.ToString();
+        }
+
+        private void AppendNativeMetrics()
+        {
+            NativeOboeDryMonitor.TryGetStats(out nativeStats);
+            metricsBuilder.Append("  ");
+            metricsBuilder.Append(nativeStats.IsExclusive ? "Exclusive" : "Shared");
+            metricsBuilder.Append("\nBurst ");
+            metricsBuilder.Append(nativeStats.framesPerBurst);
+            metricsBuilder.Append("  Buffers in/out ");
+            metricsBuilder.Append(nativeStats.inputBufferFrames);
+            metricsBuilder.Append("/");
+            metricsBuilder.Append(nativeStats.outputBufferFrames);
+            metricsBuilder.Append("  XRuns ");
+            metricsBuilder.Append(nativeStats.inputXRunCount);
+            metricsBuilder.Append("/");
+            metricsBuilder.Append(nativeStats.outputXRunCount);
+            metricsBuilder.Append("\nCallbacks ");
+            metricsBuilder.Append(nativeStats.callbackCount);
+        }
+
+        private float GetNativeInputLevel()
+        {
+            return activeBackend == NativeAudioBackend.NativeOboeDryMonitor &&
+                   NativeOboeDryMonitor.TryGetStats(out nativeStats)
+                ? Mathf.Clamp01(nativeStats.inputLevel)
+                : 0f;
+        }
+
+        private float GetNativeOutputLevel()
+        {
+            return activeBackend == NativeAudioBackend.NativeOboeDryMonitor &&
+                   NativeOboeDryMonitor.TryGetStats(out nativeStats)
+                ? Mathf.Clamp01(nativeStats.outputLevel)
+                : 0f;
         }
 
         private static float CalculateRms(float[] samples)
@@ -677,6 +891,12 @@ namespace TsukiVox.AudioPrototype
             }
 
             return Mathf.Sqrt((float)(sum / samples.Length));
+        }
+
+        private static float ToMeterDisplayLevel(float linearLevel, float displayGain)
+        {
+            var scaled = Mathf.Clamp01(Mathf.Max(0f, linearLevel) * displayGain);
+            return Mathf.Pow(scaled, MeterDisplayCurve);
         }
 
         private float CalculateCompressorGain(float envelope)

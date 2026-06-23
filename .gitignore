@@ -26,3 +26,6 @@ unity-create.log
 unity-create-scene.log
 unity-verify-after-manifest-fix.log
 .utmp/
+Native/TsukiVoxOboeMonitor/build/
+Native/TsukiVoxOboeMonitor/third_party/oboe/
+Native/TsukiVoxOboeMonitor/third_party/*.zip

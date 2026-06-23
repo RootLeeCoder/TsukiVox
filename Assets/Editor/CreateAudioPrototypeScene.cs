@@ -3,6 +3,7 @@ using TsukiVox.AudioPrototype;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace TsukiVox.AudioPrototype.Editor
@@ -67,14 +68,17 @@ namespace TsukiVox.AudioPrototype.Editor
             var volumeSlider = CreateSlider(panel.transform, "Monitor Volume", new Vector2(0f, -138f));
             volumeSlider.minValue = 0f;
             volumeSlider.maxValue = 1.4f;
-            volumeSlider.value = 0.9f;
+            volumeSlider.value = 1f;
 
             var startButton = CreateButton(panel.transform, "Start Mic", new Vector2(-270f, -214f));
             var stopButton = CreateButton(panel.transform, "Stop", new Vector2(-90f, -214f));
             var previousPreset = CreateButton(panel.transform, "Prev", new Vector2(90f, -214f));
             var nextPreset = CreateButton(panel.transform, "Next", new Vector2(270f, -214f));
-            var monitorToggle = CreateToggle(panel.transform, "Monitor", new Vector2(-135f, -276f), true);
-            var safetyToggle = CreateToggle(panel.transform, "Safety", new Vector2(135f, -276f), true);
+            var monitorToggle = CreateToggle(panel.transform, "Monitor", new Vector2(-220f, -276f), true);
+            var nativeToggle = CreateToggle(panel.transform, "Native", new Vector2(0f, -276f), false);
+            var safetyToggle = CreateToggle(panel.transform, "Safety", new Vector2(220f, -276f), true);
+            CreateEventSystem();
+            CreateQuestPointer(canvasObject);
 
             var so = new SerializedObject(prototype);
             so.FindProperty("monitorSource").objectReferenceValue = source;
@@ -93,7 +97,10 @@ namespace TsukiVox.AudioPrototype.Editor
             so.FindProperty("previousPresetButton").objectReferenceValue = previousPreset;
             so.FindProperty("nextPresetButton").objectReferenceValue = nextPreset;
             so.FindProperty("monitorToggle").objectReferenceValue = monitorToggle;
+            so.FindProperty("nativeToggle").objectReferenceValue = nativeToggle;
             so.FindProperty("safetyToggle").objectReferenceValue = safetyToggle;
+            so.FindProperty("monitorVolume").floatValue = 1f;
+            so.FindProperty("preferNativeOboeBackend").boolValue = false;
             so.ApplyModifiedPropertiesWithoutUndo();
 
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -127,7 +134,6 @@ namespace TsukiVox.AudioPrototype.Editor
             var canvasObject = new GameObject("Prototype Canvas");
             var canvas = canvasObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.worldCamera = camera;
             canvas.sortingOrder = 10;
             var scaler = canvasObject.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -137,6 +143,7 @@ namespace TsukiVox.AudioPrototype.Editor
             canvasObject.AddComponent<GraphicRaycaster>();
             var rect = canvasObject.GetComponent<RectTransform>();
             rect.sizeDelta = new Vector2(1280f, 720f);
+            rect.localScale = Vector3.one;
             return canvasObject;
         }
 
@@ -222,6 +229,7 @@ namespace TsukiVox.AudioPrototype.Editor
             image.color = new Color(0.1f, 0.16f, 0.18f);
             var button = buttonObject.AddComponent<Button>();
             button.targetGraphic = image;
+            button.colors = CreateSelectableColors();
 
             var text = CreateText(buttonObject.transform, label, 16, FontStyle.Bold);
             text.rectTransform.sizeDelta = rect.sizeDelta;
@@ -262,7 +270,39 @@ namespace TsukiVox.AudioPrototype.Editor
             toggle.targetGraphic = backgroundImage;
             toggle.graphic = checkmarkImage;
             toggle.isOn = value;
+            toggle.colors = CreateSelectableColors();
             return toggle;
+        }
+
+        private static void CreateEventSystem()
+        {
+            var eventSystemObject = new GameObject("EventSystem");
+            eventSystemObject.AddComponent<EventSystem>();
+            eventSystemObject.AddComponent<StandaloneInputModule>();
+        }
+
+        private static void CreateQuestPointer(GameObject canvasObject)
+        {
+            var pointerObject = new GameObject("Quest UI Pointer");
+            var pointer = pointerObject.AddComponent<QuestUiPointer>();
+            var so = new SerializedObject(pointer);
+            so.FindProperty("targetCanvas").objectReferenceValue = canvasObject.GetComponent<Canvas>();
+            so.FindProperty("raycaster").objectReferenceValue = canvasObject.GetComponent<GraphicRaycaster>();
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static ColorBlock CreateSelectableColors()
+        {
+            return new ColorBlock
+            {
+                normalColor = new Color(0.1f, 0.16f, 0.18f),
+                highlightedColor = new Color(0.16f, 0.3f, 0.32f),
+                pressedColor = new Color(0.28f, 0.46f, 0.42f),
+                selectedColor = new Color(0.13f, 0.22f, 0.24f),
+                disabledColor = new Color(0.08f, 0.1f, 0.11f, 0.55f),
+                colorMultiplier = 1f,
+                fadeDuration = 0.08f,
+            };
         }
 
         private static void AddSceneToBuildSettings(string path)
