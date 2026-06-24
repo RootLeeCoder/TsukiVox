@@ -1,41 +1,94 @@
 # TsukiVox Unity 路线图
 
-## 当前方向
+## 当前定位
 
-TsukiVox 正从 WebXR 原型迁移到 Unity 原生 Quest 应用。迁移原因是 Quest Browser / Web Audio 在实时人声返听和 KTV 混响上延迟不可控，无法稳定支撑演唱体验。
+TsukiVox 正从已经较成熟的 WebXR 原型迁移到 Unity 原生 Quest 应用。迁移原因不是产品方向变化，而是 Quest Browser / Web Audio 在实时人声返听和 KTV 混响上的延迟不可控，无法稳定支撑演唱体验。
 
-短期目标只优先保证 Quest 3。后续可以再考虑兼容其他 VR 设备，但现阶段不要让跨设备目标分散 Quest 3 音频验证工作。
+当前目标是做一个面向 Quest 3 的单人原生 K 歌客户端：
 
-内容和点歌链路可以继续复用 Web 版本里的 PC 端 helper。也就是说，Bilibili / YouTube 下载、本地视频托管、播放队列同步先仍然由电脑负责；Quest 原生 App 专注做好沉浸式 KTV 客户端。
+- 收音使用 Quest 3 内置麦克风。
+- Quest 手柄只承担视觉和交互角色，例如右手麦克风、左手荧光棒、控制指针。
+- 多人房间、账号、云端歌单和跨设备同步都属于远期计划，现阶段完全不纳入设计压力。
+- PC 端继续负责内容获取和点歌服务，Unity Quest App 专注低延迟音频、视频播放、VR 房间和头显内交互。
+
+WebXR 项目不是被废弃，而是作为迁移源。接下来要复用它已经验证过的内容管线、播放队列契约、交互判断和视觉体验，同时重做那些被浏览器平台限制影响的实现。
+
+## 迁移原则
+
+- 优先保护已经在 Quest 3 上主观满意的低延迟返听，不因为接入视频、UI 或房间表现而破坏音频链路。
+- 先迁移“能唱一首歌”的核心闭环，再恢复 WebXR 版本里的完整包厢表现。
+- 复用 Web 项目的 PC helper 和播放队列服务，不在 Quest App 内实现 Bilibili / YouTube 下载器。
+- 迁移体验和协议，不机械搬运 Three.js、WebXR、DOM、CSS 或 Web Audio 代码。
+- Unity App 先用简单稳定的轮询 / HTTP 控制接入 helper，跑稳后再考虑 SSE、长连接或更复杂同步。
+- 所有 Quest 3 音频相关变更都需要真机验证：麦克风权限、输入电平、返听延迟、混响舒适度、视频播放时的音频共存、削波和啸叫风险。
+
+## WebXR 成果迁移分层
+
+### 直接复用或保持服务边界
+
+- PC helper 内容管线：`helper-runtime/`、`scripts/bilibili-helper.mjs`、`you-get`、`yt-dlp`、`imageio-ffmpeg`、`downloads/` 文件服务。
+- 播放队列同步服务：`scripts/playlist-sync.mjs` 的队列状态、控制命令和下载调度。
+- 播放队列 API 契约：`queue`、`currentIndex`、`playback`、`command`、`updatedAt`，以及 `play`、`pause`、`prev`、`next`、`replay`、`remove`。
+- 输入来源规则：直链 `.mp4` / `.webm`、Bilibili BV/URL、YouTube URL/ID 的解析策略继续留在 PC 端。
+- 产品边界和风险说明：单人本地原型、平台下载不保证成功、Cookie 和版权风险、本地下载文件不提交。
+
+### 翻译成 Unity 实现
+
+- 播放队列客户端：从 TypeScript `playlistClient.ts` 翻译为 C# `PlaylistClient`，通过局域网连接 PC helper。
+- 视频大屏：从 `HTMLVideoElement + Three.js VideoTexture` 翻译为 Unity `VideoPlayer + RenderTexture`。
+- 视频适配规则：保留安全显示区和按视频宽高比缩放的体验，但用 Unity mesh / material / RawImage 实现。
+- 播放状态机：保留“当前歌曲未就绪、下载中、错误、ready、播放命令同步、视频结束后下一首”的行为。
+- 房间体验：保留 KTV 包厢、大屏、沙发起点、茶几、墙面灯带、屏幕电平条等空间判断，用 Unity prefab 或脚本重建。
+- 手柄角色：右手优先麦克风，左手荧光棒，grip 开关指针，左手 X/Y 切换荧光棒颜色。
+- 演唱反馈：麦克风输入驱动灯光、电平、麦克风光环和荧光棒亮度。
+
+### 应该重做
+
+- 音频链路：Web Audio 只作为参数参考。Unity 版本以 Unity `Microphone` / `AudioSource` / 原生插件路线为准。
+- VR 交互层：WebXR session、Three.js controller、raycaster、`VRButton` 不迁移，Unity 使用 OpenXR / Meta XR / 自有轻量交互层。
+- UI：DOM、CSS、lucide 图标体系不迁移，Unity 里重做头显内可读的世界空间 UI。
+- 浏览器 workaround：HTTPS、自签证书、自动播放手势、Quest Browser 限制等不再作为原生 App 的核心问题处理。
+- 桌面预览面板：短期不在 Unity 中复刻，PC 侧继续使用 Web 项目作为点歌和下载入口。
+
+### 暂缓迁移
+
+- 持久歌单、批量内容管理、缓存清理 UI。
+- 歌词导入和歌词偏移。
+- 更多房间主题和复杂灯光模式。
+- 录音回放、评分、练歌模式。
+- 多人包厢和合唱。
+
+这些功能仍然有价值，但应该排在 Unity 客户端成功接入 PC helper、稳定播放视频并保持低延迟返听之后。
 
 ## 当前状态
 
-状态：Quest 3 音频验证原型已经跑通。
+状态：Unity Quest 3 音频验证原型已经跑通，核心迁移方向已经明确。
 
 已完成：
 
-- 使用 Unity `6000.5.0f1` 创建 Unity 工程。
-- 安装 Android Build Support / OpenJDK，并完成 Quest 3 真机构建运行。
-- 创建最小音频验证场景：`Assets/Scenes/AudioPrototype.unity`。
+- 使用 Unity `6000.5.0f1` 创建工程。
+- 完成 Quest 3 真机构建运行。
+- 创建音频验证场景：`Assets/Scenes/AudioPrototype.unity`。
 - Quest 麦克风权限申请可用。
-- 麦克风输入电平在 Quest 3 真机上可响应。
-- 音频输出电平在 Quest 3 真机上可响应。
-- 加入 `AudioListener` 后实时返听链路打通。
-- KTV 风格测试预设已经能明显听到混响。
+- 麦克风输入电平和输出电平在 Quest 3 真机上可响应。
+- Unity `Microphone` 到 `AudioSource` 的实时返听链路已经打通。
+- KTV 风格测试预设可以明显听到混响。
+- 加入基础安全降增益、输入/输出电平显示、DSP buffer 和麦克风延迟估算。
+- 增加 Unity backend 与 Native Oboe dry backend 的 A/B 路线雏形。
 - 修复自定义 Android Manifest 导致 APK 能安装但无法启动的问题，改回由 Unity 生成默认启动 Activity。
 
 已观察到的问题：
 
-- Unity 内置 `Microphone` 可以在 Quest 3 上形成可工作的实时监听链路。
-- 当前效果链参数为了验证混响存在而刻意偏明显，还不是最终舒适演唱参数。
-- 当前 UI 仍是调试面板，不是正式 VR 界面。
-- 真实演唱延迟仍需继续结构化测试和主观评估。
+- 当前音效参数仍偏验证性质，不是最终舒适演唱参数。
+- 当前 UI 仍是调试面板，不是正式 VR 头显内界面。
+- Oboe dry backend 可作为低延迟参考路径，但当前 KTV 混响和效果链仍主要在 Unity backend 中验证。
+- 真实演唱体验需要在“视频播放 + 返听 + 混响 + 头显音量”的组合场景里继续评估。
 
-## V0.1 音频验证 Spike
+## V0.1 Quest 音频验证 Spike
 
-目标：判断 Unity 内置音频栈是否足以支撑 Quest 3 上的 KTV 演唱。
+目标：判断 Unity 原生路线是否足以支撑 Quest 3 上的实时演唱返听。
 
-状态：进行中，核心链路已经验证可用。
+状态：核心通过，继续调参。
 
 范围：
 
@@ -43,25 +96,130 @@ TsukiVox 正从 WebXR 原型迁移到 Unity 原生 Quest 应用。迁移原因�
 - 验证实时人声返听。
 - 验证明显可听的混响 / echo 效果。
 - 显示输入电平、输出电平、DSP buffer 估算和麦克风延迟估算。
-- 提供 Dry、KTV Room、Strong KTV 和较安全的小房间预设。
+- 提供 Dry、KTV Room、Strong KTV 和 Safe Small Room 预设。
 - 保留音量安全提示和基础增益保护。
 
-下一步：
+剩余工作：
 
 - 把 KTV Room 从“明显有混响”调到“能唱、舒服、不过分”。
 - 增加干声 / 湿声 A/B 对比按钮。
-- 把预设参数迁移到 ScriptableObject 或配置资源，不再硬编码。
-- 记录主观延迟：可唱、略别扭、明显拖拍或不可唱。
+- 把预设参数迁移到 ScriptableObject 或配置资源，减少硬编码。
+- 记录主观延迟标签：可唱、略别扭、明显拖拍、不可唱。
 - 分别测试 Quest 内置扬声器、有线耳机、USB-C 音频设备；蓝牙音频如延迟过高，应明确不推荐。
 
-决策门槛：
+验收标准：
 
-- 如果 Unity 内置 `Microphone` 延迟可接受，继续基于当前音频栈推进。
-- 如果延迟仍明显过高，保留当前场景作为测试壳，把核心音频路径替换为 Android Oboe / AAudio 原生插件。
+- Quest 3 内置麦克风可稳定授权和启动。
+- 用户能跟着唱而不被明显 slapback 延迟干扰。
+- 正常说话和大声唱时电平健康，不容易立即削波。
+- 中等头显音量下不应立即啸叫。
 
-## V0.2 音频引擎打磨
+## V0.2 PC Helper 兼容客户端
 
-目标：把当前音效链路调到更接近真实 KTV / SingRoom 的演唱体验。
+目标：让 Unity App 接上 WebXR 项目的内容管线和播放队列服务。
+
+这是下一步优先级最高的迁移切片。完成后，Unity 不再只是独立音频原型，而是能读到旧项目里已经验证过的点歌系统。
+
+范围：
+
+- 新增 Unity C# `PlaylistClient`，通过 HTTP 读取 PC 端 `/api/playlist/state`。
+- 支持配置 helper / playlist 服务地址，例如 `http://192.168.x.x:5175`。
+- 解析 `PlaylistState`、`PlaylistItem` 和 `PlaylistCommand`。
+- 显示 helper 连接状态、当前歌曲、下载中、错误和 ready 状态。
+- 支持从 Unity 向 `/api/playlist/control` 发送 `play`、`pause`、`prev`、`next`、`replay`。
+- 第一版使用简单轮询，避免先处理 SSE 在 Unity/Quest 上的细节。
+
+验收标准：
+
+- PC 端运行 Web 项目的 helper / playlist 服务。
+- 用户在 PC 端添加 Bilibili、YouTube 或直链视频后，Unity App 能看到队列状态。
+- 当前歌曲下载完成后，Unity App 能读到 `playableUrl`。
+- Unity App 发送的基础控制能同步回 PC playlist 服务。
+- helper 连接失败时，Unity UI 有清楚提示且可恢复。
+
+## V0.3 Unity 视频大屏与播放同步
+
+目标：在 Unity 中复现 WebXR 版本最核心的大屏播放能力。
+
+范围：
+
+- 使用 Unity `VideoPlayer + RenderTexture` 创建 KTV 大屏。
+- 支持播放一个已知 URL 或 PC helper 暴露的 `/downloads/...` 文件。
+- 根据视频宽高比适配大屏安全显示区。
+- 从 `PlaylistClient` 获取当前 ready item 并加载 `playableUrl`。
+- 根据 playlist 的 `playback` 和 `command` 同步播放、暂停、重播、上一首、下一首。
+- 视频结束后向 playlist 服务发送 `next`。
+- 验证视频音频与麦克风返听、混响共存。
+
+验收标准：
+
+- Quest 3 上可稳定播放 PC helper 提供的 MP4。
+- 视频播放时仍能开启麦克风返听和 KTV Room 预设。
+- 播放、暂停、重播、下一首的状态在 PC 和 Quest App 之间可同步。
+- 当前歌曲下载中或错误时，Quest UI 能显示正确状态。
+
+## V0.4 原生 Quest App 壳和头显内 UI
+
+目标：把音频和视频验证整合成真正的 Quest App 基础壳。
+
+范围：
+
+- 配置 OpenXR / Meta XR 基础运行环境。
+- 加入 XR camera rig。
+- 加入控制器射线或近距离 UI 交互。
+- 把当前调试 Canvas 替换为头显内可读的世界空间控制面板。
+- 控制面板保留：helper 连接、当前歌曲、播放控制、麦克风状态、预设切换、监听音量、干湿比、安全状态。
+- 固化 Quest 3 构建设置：ARM64、包名、应用名、Android min SDK、麦克风权限。
+
+验收标准：
+
+- App 能稳定从 Quest 未知来源启动。
+- UI 在头显里可读、可点、不遮挡主要画面。
+- 用户可以在头显里操作播放和音频预设，不依赖 Unity 编辑器。
+- 重新安装后麦克风权限和音频启动流程稳定。
+
+## V0.5 最小 VR KTV 房间
+
+目标：重建 WebXR 版本里最核心的 KTV 包厢体验，但先控制视觉复杂度。
+
+范围：
+
+- 创建简化 KTV 房间、大屏、沙发起点和茶几。
+- 用户进入后默认位于适合看大屏和唱歌的位置。
+- 大屏播放来自 PC helper 的当前歌曲。
+- 房间灯光和屏幕两侧电平根据麦克风输入响应。
+- 保留调试面板入口，但主要体验在 VR 空间内完成。
+
+验收标准：
+
+- 用户戴上 Quest 3 后进入一个可唱歌的小房间。
+- 视频在大屏上播放，音频返听和混响可用。
+- 房间灯光能随演唱电平变化。
+- 性能在 Quest 3 上稳定，无明显掉帧或视频卡顿。
+
+## V0.6 手柄麦克风、荧光棒和 VR 控制
+
+目标：迁移 WebXR 原型中已经验证过的手柄角色体验。
+
+范围：
+
+- 右手手柄显示为虚拟麦克风。
+- 左手手柄显示为荧光棒。
+- 麦克风和荧光棒模型使用 Unity 原生 mesh / prefab 重建。
+- 荧光棒保留多色切换，左手 X/Y 或等价按键切换颜色。
+- grip 开关控制指针，用于点击 VR 内播放控制。
+- 麦克风光环、荧光棒亮度和房间灯光响应输入电平。
+
+验收标准：
+
+- 手柄角色分配符合预期：右手麦克风，左手荧光棒。
+- 没有右手或左手时有合理 fallback。
+- VR 内播放控制命中稳定。
+- 荧光棒和麦克风反馈不会遮挡唱歌视线。
+
+## V0.7 音频引擎打磨和安全
+
+目标：把可用的音频链路打磨到更接近真实 KTV / SingRoom 的演唱体验。
 
 范围：
 
@@ -75,94 +233,18 @@ TsukiVox 正从 WebXR 原型迁移到 Unity 原生 Quest 应用。迁移原因�
 
 验收标准：
 
-- 正常说话和唱歌时电平健康。
 - KTV Room 预设明显但不过分。
 - Strong KTV 预设可用于压力测试。
-- Quest 中等音量下不应立即啸叫。
-- 用户能跟着唱而不被明显 slapback 延迟干扰；否则进入 Oboe 原生音频路线。
+- 正常演唱时不频繁触发安全降增益。
+- 用户能完成一首歌，不被明显延迟、爆音、啸叫或刺耳混响打断。
 
-## V0.3 原生 Quest App 基础
-
-目标：把音频原型扩展成一个真正的 Quest App 壳。
-
-范围：
-
-- 配置 OpenXR / Meta XR。
-- 加入简单 XR camera rig。
-- 加入控制器射线交互。
-- 把扁平调试面板替换为头显中可读的控制面板。
-- 控制面板保留：麦克风状态、预设切换、干湿比、音量、延迟、安全状态。
-- 固化 Quest 3 构建设置：ARM64、包名、应用名、Android min SDK、权限。
-
-验收标准：
-
-- App 能稳定从 Quest 未知来源启动。
-- UI 可读、不反、不太远。
-- 用户可以在头显里操作预设，不依赖 Unity 编辑器。
-- 重新安装后麦克风权限和音频启动流程稳定。
-
-## V0.4 视频播放原型
-
-目标：在 Unity 中复现 KTV 大屏视频播放核心体验。
-
-范围：
-
-- 使用 Unity `VideoPlayer` + `RenderTexture`。
-- 播放随 App 打包的本地 MP4，或加载一个已知 URL。
-- 在简化房间中显示大屏。
-- 验证 Quest 3 解码性能和音画同步。
-- 增加播放、暂停、重播、下一首等基础控制。
-
-验收标准：
-
-- MP4 在 Quest 3 上稳定播放。
-- 视频音频和人声返听可以共存。
-- 播放视频时仍然能控制人声监听音量和混响。
-
-## V0.5 PC Helper 集成
-
-目标：复用 Web 原型已有的 PC 端内容管线，不在 Quest 内重做下载器。
-
-范围：
-
-- 继续由 PC 端 Node/Python helper 负责 Bilibili / YouTube 下载和本地文件服务。
-- Unity App 通过局域网连接 PC helper。
-- 读取现有播放队列服务，或实现兼容 API。
-- 从 `/downloads/...` 加载已下载视频。
-- 在 Quest UI 里显示 helper 连接状态。
-
-验收标准：
-
-- PC 端可以添加和下载歌曲。
-- Quest App 可以看到当前歌曲并播放。
-- 基础控制同步：播放、暂停、下一首、重播。
-- helper 连接失败时，Quest UI 有清楚提示且可恢复。
-
-## V0.6 最小 VR KTV 房间
-
-目标：只重建 WebXR 版本里最核心的 KTV 房间体验。
-
-范围：
-
-- 简化 KTV 房间、大屏、沙发起点、麦克风道具、荧光棒道具。
-- Quest 控制器角色：右手麦克风，左手荧光棒。
-- 房间灯光根据麦克风电平响应。
-- 可读的 VR 内控制面板。
-
-验收标准：
-
-- 用户进入 Quest 3 上的 KTV 小房间。
-- 视频在大屏上播放。
-- 房间内麦克风返听和混响可用。
-- 灯光和道具会响应演唱电平。
-
-## V0.7 歌词和演唱辅助
+## V0.8 歌词和演唱辅助
 
 目标：让体验更接近真正 KTV。
 
 范围：
 
-- 导入 `.lrc` 歌词。
+- 支持导入或关联 `.lrc` 歌词。
 - 在大屏下方或前方显示当前行和下一行歌词。
 - 支持歌词时间偏移调整。
 - 播放队列条目可关联歌词文件。
@@ -174,13 +256,34 @@ TsukiVox 正从 WebXR 原型迁移到 Unity 原生 Quest 应用。迁移原因�
 - 用户可以在头显中调整歌词偏移。
 - 没有歌词时不影响正常视频播放。
 
-## V0.8 音频升级路线：Oboe / AAudio
+## V0.9 歌单持久化与内容管理
 
-目标：如果 Unity 内置音频不够低延迟，则进入更接近专业 KTV / 声卡级别的原生音频方案。
+目标：让 TsukiVox 可以作为可重复使用的个人 KTV 工具。
+
+范围：
+
+- 继续优先在 PC helper 侧实现持久歌单，而不是把内容库塞进 Quest App。
+- 增加本地持久歌单文件，例如 `playlist.json` 或 `data/playlists/*.json`。
+- 保存歌曲标题、来源类型、原始链接、BVID/YouTube ID、本地下载文件、下载时间和可选封面。
+- 支持启动时恢复上次歌单。
+- 支持清理失效下载文件和孤立下载文件。
+- 支持重新下载、替换源、删除歌曲和批量导入。
+
+验收标准：
+
+- 重启 PC helper 后歌单不丢失。
+- Quest App 连接后能看到恢复后的歌单和当前歌曲。
+- 下载文件堆积有基本清理方式。
+
+## 音频升级分支：Oboe / AAudio
+
+目标：如果 Unity 内置音频在完整 K 歌场景中不够稳定或延迟回退，则切换关键音频路径。
 
 触发条件：
 
-- 即使调低 DSP buffer、优化预设后，Unity `Microphone` 返听仍明显拖拍。
+- 接入视频、XR UI 和房间后，Unity `Microphone` 返听重新变得明显拖拍。
+- Unity 音频链路无法在 Quest 3 上稳定避免过高 buffer 或不可接受延迟。
+- 需要更接近专业声卡 / SingRoom 的低延迟 callback 控制。
 
 范围：
 
@@ -196,25 +299,6 @@ TsukiVox 正从 WebXR 原型迁移到 Unity 原生 Quest 应用。迁移原因�
 - 主观演唱体验更接近 SingRoom / KTV。
 - App 暂停、恢复、权限变化后音频仍稳定。
 
-## V0.9 打磨和安全
-
-目标：让 App 能稳定反复个人使用。
-
-范围：
-
-- 持久化设置。
-- 启动音量安全保护。
-- 反馈检测和自动降增益。
-- 更合理的预设名称和默认值。
-- Quest 3 性能分析。
-- 增加麦克风、helper、视频问题的排障界面。
-
-验收标准：
-
-- 不依赖 Unity 编辑器也能反复使用。
-- 常见错误清晰可见、可恢复。
-- 默认音频足够有 KTV 味，但不危险、不刺耳。
-
 ## V1.0 个人 Quest KTV MVP
 
 目标：交付一个稳定的个人 VR KTV App。
@@ -222,18 +306,33 @@ TsukiVox 正从 WebXR 原型迁移到 Unity 原生 Quest 应用。迁移原因�
 预期能力：
 
 - Quest 3 原生 App。
-- KTV 房间和视频大屏。
 - PC helper 点歌、下载和播放队列控制。
+- KTV 房间和视频大屏。
 - 实时人声返听和调好的 KTV 混响。
 - 控制器麦克风 / 荧光棒交互。
 - 基础歌词显示。
 - 安全增益和反馈保护。
 - 清晰的安装、构建、连接和排障文档。
 
+## 当前优先级
+
+下一步不优先重建漂亮房间，也不优先做歌词或持久歌单。
+
+当前最重要的切片是：
+
+1. 保持现有 Quest 3 低延迟返听链路可用。
+2. 接入 WebXR 项目的 PC helper / playlist API。
+3. 在 Unity 中播放 helper 暴露的当前歌曲视频。
+4. 验证视频播放、人声返听和混响可以同时稳定工作。
+5. 再开始重建 VR 包厢、手柄麦克风、荧光棒和头显内控制。
+
+完成这个切片后，TsukiVox Unity 才真正从“音频验证原型”进入“WebXR 成果迁移中的 Quest K 歌客户端”阶段。
+
 ## 待决策问题
 
-- Unity 内置麦克风链路调优后是否足够可唱，还是必须上 Oboe？
-- 第一版正式可用版本是否默认依赖 PC helper 常驻？
-- SingRoom 级别音频体验应该先靠 Unity 预设调优逼近，还是尽早做原生音频引擎？
-- 第一个可玩房间优先视觉完整度，还是继续优先音频可靠性？
-- 蓝牙音频是否因为延迟过高而明确不支持？
+- 第一版正式可用版本是否默认依赖 PC helper 常驻。
+- Unity 客户端连接 helper 的地址配置方式：手动输入、局域网扫描，还是二维码/配置文件。
+- helper API 是否需要为 Unity 增加更明确的 health endpoint。
+- 视频文件分辨率默认策略是否继续沿用 WebXR 版本的 Bilibili 480P、YouTube H.264 720P 上限。
+- 蓝牙音频是否因为延迟过高而明确标记为不支持。
+- Oboe / AAudio 是保留为备用分支，还是在 Unity 路线跑稳后继续作为高级音频引擎投入。
