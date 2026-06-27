@@ -4,6 +4,8 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
+using UnityEngine.SpatialTracking;
 using UnityEngine.UI;
 
 namespace TsukiVox.AudioPrototype.Editor
@@ -27,9 +29,13 @@ namespace TsukiVox.AudioPrototype.Editor
             camera.backgroundColor = new Color(0.03f, 0.04f, 0.05f);
             camera.nearClipPlane = 0.02f;
             camera.farClipPlane = 40f;
-            cameraObject.transform.position = new Vector3(0f, 1.55f, -2.9f);
-            cameraObject.transform.rotation = Quaternion.Euler(12f, 0f, 0f);
+            cameraObject.transform.position = new Vector3(0f, 1.55f, 0f);
+            cameraObject.transform.rotation = Quaternion.identity;
             cameraObject.tag = "MainCamera";
+            var poseDriver = cameraObject.AddComponent<TrackedPoseDriver>();
+            poseDriver.SetPoseSource(TrackedPoseDriver.DeviceType.GenericXRDevice, TrackedPoseDriver.TrackedPose.Center);
+            poseDriver.trackingType = TrackedPoseDriver.TrackingType.RotationAndPosition;
+            poseDriver.updateType = TrackedPoseDriver.UpdateType.UpdateAndBeforeRender;
 
             var lightObject = new GameObject("Key Light");
             var light = lightObject.AddComponent<Light>();
@@ -49,34 +55,78 @@ namespace TsukiVox.AudioPrototype.Editor
 
             var canvasObject = CreateCanvas(camera);
             var panel = CreatePanel(canvasObject.transform);
-            var title = CreateText(panel.transform, "TsukiVox Quest Audio Prototype", 30, FontStyle.Bold);
-            title.rectTransform.anchoredPosition = new Vector2(0f, 205f);
+            var title = CreateText(panel.transform, "TsukiVox Quest Prototype", 28, FontStyle.Bold);
+            title.rectTransform.anchoredPosition = new Vector2(0f, 288f);
 
-            var status = CreateText(panel.transform, "Ready.", 18, FontStyle.Normal);
-            status.rectTransform.anchoredPosition = new Vector2(0f, 152f);
+            var audioTitle = CreateText(panel.transform, "V0.1 Audio", 20, FontStyle.Bold);
+            audioTitle.rectTransform.sizeDelta = new Vector2(500f, 34f);
+            audioTitle.rectTransform.anchoredPosition = new Vector2(-300f, 244f);
 
-            var preset = CreateText(panel.transform, "Preset", 20, FontStyle.Bold);
-            preset.rectTransform.anchoredPosition = new Vector2(0f, 106f);
+            var playlistTitle = CreateText(panel.transform, "V0.2 PC Helper", 20, FontStyle.Bold);
+            playlistTitle.rectTransform.sizeDelta = new Vector2(500f, 34f);
+            playlistTitle.rectTransform.anchoredPosition = new Vector2(300f, 244f);
 
-            var metrics = CreateText(panel.transform, "Metrics", 16, FontStyle.Normal);
+            var status = CreateText(panel.transform, "Ready.", 16, FontStyle.Normal);
+            status.rectTransform.sizeDelta = new Vector2(520f, 62f);
+            status.rectTransform.anchoredPosition = new Vector2(-300f, 198f);
+
+            var preset = CreateText(panel.transform, "Preset", 18, FontStyle.Bold);
+            preset.rectTransform.sizeDelta = new Vector2(520f, 34f);
+            preset.rectTransform.anchoredPosition = new Vector2(-300f, 146f);
+
+            var metrics = CreateText(panel.transform, "Metrics", 14, FontStyle.Normal);
             metrics.alignment = TextAnchor.UpperLeft;
-            metrics.rectTransform.sizeDelta = new Vector2(680f, 116f);
-            metrics.rectTransform.anchoredPosition = new Vector2(0f, 23f);
+            metrics.rectTransform.sizeDelta = new Vector2(520f, 142f);
+            metrics.rectTransform.anchoredPosition = new Vector2(-300f, 57f);
 
-            var inputSlider = CreateSlider(panel.transform, "Input Level", new Vector2(-190f, -78f));
-            var outputSlider = CreateSlider(panel.transform, "Output Level", new Vector2(190f, -78f));
-            var volumeSlider = CreateSlider(panel.transform, "Monitor Volume", new Vector2(0f, -138f));
+            var inputSlider = CreateSlider(panel.transform, "Input Level", new Vector2(-430f, -70f));
+            var outputSlider = CreateSlider(panel.transform, "Output Level", new Vector2(-170f, -70f));
+            var volumeSlider = CreateSlider(panel.transform, "Monitor Volume", new Vector2(-300f, -130f));
             volumeSlider.minValue = 0f;
             volumeSlider.maxValue = 1.4f;
             volumeSlider.value = 1f;
 
-            var startButton = CreateButton(panel.transform, "Start Mic", new Vector2(-270f, -214f));
-            var stopButton = CreateButton(panel.transform, "Stop", new Vector2(-90f, -214f));
-            var previousPreset = CreateButton(panel.transform, "Prev", new Vector2(90f, -214f));
-            var nextPreset = CreateButton(panel.transform, "Next", new Vector2(270f, -214f));
-            var monitorToggle = CreateToggle(panel.transform, "Monitor", new Vector2(-220f, -276f), true);
-            var nativeToggle = CreateToggle(panel.transform, "Native", new Vector2(0f, -276f), false);
-            var safetyToggle = CreateToggle(panel.transform, "Safety", new Vector2(220f, -276f), true);
+            var startButton = CreateButton(panel.transform, "Start Mic", new Vector2(-495f, -206f));
+            var stopButton = CreateButton(panel.transform, "Stop", new Vector2(-365f, -206f));
+            var previousPreset = CreateButton(panel.transform, "Prev", new Vector2(-235f, -206f));
+            var nextPreset = CreateButton(panel.transform, "Next", new Vector2(-105f, -206f));
+            var monitorToggle = CreateToggle(panel.transform, "Monitor", new Vector2(-475f, -270f), true);
+            var nativeToggle = CreateToggle(panel.transform, "Native", new Vector2(-300f, -270f), false);
+            var safetyToggle = CreateToggle(panel.transform, "Safety", new Vector2(-125f, -270f), true);
+
+            var playlistObject = new GameObject("Quest Playlist Prototype");
+            var playlistPrototype = playlistObject.AddComponent<QuestPlaylistPrototype>();
+            var connection = CreateText(panel.transform, "Helper: Connecting...", 14, FontStyle.Normal);
+            connection.alignment = TextAnchor.UpperLeft;
+            connection.rectTransform.sizeDelta = new Vector2(520f, 58f);
+            connection.rectTransform.anchoredPosition = new Vector2(300f, 200f);
+
+            var currentSong = CreateText(panel.transform, "Current: no song selected.", 14, FontStyle.Normal);
+            currentSong.alignment = TextAnchor.UpperLeft;
+            currentSong.rectTransform.sizeDelta = new Vector2(520f, 102f);
+            currentSong.rectTransform.anchoredPosition = new Vector2(300f, 118f);
+
+            var queue = CreateText(panel.transform, "Queue 0 item(s)", 14, FontStyle.Normal);
+            queue.alignment = TextAnchor.UpperLeft;
+            queue.rectTransform.sizeDelta = new Vector2(520f, 66f);
+            queue.rectTransform.anchoredPosition = new Vector2(300f, 20f);
+
+            var playableUrl = CreateText(panel.transform, "Playable URL: none", 12, FontStyle.Normal);
+            playableUrl.alignment = TextAnchor.UpperLeft;
+            playableUrl.rectTransform.sizeDelta = new Vector2(520f, 62f);
+            playableUrl.rectTransform.anchoredPosition = new Vector2(300f, -54f);
+
+            var helperHostLabel = CreateText(panel.transform, "PC IP", 12, FontStyle.Bold);
+            helperHostLabel.alignment = TextAnchor.MiddleLeft;
+            helperHostLabel.rectTransform.sizeDelta = new Vector2(64f, 32f);
+            helperHostLabel.rectTransform.anchoredPosition = new Vector2(86f, -166f);
+            var helperHostInput = CreateInputField(panel.transform, QuestPlaylistPrototype.DefaultHelperHostAddress, new Vector2(258f, -166f), new Vector2(260f, 34f));
+            var applyHost = CreateButton(panel.transform, "Apply", new Vector2(432f, -166f), new Vector2(86f, 34f), 13);
+            var defaultHost = CreateButton(panel.transform, "Use PC", new Vector2(528f, -166f), new Vector2(86f, 34f), 13);
+            var playPause = CreateButton(panel.transform, "Play", new Vector2(95f, -230f));
+            var playlistPrevious = CreateButton(panel.transform, "Prev", new Vector2(225f, -230f));
+            var playlistNext = CreateButton(panel.transform, "Next", new Vector2(355f, -230f));
+            var replay = CreateButton(panel.transform, "Replay", new Vector2(485f, -230f));
             CreateEventSystem();
             CreateQuestPointer(canvasObject);
 
@@ -103,6 +153,23 @@ namespace TsukiVox.AudioPrototype.Editor
             so.FindProperty("preferNativeOboeBackend").boolValue = false;
             so.ApplyModifiedPropertiesWithoutUndo();
 
+            var playlistSo = new SerializedObject(playlistPrototype);
+            playlistSo.FindProperty("connectionText").objectReferenceValue = connection;
+            playlistSo.FindProperty("currentSongText").objectReferenceValue = currentSong;
+            playlistSo.FindProperty("queueText").objectReferenceValue = queue;
+            playlistSo.FindProperty("playableUrlText").objectReferenceValue = playableUrl;
+            playlistSo.FindProperty("playPauseButton").objectReferenceValue = playPause;
+            playlistSo.FindProperty("previousButton").objectReferenceValue = playlistPrevious;
+            playlistSo.FindProperty("nextButton").objectReferenceValue = playlistNext;
+            playlistSo.FindProperty("replayButton").objectReferenceValue = replay;
+            playlistSo.FindProperty("helperHost").stringValue = QuestPlaylistPrototype.DefaultHelperHostAddress;
+            playlistSo.FindProperty("playlistOrigin").stringValue = $"http://{QuestPlaylistPrototype.DefaultHelperHostAddress}:5175";
+            playlistSo.FindProperty("downloadOrigin").stringValue = $"http://{QuestPlaylistPrototype.DefaultHelperHostAddress}:5174";
+            playlistSo.FindProperty("helperHostInput").objectReferenceValue = helperHostInput;
+            playlistSo.FindProperty("applyHostButton").objectReferenceValue = applyHost;
+            playlistSo.FindProperty("defaultHostButton").objectReferenceValue = defaultHost;
+            playlistSo.ApplyModifiedPropertiesWithoutUndo();
+
             EditorSceneManager.SaveScene(scene, ScenePath);
             AddSceneToBuildSettings(ScenePath);
             Debug.Log($"Created {ScenePath}");
@@ -110,8 +177,8 @@ namespace TsukiVox.AudioPrototype.Editor
 
         private static void CreateMeters()
         {
-            CreateMeter("Input Meter Preview", new Vector3(-0.72f, 1.1f, 0.75f), new Color(0.2f, 0.92f, 0.8f));
-            CreateMeter("Output Meter Preview", new Vector3(0.72f, 1.1f, 0.75f), new Color(1f, 0.78f, 0.28f));
+            CreateMeter("Input Meter Preview", new Vector3(-1.55f, 1.05f, 2.35f), new Color(0.2f, 0.92f, 0.8f));
+            CreateMeter("Output Meter Preview", new Vector3(1.55f, 1.05f, 2.35f), new Color(1f, 0.78f, 0.28f));
         }
 
         private static void CreateMeter(string name, Vector3 position, Color color)
@@ -133,17 +200,21 @@ namespace TsukiVox.AudioPrototype.Editor
         {
             var canvasObject = new GameObject("Prototype Canvas");
             var canvas = canvasObject.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.worldCamera = camera;
             canvas.sortingOrder = 10;
             var scaler = canvasObject.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1280f, 720f);
             scaler.matchWidthOrHeight = 0.5f;
             scaler.dynamicPixelsPerUnit = 12f;
-            canvasObject.AddComponent<GraphicRaycaster>();
+            var raycaster = canvasObject.AddComponent<GraphicRaycaster>();
+            raycaster.ignoreReversedGraphics = false;
             var rect = canvasObject.GetComponent<RectTransform>();
             rect.sizeDelta = new Vector2(1280f, 720f);
-            rect.localScale = Vector3.one;
+            rect.position = new Vector3(0f, 1.55f, 1.85f);
+            rect.rotation = Quaternion.identity;
+            rect.localScale = Vector3.one * 0.0022f;
             return canvasObject;
         }
 
@@ -155,7 +226,7 @@ namespace TsukiVox.AudioPrototype.Editor
             rect.anchorMin = new Vector2(0.5f, 0.5f);
             rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.anchoredPosition = Vector2.zero;
-            rect.sizeDelta = new Vector2(820f, 650f);
+            rect.sizeDelta = new Vector2(1180f, 650f);
             var image = panelObject.AddComponent<Image>();
             image.color = new Color(0.04f, 0.055f, 0.062f, 0.92f);
             return rect;
@@ -220,10 +291,15 @@ namespace TsukiVox.AudioPrototype.Editor
 
         private static Button CreateButton(Transform parent, string label, Vector2 position)
         {
+            return CreateButton(parent, label, position, new Vector2(116f, 48f), 16);
+        }
+
+        private static Button CreateButton(Transform parent, string label, Vector2 position, Vector2 size, int fontSize)
+        {
             var buttonObject = new GameObject(label);
             buttonObject.transform.SetParent(parent, false);
             var rect = buttonObject.AddComponent<RectTransform>();
-            rect.sizeDelta = new Vector2(150f, 52f);
+            rect.sizeDelta = size;
             rect.anchoredPosition = position;
             var image = buttonObject.AddComponent<Image>();
             image.color = new Color(0.1f, 0.16f, 0.18f);
@@ -231,10 +307,44 @@ namespace TsukiVox.AudioPrototype.Editor
             button.targetGraphic = image;
             button.colors = CreateSelectableColors();
 
-            var text = CreateText(buttonObject.transform, label, 16, FontStyle.Bold);
+            var text = CreateText(buttonObject.transform, label, fontSize, FontStyle.Bold);
             text.rectTransform.sizeDelta = rect.sizeDelta;
             text.rectTransform.anchoredPosition = Vector2.zero;
             return button;
+        }
+
+        private static InputField CreateInputField(Transform parent, string value, Vector2 position, Vector2 size)
+        {
+            var inputObject = new GameObject("Helper Host Input");
+            inputObject.transform.SetParent(parent, false);
+            var rect = inputObject.AddComponent<RectTransform>();
+            rect.sizeDelta = size;
+            rect.anchoredPosition = position;
+            var image = inputObject.AddComponent<Image>();
+            image.color = new Color(0.08f, 0.12f, 0.14f, 0.96f);
+
+            var text = CreateText(inputObject.transform, "Text", 14, FontStyle.Normal);
+            text.alignment = TextAnchor.MiddleLeft;
+            text.supportRichText = false;
+            text.rectTransform.sizeDelta = new Vector2(size.x - 20f, size.y);
+            text.rectTransform.anchoredPosition = Vector2.zero;
+
+            var placeholder = CreateText(inputObject.transform, "Placeholder", 14, FontStyle.Italic);
+            placeholder.text = QuestPlaylistPrototype.DefaultHelperHostAddress;
+            placeholder.alignment = TextAnchor.MiddleLeft;
+            placeholder.color = new Color(0.5f, 0.6f, 0.62f, 0.8f);
+            placeholder.rectTransform.sizeDelta = new Vector2(size.x - 20f, size.y);
+            placeholder.rectTransform.anchoredPosition = Vector2.zero;
+
+            var input = inputObject.AddComponent<InputField>();
+            input.targetGraphic = image;
+            input.textComponent = text;
+            input.placeholder = placeholder;
+            input.lineType = InputField.LineType.SingleLine;
+            input.contentType = InputField.ContentType.Standard;
+            input.characterLimit = 80;
+            input.SetTextWithoutNotify(value);
+            return input;
         }
 
         private static Toggle CreateToggle(Transform parent, string label, Vector2 position, bool value)
@@ -278,7 +388,7 @@ namespace TsukiVox.AudioPrototype.Editor
         {
             var eventSystemObject = new GameObject("EventSystem");
             eventSystemObject.AddComponent<EventSystem>();
-            eventSystemObject.AddComponent<StandaloneInputModule>();
+            eventSystemObject.AddComponent<InputSystemUIInputModule>();
         }
 
         private static void CreateQuestPointer(GameObject canvasObject)
@@ -289,6 +399,42 @@ namespace TsukiVox.AudioPrototype.Editor
             so.FindProperty("targetCanvas").objectReferenceValue = canvasObject.GetComponent<Canvas>();
             so.FindProperty("raycaster").objectReferenceValue = canvasObject.GetComponent<GraphicRaycaster>();
             so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        [MenuItem("TsukiVox/Apply Current Helper Host To Scene")]
+        public static void ApplyCurrentHelperHostToScene()
+        {
+            var playlistPrototype = EnsurePlaylistPrototypeInCurrentScene();
+            ApplyCurrentHelperHost(playlistPrototype);
+            EditorSceneManager.SaveScene(playlistPrototype.gameObject.scene);
+        }
+
+        public static QuestPlaylistPrototype EnsurePlaylistPrototypeInCurrentScene()
+        {
+            var playlistPrototype = Object.FindAnyObjectByType<QuestPlaylistPrototype>();
+            if (playlistPrototype == null)
+            {
+                playlistPrototype = QuestPlaylistPrototype.EnsureScenePrototype();
+            }
+
+            return playlistPrototype;
+        }
+
+        public static void ApplyCurrentHelperHost(QuestPlaylistPrototype playlistPrototype)
+        {
+            if (playlistPrototype == null)
+            {
+                return;
+            }
+
+            var so = new SerializedObject(playlistPrototype);
+            so.FindProperty("helperHost").stringValue = QuestPlaylistPrototype.DefaultHelperHostAddress;
+            so.FindProperty("playlistOrigin").stringValue = $"http://{QuestPlaylistPrototype.DefaultHelperHostAddress}:5175";
+            so.FindProperty("downloadOrigin").stringValue = $"http://{QuestPlaylistPrototype.DefaultHelperHostAddress}:5174";
+            so.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(playlistPrototype);
+            EditorSceneManager.MarkSceneDirty(playlistPrototype.gameObject.scene);
+            Debug.Log($"Applied helper host {QuestPlaylistPrototype.DefaultHelperHostAddress} to the current scene.");
         }
 
         private static ColorBlock CreateSelectableColors()

@@ -8,4 +8,6 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/AudioPrototype.unity
     guid: de5e0ae7e3b2dc8499198e825394ceaf
-  m_configObjects: {}
+  m_configObjects:
+    com.unity.xr.management.loader_settings: {fileID: 11400000, guid: 25879fd5fce4e244989dfa25c19c02de, type: 2}
+    com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 1dc8666de9868e44ab076d66232e973d, type: 2}

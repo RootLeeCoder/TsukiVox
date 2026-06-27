@@ -36,3 +36,9 @@ target_compile_options(tsukivox_oboe_monitor
         -Wextra
         -Wpedantic
 )
+
+target_link_options(tsukivox_oboe_monitor
+    PRIVATE
+        -Wl,-z,max-page-size=16384
+        -Wl,-z,common-page-size=16384
+)
