@@ -66,6 +66,7 @@ namespace TsukiVox.AudioPrototype.Editor
                     var openedScene = EditorSceneManager.OpenScene(scene.path, OpenSceneMode.Single);
                     var prototype = CreateAudioPrototypeScene.EnsurePlaylistPrototypeInCurrentScene();
                     CreateAudioPrototypeScene.ApplyCurrentHelperHost(prototype);
+                    CreateAudioPrototypeScene.EnsureVideoScreenPrototypeInCurrentScene(prototype);
                     EditorSceneManager.MarkSceneDirty(openedScene);
                     EditorSceneManager.SaveScene(openedScene);
                 }

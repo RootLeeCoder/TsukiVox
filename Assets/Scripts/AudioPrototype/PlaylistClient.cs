@@ -108,7 +108,9 @@ namespace TsukiVox.AudioPrototype
             }
 
             var trimmed = playableUrl.Trim();
-            if (Uri.TryCreate(trimmed, UriKind.Absolute, out _))
+            if (!trimmed.StartsWith("/", StringComparison.Ordinal) &&
+                Uri.TryCreate(trimmed, UriKind.Absolute, out var absoluteUri) &&
+                IsPlayableAbsoluteUri(absoluteUri))
             {
                 return trimmed;
             }
@@ -116,6 +118,11 @@ namespace TsukiVox.AudioPrototype
             if (trimmed.StartsWith("/downloads/", StringComparison.OrdinalIgnoreCase))
             {
                 return CombineUrl(downloadOrigin, trimmed);
+            }
+
+            if (IsDirectVideoPath(trimmed))
+            {
+                return CombineUrl(downloadOrigin, trimmed.StartsWith("/", StringComparison.Ordinal) ? trimmed : $"/{trimmed}");
             }
 
             return CombineUrl(playlistOrigin, trimmed.StartsWith("/", StringComparison.Ordinal) ? trimmed : $"/{trimmed}");
@@ -205,6 +212,21 @@ namespace TsukiVox.AudioPrototype
             }
 
             return $"{origin}/{path}";
+        }
+
+        private static bool IsDirectVideoPath(string path)
+        {
+            var queryIndex = path.IndexOf('?', StringComparison.Ordinal);
+            var pathWithoutQuery = queryIndex >= 0 ? path[..queryIndex] : path;
+            return pathWithoutQuery.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ||
+                   pathWithoutQuery.EndsWith(".webm", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsPlayableAbsoluteUri(Uri uri)
+        {
+            return string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(uri.Scheme, Uri.UriSchemeFile, StringComparison.OrdinalIgnoreCase);
         }
 
         [Serializable]

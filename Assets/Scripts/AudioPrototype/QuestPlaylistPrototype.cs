@@ -51,6 +51,18 @@ namespace TsukiVox.AudioPrototype
         private string lastError = "Not connected.";
         private string pendingStatus = "Connecting to playlist sync...";
 
+        public event Action<QuestPlaylistPrototype, PlaylistState> StateChanged;
+
+        public PlaylistState CurrentState => state;
+
+        public bool IsConnected => isConnected;
+
+        public bool CanSendControl => isConnected && !isRequestInFlight;
+
+        public string PlaylistOrigin => client != null ? client.PlaylistOrigin : playlistOrigin;
+
+        public string DownloadOrigin => client != null ? client.DownloadOrigin : downloadOrigin;
+
         public static QuestPlaylistPrototype EnsureScenePrototype()
         {
             var existing = FindAnyObjectByType<QuestPlaylistPrototype>();
@@ -198,6 +210,7 @@ namespace TsukiVox.AudioPrototype
             lastRequestFailed = false;
             lastError = string.Empty;
             pendingStatus = "Playlist sync connected.";
+            StateChanged?.Invoke(this, state);
         }
 
         private void OnRequestFailed(string error)
@@ -432,6 +445,16 @@ namespace TsukiVox.AudioPrototype
             {
                 defaultHostButton.interactable = true;
             }
+        }
+
+        public string ResolvePlayableUrl(string playableUrl)
+        {
+            if (client == null)
+            {
+                client = new PlaylistClient(playlistOrigin, downloadOrigin);
+            }
+
+            return client.ResolvePlayableUrl(playableUrl);
         }
 
         private void LoadHelperHost()

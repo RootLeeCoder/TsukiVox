@@ -108,6 +108,7 @@ namespace TsukiVox.AudioPrototype
             EnsureQuestUiInteraction();
             QuestXrBootstrap.EnsureSceneBootstrap();
             QuestPlaylistPrototype.EnsureScenePrototype();
+            QuestVideoScreenPrototype.EnsureScenePrototype();
             currentPreset = initialPreset;
             ApplyPreset(currentPreset);
             ApplyMonitorVolume(monitorVolume);

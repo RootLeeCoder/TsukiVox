@@ -7,6 +7,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.SpatialTracking;
 using UnityEngine.UI;
+using UnityEngine.Video;
 
 namespace TsukiVox.AudioPrototype.Editor
 {
@@ -127,8 +128,10 @@ namespace TsukiVox.AudioPrototype.Editor
             var playlistPrevious = CreateButton(panel.transform, "Prev", new Vector2(225f, -230f));
             var playlistNext = CreateButton(panel.transform, "Next", new Vector2(355f, -230f));
             var replay = CreateButton(panel.transform, "Replay", new Vector2(485f, -230f));
+            var copyVideoDebug = CreateButton(panel.transform, "Copy Debug", new Vector2(300f, -292f), new Vector2(150f, 38f), 13);
             CreateEventSystem();
             CreateQuestPointer(canvasObject);
+            CreateVideoScreen(playlistPrototype, copyVideoDebug);
 
             var so = new SerializedObject(prototype);
             so.FindProperty("monitorSource").objectReferenceValue = source;
@@ -401,6 +404,19 @@ namespace TsukiVox.AudioPrototype.Editor
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
+        private static void CreateVideoScreen(QuestPlaylistPrototype playlistPrototype, Button copyDebugButton)
+        {
+            var videoObject = new GameObject("Quest Video Screen Prototype");
+            videoObject.AddComponent<AudioSource>();
+            videoObject.AddComponent<VideoPlayer>();
+            var videoScreen = videoObject.AddComponent<QuestVideoScreenPrototype>();
+
+            var so = new SerializedObject(videoScreen);
+            so.FindProperty("playlistPrototype").objectReferenceValue = playlistPrototype;
+            so.FindProperty("copyDebugButton").objectReferenceValue = copyDebugButton;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
         [MenuItem("TsukiVox/Apply Current Helper Host To Scene")]
         public static void ApplyCurrentHelperHostToScene()
         {
@@ -418,6 +434,54 @@ namespace TsukiVox.AudioPrototype.Editor
             }
 
             return playlistPrototype;
+        }
+
+        public static QuestVideoScreenPrototype EnsureVideoScreenPrototypeInCurrentScene(QuestPlaylistPrototype playlistPrototype)
+        {
+            var videoScreen = Object.FindAnyObjectByType<QuestVideoScreenPrototype>();
+            if (videoScreen == null)
+            {
+                var videoObject = new GameObject("Quest Video Screen Prototype");
+                videoScreen = videoObject.AddComponent<QuestVideoScreenPrototype>();
+            }
+
+            if (playlistPrototype != null)
+            {
+                var so = new SerializedObject(videoScreen);
+                so.FindProperty("playlistPrototype").objectReferenceValue = playlistPrototype;
+                so.FindProperty("copyDebugButton").objectReferenceValue = FindOrCreateCopyDebugButton();
+                so.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(videoScreen);
+                EditorSceneManager.MarkSceneDirty(videoScreen.gameObject.scene);
+            }
+
+            return videoScreen;
+        }
+
+        private static Button FindOrCreateCopyDebugButton()
+        {
+            var canvases = Object.FindObjectsByType<Canvas>(FindObjectsInactive.Exclude);
+            for (var i = 0; i < canvases.Length; i += 1)
+            {
+                if (canvases[i].name != "Prototype Canvas")
+                {
+                    continue;
+                }
+
+                var panel = canvases[i].transform.Find("Panel");
+                if (panel != null)
+                {
+                    var existing = panel.Find("Copy Debug");
+                    if (existing != null && existing.TryGetComponent<Button>(out var existingButton))
+                    {
+                        return existingButton;
+                    }
+
+                    return CreateButton(panel, "Copy Debug", new Vector2(300f, -292f), new Vector2(150f, 38f), 13);
+                }
+            }
+
+            return null;
         }
 
         public static void ApplyCurrentHelperHost(QuestPlaylistPrototype playlistPrototype)
