@@ -62,7 +62,7 @@ WebXR 项目不是被废弃，而是作为迁移源。接下来要复用它已�
 
 ## 当前状态
 
-状态：V0.1 Quest 3 音频验证和 V0.2 PC Helper 兼容客户端已经完成第一版，Unity 客户端已从独立音频原型进入 WebXR 成果迁移阶段。下一步主线是 V0.3 Unity 视频大屏与播放同步。
+状态：V0.1 Quest 3 音频验证、V0.2 PC Helper 兼容客户端和 V0.3 Unity 视频大屏与播放同步已经完成第一版。Unity 客户端已经具备“读 PC 点歌队列、加载当前 ready 视频、在 Quest 场景中播放并保留麦克风返听”的核心闭环。下一步主线是 V0.4 原生 Quest App 壳和头显内 UI。
 
 已完成：
 
@@ -83,15 +83,22 @@ WebXR 项目不是被废弃，而是作为迁移源。接下来要复用它已�
 - 支持把 `/downloads/...` 相对地址解析为 PC 下载文件服务地址。
 - 场景生成器已包含 V0.1 音频面板和 V0.2 PC Helper 面板。
 - Android 构建预处理已固化 ARM64、GameActivity、OpenXR 基础配置、Internet 权限和本地 HTTP 访问设置。
+- 新增 `QuestVideoScreenPrototype`，使用 Unity `VideoPlayer + RenderTexture` 创建 V0.3 视频大屏。
+- 视频大屏可订阅 `QuestPlaylistPrototype.StateChanged`，在当前条目 ready 后解析并加载 `playableUrl`。
+- 支持播放 PC helper 暴露的 MP4/WebM URL，包括 `/downloads/...` 和直接视频路径。
+- 在 Android/Quest 路径上优先把远端视频缓存到 `Application.persistentDataPath/video-cache/` 后播放，降低直接 HTTP 流式播放的不确定性。
+- 视频首帧和 prepare 完成后按实际宽高比适配屏幕安全区域。
+- 根据 playlist `playback` 和 `command` 同步播放、暂停和重播；视频结束后可向 playlist 服务发送 `next`。
+- 增加 V0.3 视频状态文本、probe/cache/prepare 诊断，以及 `Copy Debug` 按钮用于真机排查。
 
 已观察到的问题：
 
 - 当前音效参数仍偏验证性质，不是最终舒适演唱参数。
 - 当前 UI 仍是调试面板，不是正式 VR 头显内界面。
 - Oboe dry backend 可作为低延迟参考路径，但当前 KTV 混响和效果链仍主要在 Unity backend 中验证。
-- V0.2 目前只完成播放队列状态和控制接入，尚未在 Unity 中实际播放 `playableUrl` 视频。
+- V0.3 已能加载并播放 ready 视频，但仍需要持续做 Quest 真机 + PC helper 回归，确认不同来源和文件大小下的缓存、prepare 和首帧表现。
 - helper 地址仍是手动输入 / 默认 IP 配置，尚未做局域网扫描、二维码配对或更友好的连接向导。
-- 真实演唱体验需要在“视频播放 + 返听 + 混响 + 头显音量”的组合场景里继续评估。
+- 真实演唱体验已经进入“视频播放 + 返听 + 混响 + 头显音量”的组合评估阶段，但音频舒适度和反馈风险仍需继续打磨。
 
 ## V0.1 Quest 音频验证 Spike
 
@@ -150,9 +157,9 @@ WebXR 项目不是被废弃，而是作为迁移源。接下来要复用它已�
 
 目标：在 Unity 中复现 WebXR 版本最核心的大屏播放能力。
 
-状态：下一步主线。
+状态：已完成第一版。Unity 已经可以从 PC helper 队列读取当前 ready 条目，解析 `playableUrl`，在场景视频大屏上加载并播放 MP4/WebM，并和 playlist 控制状态做基础同步。
 
-范围：
+已实现范围：
 
 - 使用 Unity `VideoPlayer + RenderTexture` 创建 KTV 大屏。
 - 支持播放一个已知 URL 或 PC helper 暴露的 `/downloads/...` 文件。
@@ -161,17 +168,21 @@ WebXR 项目不是被废弃，而是作为迁移源。接下来要复用它已�
 - 根据 playlist 的 `playback` 和 `command` 同步播放、暂停、重播、上一首、下一首。
 - 视频结束后向 playlist 服务发送 `next`。
 - 验证视频音频与麦克风返听、混响共存。
+- 支持对 HTTP/HTTPS 视频做 HEAD probe，并记录 Content-Type、Content-Length 和 Accept-Ranges。
+- 在 Android/Quest 上缓存远端视频到 `Application.persistentDataPath/video-cache/`，再以 file URL 交给 `VideoPlayer` 播放。
+- 提供视频状态文本和 `Copy Debug`，包含 playlist、URL 解析、缓存、VideoPlayer、RenderTexture 等诊断信息。
 
-验收标准：
+验收状态：
 
-- Quest 3 上可稳定播放 PC helper 提供的 MP4。
-- 视频播放时仍能开启麦克风返听和 KTV Room 预设。
-- 播放、暂停、重播、下一首的状态在 PC 和 Quest App 之间可同步。
-- 当前歌曲下载中或错误时，Quest UI 能显示正确状态。
+- 代码侧已具备 Quest 场景中播放 helper 提供的 MP4/WebM、显示下载中/错误/未 ready 状态、播放/暂停/重播同步和视频结束后 next 的能力。
+- 已保留视频播放时同时启用麦克风返听和 KTV Room 预设的验证路径。
+- 仍需要按设备回归记录不同来源视频的缓存耗时、首帧时间、播放稳定性，以及与麦克风返听/混响共存时的实际音量和反馈风险。
 
 ## V0.4 原生 Quest App 壳和头显内 UI
 
 目标：把音频和视频验证整合成真正的 Quest App 基础壳。
+
+状态：下一步主线。
 
 范围：
 
@@ -329,22 +340,23 @@ WebXR 项目不是被废弃，而是作为迁移源。接下来要复用它已�
 
 下一步不优先重建漂亮房间，也不优先做歌词或持久歌单。
 
-当前最重要的切片是 V0.3：
+当前最重要的切片是 V0.4：
 
 1. 保持现有 Quest 3 低延迟返听链路可用。
 2. 保持 V0.2 的 PC helper / playlist API 接入可回归。
-3. 使用 `VideoPlayer + RenderTexture` 播放 helper 暴露的当前 ready 歌曲视频。
-4. 同步 playlist 的播放、暂停、重播、上一首和下一首命令。
-5. 验证视频播放、人声返听和混响可以同时稳定工作。
-6. 再开始重建 VR 包厢、手柄麦克风、荧光棒和头显内控制。
+3. 保持 V0.3 的 `VideoPlayer + RenderTexture` 视频大屏、远端缓存和播放同步可回归。
+4. 把当前调试 Canvas 收敛成更像 Quest App 的头显内控制面板。
+5. 固化用户在头显内完成 helper 连接、播放控制、麦克风启动和预设切换的基础流程。
+6. 继续验证视频播放、人声返听和混响可以同时稳定工作。
+7. 再开始重建 VR 包厢、手柄麦克风、荧光棒和更完整的空间表现。
 
-完成这个切片后，TsukiVox Unity 才真正从“能读点歌队列的 Quest 音频原型”进入“能唱一首歌的 Quest K 歌客户端”阶段。
+完成这个切片后，TsukiVox Unity 才真正从“能唱一首歌的技术原型”进入“可以反复使用和演示的 Quest K 歌客户端”阶段。
 
 ## 待决策问题
 
 - 第一版正式可用版本是否默认依赖 PC helper 常驻。
 - Unity 客户端连接 helper 的地址配置方式：手动输入、局域网扫描，还是二维码/配置文件。
 - helper API 是否需要为 Unity 增加更明确的 health endpoint。
-- 视频文件分辨率默认策略是否继续沿用 WebXR 版本的 Bilibili 480P、YouTube H.264 720P 上限。
+- 视频文件分辨率默认策略是否继续沿用 WebXR 版本的 Bilibili 480P、YouTube H.264 720P 上限，以及是否需要限制单个缓存文件大小。
 - 蓝牙音频是否因为延迟过高而明确标记为不支持。
 - Oboe / AAudio 是保留为备用分支，还是在 Unity 路线跑稳后继续作为高级音频引擎投入。
