@@ -562,8 +562,16 @@ namespace TsukiVox.AudioPrototype
             var panel = canvasTransform.Find("Panel") as RectTransform;
             if (panel != null)
             {
-                panel.sizeDelta = new Vector2(Mathf.Max(panel.sizeDelta.x, 1180f), Mathf.Max(panel.sizeDelta.y, 650f));
-                ReflowAudioPrototypePanel(panel);
+                if (FindAnyObjectByType<QuestAppShellPrototype>() != null)
+                {
+                    panel.sizeDelta = new Vector2(Mathf.Max(panel.sizeDelta.x, 1240f), Mathf.Max(panel.sizeDelta.y, 690f));
+                }
+                else
+                {
+                    panel.sizeDelta = new Vector2(Mathf.Max(panel.sizeDelta.x, 1180f), Mathf.Max(panel.sizeDelta.y, 650f));
+                    ReflowAudioPrototypePanel(panel);
+                }
+
                 return panel;
             }
 

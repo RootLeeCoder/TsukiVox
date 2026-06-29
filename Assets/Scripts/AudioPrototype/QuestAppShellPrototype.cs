@@ -1,0 +1,679 @@
+using System;
+using System.IO;
+using System.Text;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
+using UnityEngine.UI;
+
+namespace TsukiVox.AudioPrototype
+{
+    public sealed class QuestAppShellPrototype : MonoBehaviour
+    {
+        public static readonly Vector3 ControlPanelWorldPosition = new Vector3(0f, 1.22f, 1.82f);
+        public static readonly Quaternion ControlPanelWorldRotation = Quaternion.Euler(10f, 0f, 0f);
+        public static readonly Vector3 ControlPanelWorldScale = Vector3.one * 0.002f;
+        public static readonly Vector2 ControlPanelSize = new Vector2(1320f, 760f);
+
+        private const string CanvasName = "Prototype Canvas";
+        private const string PanelName = "Panel";
+        private const string ShellObjectName = "Quest App Shell Prototype";
+
+        private static readonly Color PanelBackground = new Color(0.025f, 0.035f, 0.04f, 0.94f);
+        private static readonly Color SectionBackground = new Color(0.055f, 0.075f, 0.082f, 0.82f);
+        private static readonly Color SectionLine = new Color(0.16f, 0.25f, 0.27f, 0.72f);
+        private static readonly Color TextPrimary = new Color(0.93f, 0.97f, 0.98f, 1f);
+        private static readonly Color TextSecondary = new Color(0.64f, 0.75f, 0.76f, 1f);
+        private static readonly Color Accent = new Color(0.25f, 0.95f, 0.72f, 1f);
+        [Header("Scene References")]
+        [SerializeField] private Canvas controlCanvas;
+        [SerializeField] private RectTransform panel;
+        [SerializeField] private Text appStatusText;
+        [SerializeField] private Button copyAppDebugButton;
+        [SerializeField] private QuestAudioPrototype audioPrototype;
+        [SerializeField] private QuestPlaylistPrototype playlistPrototype;
+        [SerializeField] private QuestVideoScreenPrototype videoScreenPrototype;
+
+        [Header("Runtime")]
+        [SerializeField] private bool organizePanelOnAwake = true;
+        [SerializeField, Min(0.25f)] private float statusRefreshSeconds = 1f;
+
+        private readonly StringBuilder debugBuilder = new StringBuilder(4096);
+        private float nextStatusRefreshAt;
+
+        public static QuestAppShellPrototype EnsureSceneShell()
+        {
+            var existing = FindAnyObjectByType<QuestAppShellPrototype>();
+            if (existing != null)
+            {
+                existing.ConfigureSceneReferences();
+                return existing;
+            }
+
+            var shellObject = new GameObject(ShellObjectName);
+            var shell = shellObject.AddComponent<QuestAppShellPrototype>();
+            shell.ConfigureSceneReferences();
+            return shell;
+        }
+
+        private void Awake()
+        {
+            ConfigureSceneReferences();
+        }
+
+        private void Start()
+        {
+            RefreshAppStatus();
+        }
+
+        private void Update()
+        {
+            if (Time.unscaledTime < nextStatusRefreshAt)
+            {
+                return;
+            }
+
+            nextStatusRefreshAt = Time.unscaledTime + statusRefreshSeconds;
+            RefreshAppStatus();
+        }
+
+        public void ConfigureSceneReferences()
+        {
+            QuestXrBootstrap.EnsureSceneBootstrap();
+            audioPrototype = audioPrototype != null ? audioPrototype : FindAnyObjectByType<QuestAudioPrototype>();
+            playlistPrototype = playlistPrototype != null ? playlistPrototype : QuestPlaylistPrototype.EnsureScenePrototype();
+            videoScreenPrototype = videoScreenPrototype != null ? videoScreenPrototype : QuestVideoScreenPrototype.EnsureScenePrototype();
+
+            controlCanvas = controlCanvas != null ? controlCanvas : FindOrCreateControlCanvas();
+            if (controlCanvas == null)
+            {
+                return;
+            }
+
+            ConfigureControlCanvas(controlCanvas);
+            panel = panel != null ? panel : FindOrCreatePanel(controlCanvas.transform);
+            EnsureEventSystem();
+            QuestUiPointer.EnsureScenePointer();
+
+            if (organizePanelOnAwake && panel != null)
+            {
+                OrganizeControlPanel(panel);
+            }
+
+            appStatusText = appStatusText != null
+                ? appStatusText
+                : FindOrCreateText(panel, "App Status", "Quest App shell starting.", 15, FontStyle.Normal, new Vector2(0f, 292f), new Vector2(900f, 38f), TextAnchor.MiddleCenter);
+            copyAppDebugButton = copyAppDebugButton != null
+                ? copyAppDebugButton
+                : FindOrCreateButton(panel, "Copy App Debug", "Copy App Debug", new Vector2(522f, -300f), new Vector2(176f, 42f), 13);
+            WireCopyButton();
+            RefreshAppStatus();
+        }
+
+        public void CopyAppDebugInfoToClipboard()
+        {
+            var debugInfo = BuildAppDebugInfo();
+            TsukiVoxClipboard.CopyPlainText("TsukiVox App Debug", debugInfo);
+            if (appStatusText != null)
+            {
+                appStatusText.text = "App debug copied to clipboard.";
+            }
+
+            Debug.Log($"[TsukiVox App Shell] Copied app debug info:\n{debugInfo}");
+        }
+
+        private void WireCopyButton()
+        {
+            if (copyAppDebugButton == null)
+            {
+                return;
+            }
+
+            copyAppDebugButton.onClick.RemoveListener(CopyAppDebugInfoToClipboard);
+            copyAppDebugButton.onClick.AddListener(CopyAppDebugInfoToClipboard);
+        }
+
+        private void RefreshAppStatus()
+        {
+            if (appStatusText == null)
+            {
+                return;
+            }
+
+            var playlistStatus = playlistPrototype != null && playlistPrototype.IsConnected
+                ? "helper connected"
+                : "helper offline";
+            var micStatus = audioPrototype != null && audioPrototype.IsMonitoring ? "mic active" : "mic standby";
+            appStatusText.text = $"V0.4 Quest app shell  {playlistStatus}  {micStatus}  {Application.platform}";
+        }
+
+        private string BuildAppDebugInfo()
+        {
+            debugBuilder.Clear();
+            debugBuilder.AppendLine("TsukiVox V0.4 App Debug");
+            debugBuilder.AppendLine($"utc {DateTime.UtcNow:O}");
+            debugBuilder.AppendLine($"platform {Application.platform}");
+            debugBuilder.AppendLine($"unity {Application.unityVersion}");
+            debugBuilder.AppendLine($"product {Application.productName}");
+            debugBuilder.AppendLine($"identifier {Application.identifier}");
+            debugBuilder.AppendLine($"version {Application.version}");
+            debugBuilder.AppendLine($"persistentDataPath {Application.persistentDataPath}");
+            debugBuilder.AppendLine($"temporaryCachePath {Application.temporaryCachePath}");
+            debugBuilder.AppendLine($"internetReachability {Application.internetReachability}");
+            debugBuilder.AppendLine($"audioSampleRate {AudioSettings.outputSampleRate}");
+            AudioSettings.GetDSPBufferSize(out var dspBufferLength, out var dspBufferCount);
+            debugBuilder.AppendLine($"dspBuffer {dspBufferLength}x{dspBufferCount}");
+            debugBuilder.AppendLine($"mainCamera {(Camera.main == null ? "missing" : Camera.main.name)}");
+            debugBuilder.AppendLine($"canvas {(controlCanvas == null ? "missing" : $"{controlCanvas.name} {controlCanvas.renderMode} {controlCanvas.GetComponent<RectTransform>().sizeDelta}")}");
+            debugBuilder.AppendLine($"panel {(panel == null ? "missing" : $"{panel.name} {panel.sizeDelta} pos {panel.anchoredPosition}")}");
+            debugBuilder.AppendLine($"audioPrototype {audioPrototype != null}");
+            debugBuilder.AppendLine($"playlistPrototype {playlistPrototype != null}");
+            debugBuilder.AppendLine($"videoScreenPrototype {videoScreenPrototype != null}");
+
+            if (playlistPrototype != null)
+            {
+                var state = playlistPrototype.CurrentState;
+                var item = state?.CurrentItem;
+                debugBuilder.AppendLine($"playlistConnected {playlistPrototype.IsConnected}");
+                debugBuilder.AppendLine($"playlistCanSendControl {playlistPrototype.CanSendControl}");
+                debugBuilder.AppendLine($"playlistOrigin {playlistPrototype.PlaylistOrigin}");
+                debugBuilder.AppendLine($"downloadOrigin {playlistPrototype.DownloadOrigin}");
+                debugBuilder.AppendLine($"playbackState {state?.playback}");
+                debugBuilder.AppendLine($"queueCount {state?.QueueCount}");
+                debugBuilder.AppendLine($"currentIndex {state?.currentIndex}");
+                debugBuilder.AppendLine($"itemTitle {item?.title}");
+                debugBuilder.AppendLine($"itemStatus {item?.status}");
+                debugBuilder.AppendLine($"itemPlayableUrl {item?.playableUrl}");
+                debugBuilder.AppendLine($"itemResolvedUrl {(item == null ? string.Empty : playlistPrototype.ResolvePlayableUrl(item.playableUrl))}");
+            }
+
+            if (audioPrototype != null)
+            {
+                debugBuilder.AppendLine($"audioMonitoring {audioPrototype.IsMonitoring}");
+                debugBuilder.AppendLine($"audioWaitingForPermission {audioPrototype.IsWaitingForPermission}");
+                debugBuilder.AppendLine($"audioSafetyReducingGain {audioPrototype.IsSafetyReducingGain}");
+                debugBuilder.AppendLine($"audioBackend {audioPrototype.ActiveBackendName}");
+                debugBuilder.AppendLine($"audioPreset {audioPrototype.CurrentPresetName}");
+                debugBuilder.AppendLine($"audioMonitorVolume {audioPrototype.MonitorVolume:0.000}");
+            }
+
+            AppendTextIfPresent("audioStatus", "Ready.");
+            AppendTextIfPresent("audioPreset", "Preset");
+            AppendTextIfPresent("audioMetrics", "Metrics");
+            AppendTextIfPresent("connectionText", "Helper Connection");
+            AppendTextIfPresent("songText", "Helper Current Song");
+            AppendTextIfPresent("queueText", "Helper Queue");
+            AppendTextIfPresent("playableUrlText", "Helper Playable URL");
+            AppendCacheDirectoryInfo();
+            return debugBuilder.ToString();
+        }
+
+        private void AppendTextIfPresent(string label, string objectName)
+        {
+            var text = panel == null ? null : FindText(panel, objectName);
+            if (text == null)
+            {
+                return;
+            }
+
+            debugBuilder.AppendLine($"{label} {SanitizeLine(text.text)}");
+        }
+
+        private void AppendCacheDirectoryInfo()
+        {
+            var cacheDirectory = Path.Combine(Application.persistentDataPath, "video-cache");
+            debugBuilder.AppendLine($"videoCacheDirectory {cacheDirectory}");
+            if (!Directory.Exists(cacheDirectory))
+            {
+                debugBuilder.AppendLine("videoCacheExists False");
+                return;
+            }
+
+            debugBuilder.AppendLine("videoCacheExists True");
+            var files = Directory.GetFiles(cacheDirectory);
+            debugBuilder.AppendLine($"videoCacheFileCount {files.Length}");
+            for (var i = 0; i < Mathf.Min(files.Length, 8); i += 1)
+            {
+                var info = new FileInfo(files[i]);
+                debugBuilder.AppendLine($"videoCacheFile {info.Name} {info.Length} bytes");
+            }
+        }
+
+        private static void ConfigureControlCanvas(Canvas canvas)
+        {
+            var camera = Camera.main;
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.worldCamera = camera;
+            canvas.planeDistance = 100f;
+            canvas.sortingOrder = 10;
+
+            var rect = canvas.GetComponent<RectTransform>();
+            rect.position = ControlPanelWorldPosition;
+            rect.rotation = ControlPanelWorldRotation;
+            rect.localScale = ControlPanelWorldScale;
+            rect.sizeDelta = ControlPanelSize;
+            rect.pivot = new Vector2(0.5f, 0.5f);
+
+            var scaler = canvas.GetComponent<CanvasScaler>() ?? canvas.gameObject.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = ControlPanelSize;
+            scaler.matchWidthOrHeight = 0.5f;
+            scaler.dynamicPixelsPerUnit = 14f;
+
+            var raycaster = canvas.GetComponent<GraphicRaycaster>() ?? canvas.gameObject.AddComponent<GraphicRaycaster>();
+            raycaster.ignoreReversedGraphics = false;
+        }
+
+        private static Canvas FindOrCreateControlCanvas()
+        {
+            var canvases = FindObjectsByType<Canvas>(FindObjectsInactive.Exclude);
+            for (var i = 0; i < canvases.Length; i += 1)
+            {
+                if (canvases[i].name == CanvasName)
+                {
+                    return canvases[i];
+                }
+            }
+
+            var canvasObject = new GameObject(CanvasName);
+            return canvasObject.AddComponent<Canvas>();
+        }
+
+        private static RectTransform FindOrCreatePanel(Transform canvasTransform)
+        {
+            var existing = canvasTransform.Find(PanelName) as RectTransform;
+            if (existing != null)
+            {
+                existing.sizeDelta = new Vector2(1240f, 690f);
+                EnsurePanelImage(existing);
+                return existing;
+            }
+
+            var panelObject = new GameObject(PanelName);
+            panelObject.transform.SetParent(canvasTransform, false);
+            var rect = panelObject.AddComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 0.5f);
+            rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = new Vector2(1240f, 690f);
+            EnsurePanelImage(rect);
+            return rect;
+        }
+
+        private static void EnsurePanelImage(RectTransform panelRect)
+        {
+            var image = panelRect.GetComponent<Image>() ?? panelRect.gameObject.AddComponent<Image>();
+            image.color = PanelBackground;
+        }
+
+        private static void OrganizeControlPanel(RectTransform panelRect)
+        {
+            panelRect.sizeDelta = new Vector2(1240f, 690f);
+            EnsurePanelImage(panelRect);
+
+            var title = FindText(panelRect, "TsukiVox Quest Audio Prototype") ?? FindText(panelRect, "TsukiVox Quest Prototype");
+            if (title != null)
+            {
+                title.name = "TsukiVox Quest";
+                title.text = "TsukiVox Quest";
+                title.fontSize = 30;
+                title.fontStyle = FontStyle.Bold;
+                title.alignment = TextAnchor.MiddleLeft;
+                SetRect(title.rectTransform, new Vector2(-500f, 306f), new Vector2(260f, 42f));
+            }
+
+            var subtitle = FindOrCreateText(panelRect, "V0.4 Subtitle", "Native Quest control shell", 13, FontStyle.Normal, new Vector2(-290f, 306f), new Vector2(260f, 36f), TextAnchor.MiddleLeft);
+            subtitle.color = TextSecondary;
+
+            ConfigureSection(panelRect, "Connection Section", "Connection", new Vector2(310f, 204f), new Vector2(520f, 196f));
+            ConfigureSection(panelRect, "Now Playing Section", "Now Playing", new Vector2(310f, -58f), new Vector2(520f, 302f));
+            ConfigureSection(panelRect, "Mic Section", "Mic", new Vector2(-310f, 122f), new Vector2(560f, 360f));
+            ConfigureSection(panelRect, "Debug Section", "Debug", new Vector2(-310f, -242f), new Vector2(560f, 126f));
+
+            MoveText(panelRect, "V0.1 Audio", "Mic", new Vector2(-548f, 276f), new Vector2(130f, 32f), 18, TextAnchor.MiddleLeft);
+            MoveText(panelRect, "Ready.", null, new Vector2(-310f, 230f), new Vector2(520f, 56f), 15, TextAnchor.UpperLeft);
+            MoveText(panelRect, "Preset", null, new Vector2(-310f, 178f), new Vector2(520f, 30f), 18, TextAnchor.MiddleLeft);
+            MoveText(panelRect, "Metrics", null, new Vector2(-310f, 90f), new Vector2(520f, 128f), 13, TextAnchor.UpperLeft);
+
+            MoveRect(panelRect, "Input Level", new Vector2(-445f, 0f), new Vector2(250f, 46f));
+            MoveRect(panelRect, "Output Level", new Vector2(-175f, 0f), new Vector2(250f, 46f));
+            MoveRect(panelRect, "Monitor Volume", new Vector2(-310f, -64f), new Vector2(390f, 50f));
+            MoveRect(panelRect, "Start Mic", new Vector2(-520f, -132f), new Vector2(124f, 44f));
+            MoveRect(panelRect, "Stop", new Vector2(-386f, -132f), new Vector2(96f, 44f));
+            MoveRect(panelRect, "Prev", new Vector2(-282f, -132f), new Vector2(88f, 44f));
+            MoveRect(panelRect, "Next", new Vector2(-184f, -132f), new Vector2(88f, 44f));
+            MoveRect(panelRect, "Monitor", new Vector2(-510f, -184f), new Vector2(150f, 36f));
+            MoveRect(panelRect, "Native", new Vector2(-350f, -184f), new Vector2(150f, 36f));
+            MoveRect(panelRect, "Safety", new Vector2(-190f, -184f), new Vector2(150f, 36f));
+
+            var helperRoot = ResolveHelperRoot(panelRect);
+            MoveText(helperRoot, "Helper Title", "PC Helper", new Vector2(40f, 276f), new Vector2(180f, 32f), 18, TextAnchor.MiddleLeft);
+            MoveText(panelRect, "V0.2 PC Helper", "PC Helper", new Vector2(72f, 276f), new Vector2(180f, 32f), 18, TextAnchor.MiddleLeft);
+            MoveText(helperRoot, new[] { "Helper Connection", "Helper: Connecting..." }, null, new Vector2(310f, 226f), new Vector2(480f, 58f), 13, TextAnchor.UpperLeft);
+            MoveText(helperRoot, new[] { "Helper Host Label", "PC IP" }, "PC IP", new Vector2(74f, 170f), new Vector2(62f, 34f), 12, TextAnchor.MiddleLeft);
+            MoveRect(helperRoot, new[] { "Helper Host Input" }, new Vector2(238f, 170f), new Vector2(258f, 36f));
+            MoveRect(helperRoot, new[] { "Helper Apply Host", "Apply" }, new Vector2(410f, 170f), new Vector2(82f, 36f));
+            MoveRect(helperRoot, new[] { "Helper Default Host", "Use PC" }, new Vector2(500f, 170f), new Vector2(82f, 36f));
+
+            MoveText(helperRoot, new[] { "Helper Current Song", "Current: no song selected." }, null, new Vector2(310f, 42f), new Vector2(480f, 86f), 14, TextAnchor.UpperLeft);
+            MoveText(helperRoot, new[] { "Helper Queue", "Queue 0 item(s)" }, null, new Vector2(310f, -54f), new Vector2(480f, 64f), 13, TextAnchor.UpperLeft);
+            MoveText(helperRoot, new[] { "Helper Playable URL", "Playable URL: none" }, null, new Vector2(310f, -128f), new Vector2(480f, 58f), 11, TextAnchor.UpperLeft);
+            MoveRect(helperRoot, new[] { "Helper Play", "Play" }, new Vector2(92f, -210f), new Vector2(112f, 46f));
+            MoveRect(helperRoot, new[] { "Helper Previous" }, new Vector2(216f, -210f), new Vector2(104f, 46f));
+            MoveRect(helperRoot, new[] { "Helper Next" }, new Vector2(332f, -210f), new Vector2(104f, 46f));
+            MoveRect(helperRoot, new[] { "Helper Replay", "Replay" }, new Vector2(452f, -210f), new Vector2(104f, 46f));
+
+            MoveRect(panelRect, "Copy Debug", new Vector2(-420f, -300f), new Vector2(154f, 42f));
+            ApplyVisualStyle(panelRect);
+        }
+
+        private static RectTransform ResolveHelperRoot(RectTransform panelRect)
+        {
+            var helperRoot = panelRect.Find("V0.2 Runtime Helper") as RectTransform;
+            if (helperRoot == null)
+            {
+                return panelRect;
+            }
+
+            SetRect(helperRoot, Vector2.zero, panelRect.sizeDelta);
+            return helperRoot;
+        }
+
+        private static void ConfigureSection(RectTransform panelRect, string name, string title, Vector2 position, Vector2 size)
+        {
+            var section = panelRect.Find(name) as RectTransform;
+            if (section == null)
+            {
+                var sectionObject = new GameObject(name);
+                sectionObject.transform.SetParent(panelRect, false);
+                section = sectionObject.AddComponent<RectTransform>();
+                var image = sectionObject.AddComponent<Image>();
+                image.color = SectionBackground;
+            }
+
+            section.SetAsFirstSibling();
+            SetRect(section, position, size);
+            var sectionImage = section.GetComponent<Image>();
+            if (sectionImage != null)
+            {
+                sectionImage.color = SectionBackground;
+            }
+
+            var label = FindOrCreateText(section, "Label", title, 12, FontStyle.Bold, new Vector2(-size.x * 0.5f + 54f, size.y * 0.5f - 22f), new Vector2(120f, 24f), TextAnchor.MiddleLeft);
+            label.color = TextSecondary;
+
+            var line = section.Find("Line") as RectTransform;
+            if (line == null)
+            {
+                var lineObject = new GameObject("Line");
+                lineObject.transform.SetParent(section, false);
+                line = lineObject.AddComponent<RectTransform>();
+                lineObject.AddComponent<Image>();
+            }
+
+            SetRect(line, new Vector2(0f, size.y * 0.5f - 42f), new Vector2(size.x - 40f, 2f));
+            var lineImage = line.GetComponent<Image>();
+            if (lineImage != null)
+            {
+                lineImage.color = SectionLine;
+            }
+        }
+
+        private static void ApplyVisualStyle(Transform root)
+        {
+            var texts = root.GetComponentsInChildren<Text>(true);
+            for (var i = 0; i < texts.Length; i += 1)
+            {
+                if (texts[i].name == "Label" && texts[i].transform.parent != null && texts[i].transform.parent.name.EndsWith("Section", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                texts[i].color = texts[i].fontStyle == FontStyle.Bold ? TextPrimary : TextSecondary;
+                texts[i].horizontalOverflow = HorizontalWrapMode.Wrap;
+                texts[i].verticalOverflow = VerticalWrapMode.Overflow;
+            }
+
+            var buttons = root.GetComponentsInChildren<Button>(true);
+            for (var i = 0; i < buttons.Length; i += 1)
+            {
+                buttons[i].colors = CreateSelectableColors();
+                var image = buttons[i].GetComponent<Image>();
+                if (image != null)
+                {
+                    image.color = new Color(0.08f, 0.14f, 0.15f, 1f);
+                }
+            }
+
+            var sliders = root.GetComponentsInChildren<Slider>(true);
+            for (var i = 0; i < sliders.Length; i += 1)
+            {
+                var fill = sliders[i].fillRect != null ? sliders[i].fillRect.GetComponent<Image>() : null;
+                if (fill != null)
+                {
+                    fill.color = Accent;
+                }
+            }
+
+            var toggles = root.GetComponentsInChildren<Toggle>(true);
+            for (var i = 0; i < toggles.Length; i += 1)
+            {
+                toggles[i].colors = CreateSelectableColors();
+                if (toggles[i].graphic is Image graphicImage)
+                {
+                    graphicImage.color = Accent;
+                }
+            }
+        }
+
+        private static Text FindOrCreateText(Transform parent, string name, string value, int fontSize, FontStyle style, Vector2 position, Vector2 size, TextAnchor alignment)
+        {
+            var existing = parent.Find(name);
+            if (existing != null && existing.TryGetComponent<Text>(out var existingText))
+            {
+                existingText.text = value;
+                existingText.fontSize = fontSize;
+                existingText.fontStyle = style;
+                existingText.alignment = alignment;
+                SetRect(existingText.rectTransform, position, size);
+                return existingText;
+            }
+
+            var textObject = new GameObject(name);
+            textObject.transform.SetParent(parent, false);
+            var text = textObject.AddComponent<Text>();
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.text = value;
+            text.fontSize = fontSize;
+            text.fontStyle = style;
+            text.color = style == FontStyle.Bold ? TextPrimary : TextSecondary;
+            text.alignment = alignment;
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            SetRect(text.rectTransform, position, size);
+            return text;
+        }
+
+        private static Button FindOrCreateButton(Transform parent, string name, string label, Vector2 position, Vector2 size, int fontSize)
+        {
+            var existing = parent.Find(name);
+            if (existing != null && existing.TryGetComponent<Button>(out var existingButton))
+            {
+                SetRect(existingButton.GetComponent<RectTransform>(), position, size);
+                SetButtonLabel(existingButton, label, fontSize);
+                return existingButton;
+            }
+
+            var buttonObject = new GameObject(name);
+            buttonObject.transform.SetParent(parent, false);
+            var rect = buttonObject.AddComponent<RectTransform>();
+            SetRect(rect, position, size);
+            var image = buttonObject.AddComponent<Image>();
+            image.color = new Color(0.08f, 0.14f, 0.15f, 1f);
+            var button = buttonObject.AddComponent<Button>();
+            button.targetGraphic = image;
+            button.colors = CreateSelectableColors();
+
+            var labelText = FindOrCreateText(buttonObject.transform, "Label", label, fontSize, FontStyle.Bold, Vector2.zero, size, TextAnchor.MiddleCenter);
+            labelText.color = TextPrimary;
+            return button;
+        }
+
+        private static void SetButtonLabel(Button button, string label, int fontSize)
+        {
+            var text = button.GetComponentInChildren<Text>();
+            if (text == null)
+            {
+                return;
+            }
+
+            text.text = label;
+            text.fontSize = fontSize;
+            text.alignment = TextAnchor.MiddleCenter;
+            text.color = TextPrimary;
+            SetRect(text.rectTransform, Vector2.zero, button.GetComponent<RectTransform>().sizeDelta);
+        }
+
+        private static void MoveText(Transform parent, string name, string nextText, Vector2 position, Vector2 size, int fontSize, TextAnchor alignment)
+        {
+            var text = FindText(parent, name);
+            if (text == null)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(nextText))
+            {
+                text.text = nextText;
+            }
+
+            text.fontSize = fontSize;
+            text.alignment = alignment;
+            SetRect(text.rectTransform, position, size);
+        }
+
+        private static void MoveText(Transform parent, string[] names, string nextText, Vector2 position, Vector2 size, int fontSize, TextAnchor alignment)
+        {
+            for (var i = 0; i < names.Length; i += 1)
+            {
+                var text = FindText(parent, names[i]);
+                if (text == null)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(nextText))
+                {
+                    text.text = nextText;
+                }
+
+                text.fontSize = fontSize;
+                text.alignment = alignment;
+                SetRect(text.rectTransform, position, size);
+                return;
+            }
+        }
+
+        private static void MoveRect(Transform parent, string name, Vector2 position, Vector2 size)
+        {
+            var child = parent.Find(name);
+            if (child == null || !child.TryGetComponent<RectTransform>(out var rect))
+            {
+                return;
+            }
+
+            SetRect(rect, position, size);
+            var label = child.GetComponentInChildren<Text>();
+            if (label != null && child.TryGetComponent<Button>(out _))
+            {
+                SetRect(label.rectTransform, Vector2.zero, size);
+            }
+        }
+
+        private static void MoveRect(Transform parent, string[] names, Vector2 position, Vector2 size)
+        {
+            for (var i = 0; i < names.Length; i += 1)
+            {
+                var child = parent.Find(names[i]);
+                if (child == null || !child.TryGetComponent<RectTransform>(out var rect))
+                {
+                    continue;
+                }
+
+                SetRect(rect, position, size);
+                var label = child.GetComponentInChildren<Text>();
+                if (label != null && child.TryGetComponent<Button>(out _))
+                {
+                    SetRect(label.rectTransform, Vector2.zero, size);
+                }
+
+                return;
+            }
+        }
+
+        private static Text FindText(Transform parent, string name)
+        {
+            var child = parent.Find(name);
+            if (child != null && child.TryGetComponent<Text>(out var text))
+            {
+                return text;
+            }
+
+            for (var i = 0; i < parent.childCount; i += 1)
+            {
+                var nested = FindText(parent.GetChild(i), name);
+                if (nested != null)
+                {
+                    return nested;
+                }
+            }
+
+            return null;
+        }
+
+        private static void SetRect(RectTransform rect, Vector2 position, Vector2 size)
+        {
+            rect.anchorMin = new Vector2(0.5f, 0.5f);
+            rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = position;
+            rect.sizeDelta = size;
+        }
+
+        private static ColorBlock CreateSelectableColors()
+        {
+            return new ColorBlock
+            {
+                normalColor = new Color(0.08f, 0.14f, 0.15f, 1f),
+                highlightedColor = new Color(0.15f, 0.3f, 0.31f, 1f),
+                pressedColor = Accent,
+                selectedColor = new Color(0.18f, 0.36f, 0.34f, 1f),
+                disabledColor = new Color(0.08f, 0.1f, 0.105f, 0.48f),
+                colorMultiplier = 1f,
+                fadeDuration = 0.05f,
+            };
+        }
+
+        private static void EnsureEventSystem()
+        {
+            if (EventSystem.current != null)
+            {
+                if (EventSystem.current.GetComponent<InputSystemUIInputModule>() == null)
+                {
+                    EventSystem.current.gameObject.AddComponent<InputSystemUIInputModule>();
+                }
+
+                return;
+            }
+
+            var eventSystemObject = new GameObject("EventSystem");
+            eventSystemObject.AddComponent<EventSystem>();
+            eventSystemObject.AddComponent<InputSystemUIInputModule>();
+        }
+
+        private static string SanitizeLine(string text)
+        {
+            return string.IsNullOrWhiteSpace(text) ? string.Empty : text.Replace("\r", "\\r").Replace("\n", "\\n");
+        }
+    }
+}

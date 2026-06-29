@@ -124,14 +124,16 @@ namespace TsukiVox.AudioPrototype.Editor
             var helperHostInput = CreateInputField(panel.transform, QuestPlaylistPrototype.DefaultHelperHostAddress, new Vector2(258f, -166f), new Vector2(260f, 34f));
             var applyHost = CreateButton(panel.transform, "Apply", new Vector2(432f, -166f), new Vector2(86f, 34f), 13);
             var defaultHost = CreateButton(panel.transform, "Use PC", new Vector2(528f, -166f), new Vector2(86f, 34f), 13);
-            var playPause = CreateButton(panel.transform, "Play", new Vector2(95f, -230f));
-            var playlistPrevious = CreateButton(panel.transform, "Prev", new Vector2(225f, -230f));
-            var playlistNext = CreateButton(panel.transform, "Next", new Vector2(355f, -230f));
-            var replay = CreateButton(panel.transform, "Replay", new Vector2(485f, -230f));
+            var playPause = CreateButton(panel.transform, "Helper Play", "Play", new Vector2(95f, -230f));
+            var playlistPrevious = CreateButton(panel.transform, "Helper Previous", "Prev", new Vector2(225f, -230f));
+            var playlistNext = CreateButton(panel.transform, "Helper Next", "Next", new Vector2(355f, -230f));
+            var replay = CreateButton(panel.transform, "Helper Replay", "Replay", new Vector2(485f, -230f));
             var copyVideoDebug = CreateButton(panel.transform, "Copy Debug", new Vector2(300f, -292f), new Vector2(150f, 38f), 13);
+            var copyAppDebug = CreateButton(panel.transform, "Copy App Debug", new Vector2(522f, -300f), new Vector2(176f, 42f), 13);
             CreateEventSystem();
             CreateQuestPointer(canvasObject);
             CreateVideoScreen(playlistPrototype, copyVideoDebug);
+            CreateAppShell(canvasObject, panel, prototype, playlistPrototype, copyAppDebug);
 
             var so = new SerializedObject(prototype);
             so.FindProperty("monitorSource").objectReferenceValue = source;
@@ -208,16 +210,16 @@ namespace TsukiVox.AudioPrototype.Editor
             canvas.sortingOrder = 10;
             var scaler = canvasObject.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1280f, 720f);
+            scaler.referenceResolution = QuestAppShellPrototype.ControlPanelSize;
             scaler.matchWidthOrHeight = 0.5f;
             scaler.dynamicPixelsPerUnit = 12f;
             var raycaster = canvasObject.AddComponent<GraphicRaycaster>();
             raycaster.ignoreReversedGraphics = false;
             var rect = canvasObject.GetComponent<RectTransform>();
-            rect.sizeDelta = new Vector2(1280f, 720f);
-            rect.position = new Vector3(0f, 1.55f, 1.85f);
-            rect.rotation = Quaternion.identity;
-            rect.localScale = Vector3.one * 0.0022f;
+            rect.sizeDelta = QuestAppShellPrototype.ControlPanelSize;
+            rect.position = QuestAppShellPrototype.ControlPanelWorldPosition;
+            rect.rotation = QuestAppShellPrototype.ControlPanelWorldRotation;
+            rect.localScale = QuestAppShellPrototype.ControlPanelWorldScale;
             return canvasObject;
         }
 
@@ -229,7 +231,7 @@ namespace TsukiVox.AudioPrototype.Editor
             rect.anchorMin = new Vector2(0.5f, 0.5f);
             rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.anchoredPosition = Vector2.zero;
-            rect.sizeDelta = new Vector2(1180f, 650f);
+            rect.sizeDelta = new Vector2(1240f, 690f);
             var image = panelObject.AddComponent<Image>();
             image.color = new Color(0.04f, 0.055f, 0.062f, 0.92f);
             return rect;
@@ -299,7 +301,17 @@ namespace TsukiVox.AudioPrototype.Editor
 
         private static Button CreateButton(Transform parent, string label, Vector2 position, Vector2 size, int fontSize)
         {
-            var buttonObject = new GameObject(label);
+            return CreateButton(parent, label, label, position, size, fontSize);
+        }
+
+        private static Button CreateButton(Transform parent, string name, string label, Vector2 position)
+        {
+            return CreateButton(parent, name, label, position, new Vector2(116f, 48f), 16);
+        }
+
+        private static Button CreateButton(Transform parent, string name, string label, Vector2 position, Vector2 size, int fontSize)
+        {
+            var buttonObject = new GameObject(name);
             buttonObject.transform.SetParent(parent, false);
             var rect = buttonObject.AddComponent<RectTransform>();
             rect.sizeDelta = size;
@@ -417,6 +429,25 @@ namespace TsukiVox.AudioPrototype.Editor
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
+        private static void CreateAppShell(
+            GameObject canvasObject,
+            RectTransform panel,
+            QuestAudioPrototype audioPrototype,
+            QuestPlaylistPrototype playlistPrototype,
+            Button copyAppDebugButton)
+        {
+            var shellObject = new GameObject("Quest App Shell Prototype");
+            var shell = shellObject.AddComponent<QuestAppShellPrototype>();
+            var so = new SerializedObject(shell);
+            so.FindProperty("controlCanvas").objectReferenceValue = canvasObject.GetComponent<Canvas>();
+            so.FindProperty("panel").objectReferenceValue = panel;
+            so.FindProperty("copyAppDebugButton").objectReferenceValue = copyAppDebugButton;
+            so.FindProperty("audioPrototype").objectReferenceValue = audioPrototype;
+            so.FindProperty("playlistPrototype").objectReferenceValue = playlistPrototype;
+            so.FindProperty("videoScreenPrototype").objectReferenceValue = Object.FindAnyObjectByType<QuestVideoScreenPrototype>();
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
         [MenuItem("TsukiVox/Apply Current Helper Host To Scene")]
         public static void ApplyCurrentHelperHostToScene()
         {
@@ -456,6 +487,26 @@ namespace TsukiVox.AudioPrototype.Editor
             }
 
             return videoScreen;
+        }
+
+        public static QuestAppShellPrototype EnsureAppShellInCurrentScene(
+            QuestPlaylistPrototype playlistPrototype,
+            QuestVideoScreenPrototype videoScreen)
+        {
+            var shell = Object.FindAnyObjectByType<QuestAppShellPrototype>();
+            if (shell == null)
+            {
+                var shellObject = new GameObject("Quest App Shell Prototype");
+                shell = shellObject.AddComponent<QuestAppShellPrototype>();
+            }
+
+            var so = new SerializedObject(shell);
+            so.FindProperty("playlistPrototype").objectReferenceValue = playlistPrototype;
+            so.FindProperty("videoScreenPrototype").objectReferenceValue = videoScreen;
+            so.FindProperty("audioPrototype").objectReferenceValue = Object.FindAnyObjectByType<QuestAudioPrototype>();
+            so.ApplyModifiedPropertiesWithoutUndo();
+            shell.ConfigureSceneReferences();
+            return shell;
         }
 
         private static Button FindOrCreateCopyDebugButton()

@@ -90,6 +90,18 @@ namespace TsukiVox.AudioPrototype
             SafeSmallRoom,
         }
 
+        public bool IsMonitoring => isMonitoring;
+
+        public bool IsWaitingForPermission => isWaitingForPermission;
+
+        public bool IsSafetyReducingGain => isSafetyReducingGain;
+
+        public string ActiveBackendName => activeBackend == NativeAudioBackend.NativeOboeDryMonitor ? "Native Oboe Dry" : "Unity Microphone";
+
+        public string CurrentPresetName => FormatPresetName(currentPreset);
+
+        public float MonitorVolume => monitorVolume;
+
         private void Reset()
         {
             monitorSource = GetComponent<AudioSource>();
@@ -109,6 +121,7 @@ namespace TsukiVox.AudioPrototype
             QuestXrBootstrap.EnsureSceneBootstrap();
             QuestPlaylistPrototype.EnsureScenePrototype();
             QuestVideoScreenPrototype.EnsureScenePrototype();
+            QuestAppShellPrototype.EnsureSceneShell();
             currentPreset = initialPreset;
             ApplyPreset(currentPreset);
             ApplyMonitorVolume(monitorVolume);

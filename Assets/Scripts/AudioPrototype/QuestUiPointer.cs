@@ -17,9 +17,9 @@ namespace TsukiVox.AudioPrototype
         private const int PointerId = -32025;
         private const float TriggerPressThreshold = 0.65f;
 
-        private static readonly Vector3 PanelWorldPosition = new Vector3(0f, 1.55f, 1.85f);
-        private static readonly Quaternion PanelWorldRotation = Quaternion.identity;
-        private static readonly Vector3 PanelWorldScale = Vector3.one * 0.0022f;
+        private static readonly Vector3 PanelWorldPosition = QuestAppShellPrototype.ControlPanelWorldPosition;
+        private static readonly Quaternion PanelWorldRotation = QuestAppShellPrototype.ControlPanelWorldRotation;
+        private static readonly Vector3 PanelWorldScale = QuestAppShellPrototype.ControlPanelWorldScale;
 
         private static readonly Color PointerIdleColor = new Color(0.32f, 0.92f, 1f, 0.88f);
         private static readonly Color PointerHoverColor = new Color(0.52f, 1f, 0.84f, 1f);
@@ -110,7 +110,7 @@ namespace TsukiVox.AudioPrototype
             rect.position = PanelWorldPosition;
             rect.rotation = PanelWorldRotation;
             rect.localScale = PanelWorldScale;
-            rect.sizeDelta = new Vector2(1280f, 720f);
+            rect.sizeDelta = QuestAppShellPrototype.ControlPanelSize;
             rect.pivot = new Vector2(0.5f, 0.5f);
 
             var scaler = canvas.GetComponent<CanvasScaler>();

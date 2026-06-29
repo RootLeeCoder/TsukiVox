@@ -1009,22 +1009,7 @@ namespace TsukiVox.AudioPrototype
 
         private static void CopyToClipboard(string text)
         {
-            GUIUtility.systemCopyBuffer = text;
-#if UNITY_ANDROID && !UNITY_EDITOR
-            try
-            {
-                using var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
-                using var activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
-                using var clipboard = activity.Call<AndroidJavaObject>("getSystemService", "clipboard");
-                using var clipDataClass = new AndroidJavaClass("android.content.ClipData");
-                using var clip = clipDataClass.CallStatic<AndroidJavaObject>("newPlainText", "TsukiVox Video Debug", text);
-                clipboard.Call("setPrimaryClip", clip);
-            }
-            catch (Exception exception)
-            {
-                Debug.LogWarning($"[TsukiVox Video] Android clipboard fallback failed: {exception.Message}");
-            }
-#endif
+            TsukiVoxClipboard.CopyPlainText("TsukiVox Video Debug", text);
         }
 
         private static bool IsSupportedVideoUrl(string url)

@@ -24,7 +24,7 @@ namespace TsukiVox.AudioPrototype.Editor
             }
 
             PlayerSettings.companyName = "TsukiVox";
-            PlayerSettings.productName = "TsukiVox Audio Prototype";
+            PlayerSettings.productName = "TsukiVox Quest";
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "com.tsukivox.audio");
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel26;
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
@@ -66,7 +66,8 @@ namespace TsukiVox.AudioPrototype.Editor
                     var openedScene = EditorSceneManager.OpenScene(scene.path, OpenSceneMode.Single);
                     var prototype = CreateAudioPrototypeScene.EnsurePlaylistPrototypeInCurrentScene();
                     CreateAudioPrototypeScene.ApplyCurrentHelperHost(prototype);
-                    CreateAudioPrototypeScene.EnsureVideoScreenPrototypeInCurrentScene(prototype);
+                    var videoScreen = CreateAudioPrototypeScene.EnsureVideoScreenPrototypeInCurrentScene(prototype);
+                    CreateAudioPrototypeScene.EnsureAppShellInCurrentScene(prototype, videoScreen);
                     EditorSceneManager.MarkSceneDirty(openedScene);
                     EditorSceneManager.SaveScene(openedScene);
                 }
