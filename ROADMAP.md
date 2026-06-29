@@ -62,7 +62,7 @@ WebXR 项目不是被废弃，而是作为迁移源。接下来要复用它已�
 
 ## 当前状态
 
-状态：V0.1 Quest 3 音频验证、V0.2 PC Helper 兼容客户端和 V0.3 Unity 视频大屏与播放同步已经完成第一版。Unity 客户端已经具备“读 PC 点歌队列、加载当前 ready 视频、在 Quest 场景中播放并保留麦克风返听”的核心闭环。下一步主线是 V0.4 原生 Quest App 壳和头显内 UI。
+状态：V0.1 Quest 3 音频验证、V0.2 PC Helper 兼容客户端、V0.3 Unity 视频大屏与播放同步、V0.4 原生 Quest App 壳和头显内 UI 都已经完成第一版。Unity 客户端已经具备“读 PC 点歌队列、加载当前 ready 视频、在 Quest 头显内操作播放与麦克风返听”的可演示闭环。下一步主线是 V0.5 最小 VR KTV 房间。
 
 已完成：
 
@@ -90,14 +90,21 @@ WebXR 项目不是被废弃，而是作为迁移源。接下来要复用它已�
 - 视频首帧和 prepare 完成后按实际宽高比适配屏幕安全区域。
 - 根据 playlist `playback` 和 `command` 同步播放、暂停和重播；视频结束后可向 playlist 服务发送 `next`。
 - 增加 V0.3 视频状态文本、probe/cache/prepare 诊断，以及 `Copy Debug` 按钮用于真机排查。
+- 新增 `QuestAppShellPrototype`，把 V0.1/V0.2/V0.3 调试控件整理成面向头显使用的世界空间控制面板。
+- 新增 V0.4 app 状态栏，显示 helper 连接、麦克风状态和运行平台。
+- 新增 `Copy App Debug`，可复制平台、包名、版本、DSP buffer、playlist、音频状态、视频缓存和面板文本等诊断信息。
+- `QuestUiPointer` 已升级为控制器射线 UI 指针，支持 trigger / primary button / grip 点击、hover、press、drag 和可视射线/reticle。
+- `QuestXrBootstrap` 会确保主相机使用 HMD tracking，并记录 XR loader 状态。
+- Android 构建预处理会固化应用名 `TsukiVox Quest`、GameActivity、New Input System、OpenXR loader / Quest Touch 控制器配置，并确保构建场景中存在 playlist、video screen 和 app shell。
 
 已观察到的问题：
 
 - 当前音效参数仍偏验证性质，不是最终舒适演唱参数。
-- 当前 UI 仍是调试面板，不是正式 VR 头显内界面。
+- V0.4 UI 已经从散乱调试面板收敛为头显内控制壳，但仍不是最终 KTV 房间内的沉浸式界面。
 - Oboe dry backend 可作为低延迟参考路径，但当前 KTV 混响和效果链仍主要在 Unity backend 中验证。
 - V0.3 已能加载并播放 ready 视频，但仍需要持续做 Quest 真机 + PC helper 回归，确认不同来源和文件大小下的缓存、prepare 和首帧表现。
 - helper 地址仍是手动输入 / 默认 IP 配置，尚未做局域网扫描、二维码配对或更友好的连接向导。
+- 控制器射线 UI 需要继续在 Quest 真机上回归输入框、滑杆、开关、按钮和不同手柄追踪状态。
 - 真实演唱体验已经进入“视频播放 + 返听 + 混响 + 头显音量”的组合评估阶段，但音频舒适度和反馈风险仍需继续打磨。
 
 ## V0.1 Quest 音频验证 Spike
@@ -182,9 +189,9 @@ WebXR 项目不是被废弃，而是作为迁移源。接下来要复用它已�
 
 目标：把音频和视频验证整合成真正的 Quest App 基础壳。
 
-状态：下一步主线。
+状态：已完成第一版。V0.4 已经把音频、PC helper、视频大屏和调试信息收敛到可在 Quest 头显内使用的世界空间控制面板，并补上控制器射线、App Debug 和构建时场景补全。
 
-范围：
+已实现范围：
 
 - 配置 OpenXR / Meta XR 基础运行环境。
 - 加入 XR camera rig。
@@ -192,17 +199,23 @@ WebXR 项目不是被废弃，而是作为迁移源。接下来要复用它已�
 - 把当前调试 Canvas 替换为头显内可读的世界空间控制面板。
 - 控制面板保留：helper 连接、当前歌曲、播放控制、麦克风状态、预设切换、监听音量、干湿比、安全状态。
 - 固化 Quest 3 构建设置：ARM64、包名、应用名、Android min SDK、麦克风权限。
+- 使用 `QuestAppShellPrototype` 组织 `Prototype Canvas`：分区显示 Connection、Now Playing、Mic 和 Debug。
+- 使用 `QuestUiPointer` 从 Quest 控制器发射世界空间 UI 射线，并驱动 Button、InputField、Slider 和 Toggle。
+- 使用 `QuestXrBootstrap` 确保 Main Camera 绑定 HMD tracking，并在启动时报告 XR loader 状态。
+- 使用 `TsukiVoxClipboard` 统一 `Copy Debug` / `Copy App Debug` 在 Editor 和 Android 上的剪贴板复制。
+- 在构建预处理里确保 build scene 自动补齐 playlist、video screen 和 app shell，避免旧场景漏掉 V0.4 组件。
 
-验收标准：
+验收状态：
 
-- App 能稳定从 Quest 未知来源启动。
-- UI 在头显里可读、可点、不遮挡主要画面。
-- 用户可以在头显里操作播放和音频预设，不依赖 Unity 编辑器。
-- 重新安装后麦克风权限和音频启动流程稳定。
+- 代码侧已具备 Quest 头显内控制 helper 连接、播放、麦克风、音频预设和调试复制的基础壳。
+- Android 构建设置已覆盖应用名、包名、ARM64、GameActivity、New Input System、OpenXR loader、Quest Touch 控制器和 Internet / HTTP 访问。
+- 仍需要每次 UI/输入改动后在 Quest 3 真机上确认：App 从未知来源启动、面板可读可点、指针命中稳定、重新安装后麦克风权限和音频启动流程稳定。
 
 ## V0.5 最小 VR KTV 房间
 
 目标：重建 WebXR 版本里最核心的 KTV 包厢体验，但先控制视觉复杂度。
+
+状态：下一步主线。
 
 范围：
 
@@ -340,17 +353,18 @@ WebXR 项目不是被废弃，而是作为迁移源。接下来要复用它已�
 
 下一步不优先重建漂亮房间，也不优先做歌词或持久歌单。
 
-当前最重要的切片是 V0.4：
+当前最重要的切片是 V0.5：
 
 1. 保持现有 Quest 3 低延迟返听链路可用。
 2. 保持 V0.2 的 PC helper / playlist API 接入可回归。
 3. 保持 V0.3 的 `VideoPlayer + RenderTexture` 视频大屏、远端缓存和播放同步可回归。
-4. 把当前调试 Canvas 收敛成更像 Quest App 的头显内控制面板。
-5. 固化用户在头显内完成 helper 连接、播放控制、麦克风启动和预设切换的基础流程。
-6. 继续验证视频播放、人声返听和混响可以同时稳定工作。
-7. 再开始重建 VR 包厢、手柄麦克风、荧光棒和更完整的空间表现。
+4. 保持 V0.4 的头显内控制壳、控制器射线和 App Debug 可回归。
+5. 建立最小 KTV 房间：大屏、用户默认站位/坐位、简化墙面/地面/空间边界。
+6. 把视频大屏放进房间体验，而不是停留在独立调试屏幕。
+7. 让房间灯光或电平反馈响应麦克风输入，并继续验证视频播放、人声返听和混响可以同时稳定工作。
+8. 再开始做手柄麦克风、荧光棒和更完整的空间表现。
 
-完成这个切片后，TsukiVox Unity 才真正从“能唱一首歌的技术原型”进入“可以反复使用和演示的 Quest K 歌客户端”阶段。
+完成这个切片后，TsukiVox Unity 才真正从“头显内可操作的技术原型”进入“有 KTV 空间感的 Quest K 歌客户端”阶段。
 
 ## 待决策问题
 
@@ -358,5 +372,6 @@ WebXR 项目不是被废弃，而是作为迁移源。接下来要复用它已�
 - Unity 客户端连接 helper 的地址配置方式：手动输入、局域网扫描，还是二维码/配置文件。
 - helper API 是否需要为 Unity 增加更明确的 health endpoint。
 - 视频文件分辨率默认策略是否继续沿用 WebXR 版本的 Bilibili 480P、YouTube H.264 720P 上限，以及是否需要限制单个缓存文件大小。
+- V0.5 房间应该先走脚本生成的极简几何，还是尽早引入 prefab / ProBuilder / 美术资产。
 - 蓝牙音频是否因为延迟过高而明确标记为不支持。
 - Oboe / AAudio 是保留为备用分支，还是在 Unity 路线跑稳后继续作为高级音频引擎投入。
