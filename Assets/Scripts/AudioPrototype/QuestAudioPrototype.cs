@@ -102,6 +102,10 @@ namespace TsukiVox.AudioPrototype
 
         public float MonitorVolume => monitorVolume;
 
+        public float InputLevel => Mathf.Clamp01(smoothedInputLevel);
+
+        public float OutputLevel => Mathf.Clamp01(smoothedOutputLevel);
+
         private void Reset()
         {
             monitorSource = GetComponent<AudioSource>();
@@ -122,6 +126,7 @@ namespace TsukiVox.AudioPrototype
             QuestPlaylistPrototype.EnsureScenePrototype();
             QuestVideoScreenPrototype.EnsureScenePrototype();
             QuestAppShellPrototype.EnsureSceneShell();
+            QuestKtvRoomPrototype.EnsureSceneRoom();
             currentPreset = initialPreset;
             ApplyPreset(currentPreset);
             ApplyMonitorVolume(monitorVolume);

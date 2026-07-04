@@ -16,9 +16,9 @@ namespace TsukiVox.AudioPrototype
         private const int ScreenLayer = 0;
         private const string MainTextureProperty = "_MainTex";
 
-        private static readonly Vector3 ScreenWorldPosition = new Vector3(0f, 3.35f, 3.45f);
-        private static readonly Vector2 ScreenSafeSize = new Vector2(3.25f, 1.83f);
-        private static readonly Vector2 ScreenMatteSize = new Vector2(3.5f, 2.03f);
+        private static readonly Vector3 DefaultScreenPosition = new Vector3(0f, 3.35f, 3.45f);
+        private static readonly Vector2 DefaultScreenSafeSize = new Vector2(3.25f, 1.83f);
+        private static readonly Vector2 DefaultScreenMatteSize = new Vector2(3.5f, 2.03f);
 
         [Header("Playlist")]
         [SerializeField] private QuestPlaylistPrototype playlistPrototype;
@@ -33,6 +33,12 @@ namespace TsukiVox.AudioPrototype
         [SerializeField] private Button copyDebugButton;
         [SerializeField] private int renderTextureWidth = DefaultTextureWidth;
         [SerializeField] private int renderTextureHeight = DefaultTextureHeight;
+
+        [Header("Screen Layout")]
+        [SerializeField] private Vector3 screenPosition = DefaultScreenPosition;
+        [SerializeField] private Vector3 screenEulerAngles = Vector3.zero;
+        [SerializeField] private Vector2 screenSafeSize = DefaultScreenSafeSize;
+        [SerializeField] private Vector2 screenMatteSize = DefaultScreenMatteSize;
 
         [Header("Loading")]
         [SerializeField] private bool cacheRemoteVideosBeforePlayback = true;
@@ -213,6 +219,53 @@ namespace TsukiVox.AudioPrototype
             renderTexture.Create();
         }
 
+        private Quaternion ScreenRotation => Quaternion.Euler(screenEulerAngles);
+
+        private Vector3 ScreenViewerOffset => ScreenRotation * Vector3.back;
+
+        public void ApplyScreenLayout(Vector3 position, Quaternion rotation, Vector2 safeSize, Vector2 matteSize)
+        {
+            screenPosition = position;
+            screenEulerAngles = rotation.eulerAngles;
+            screenSafeSize = safeSize;
+            screenMatteSize = matteSize;
+            ApplyScreenLayoutToObjects();
+        }
+
+        private void ApplyScreenLayoutToObjects()
+        {
+            if (matteRenderer != null)
+            {
+                matteRenderer.transform.SetPositionAndRotation(screenPosition, ScreenRotation);
+                matteRenderer.transform.localScale = new Vector3(screenMatteSize.x, screenMatteSize.y, 1f);
+            }
+
+            if (screenRenderer != null)
+            {
+                screenRenderer.transform.SetPositionAndRotation(screenPosition + ScreenViewerOffset * 0.01f, ScreenRotation);
+            }
+
+            ConfigureScreenImageTransform();
+            ApplyStatusCanvasLayout();
+            var width = videoPlayer != null && videoPlayer.width > 0 ? videoPlayer.width : (ulong)DefaultTextureWidth;
+            var height = videoPlayer != null && videoPlayer.height > 0 ? videoPlayer.height : (ulong)DefaultTextureHeight;
+            FitScreenToVideo(width, height);
+        }
+
+        private void ApplyStatusCanvasLayout()
+        {
+            var statusCanvasObject = GameObject.Find("V0.3 Video Screen Status Canvas");
+            if (statusCanvasObject == null || !statusCanvasObject.TryGetComponent<RectTransform>(out var rect))
+            {
+                return;
+            }
+
+            rect.position = screenPosition +
+                            ScreenRotation * new Vector3(0f, -(screenMatteSize.y * 0.5f - 0.17f), 0f) +
+                            ScreenViewerOffset * 0.02f;
+            rect.rotation = ScreenRotation;
+        }
+
         private void EnsureScreenObjects()
         {
             if (matteRenderer == null)
@@ -221,9 +274,9 @@ namespace TsukiVox.AudioPrototype
                 matteObject.name = "V0.3 Video Screen Matte";
                 matteObject.layer = ScreenLayer;
                 matteObject.transform.SetParent(null, false);
-                matteObject.transform.position = ScreenWorldPosition;
-                matteObject.transform.rotation = Quaternion.identity;
-                matteObject.transform.localScale = new Vector3(ScreenMatteSize.x, ScreenMatteSize.y, 1f);
+                matteObject.transform.position = screenPosition;
+                matteObject.transform.rotation = ScreenRotation;
+                matteObject.transform.localScale = new Vector3(screenMatteSize.x, screenMatteSize.y, 1f);
                 DestroyCollider(matteObject);
                 matteRenderer = matteObject.GetComponent<MeshRenderer>();
             }
@@ -234,9 +287,9 @@ namespace TsukiVox.AudioPrototype
                 screenObject.name = "V0.3 Video Screen";
                 screenObject.layer = ScreenLayer;
                 screenObject.transform.SetParent(null, false);
-                screenObject.transform.position = ScreenWorldPosition + new Vector3(0f, 0f, -0.01f);
-                screenObject.transform.rotation = Quaternion.identity;
-                screenObject.transform.localScale = new Vector3(ScreenSafeSize.x, ScreenSafeSize.y, 1f);
+                screenObject.transform.position = screenPosition + ScreenViewerOffset * 0.01f;
+                screenObject.transform.rotation = ScreenRotation;
+                screenObject.transform.localScale = new Vector3(screenSafeSize.x, screenSafeSize.y, 1f);
                 DestroyCollider(screenObject);
                 screenRenderer = screenObject.GetComponent<MeshRenderer>();
             }
@@ -325,9 +378,9 @@ namespace TsukiVox.AudioPrototype
             screenCanvasRect = screenImage.canvas != null ? screenImage.canvas.GetComponent<RectTransform>() : screenCanvasRect;
             if (screenCanvasRect != null)
             {
-                screenCanvasRect.position = ScreenWorldPosition + new Vector3(0f, 0f, -0.02f);
-                screenCanvasRect.rotation = Quaternion.identity;
-                screenCanvasRect.localScale = Vector3.one * (ScreenSafeSize.x / DefaultTextureWidth);
+                screenCanvasRect.position = screenPosition + ScreenViewerOffset * 0.02f;
+                screenCanvasRect.rotation = ScreenRotation;
+                screenCanvasRect.localScale = Vector3.one * (screenSafeSize.x / DefaultTextureWidth);
                 screenCanvasRect.sizeDelta = new Vector2(DefaultTextureWidth, DefaultTextureHeight);
             }
 
@@ -435,8 +488,10 @@ namespace TsukiVox.AudioPrototype
 
             var rect = canvasObject.GetComponent<RectTransform>();
             rect.sizeDelta = new Vector2(960f, 72f);
-            rect.position = ScreenWorldPosition + new Vector3(0f, -0.85f, -0.02f);
-            rect.rotation = Quaternion.identity;
+            rect.position = screenPosition +
+                            ScreenRotation * new Vector3(0f, -(screenMatteSize.y * 0.5f - 0.17f), 0f) +
+                            ScreenViewerOffset * 0.02f;
+            rect.rotation = ScreenRotation;
             rect.localScale = Vector3.one * 0.0025f;
             return canvas;
         }
@@ -877,11 +932,11 @@ namespace TsukiVox.AudioPrototype
                 ? (float)width / height
                 : (float)DefaultTextureWidth / DefaultTextureHeight;
 
-            var displayWidth = ScreenSafeSize.x;
+            var displayWidth = screenSafeSize.x;
             var displayHeight = displayWidth / videoAspect;
-            if (displayHeight > ScreenSafeSize.y)
+            if (displayHeight > screenSafeSize.y)
             {
-                displayHeight = ScreenSafeSize.y;
+                displayHeight = screenSafeSize.y;
                 displayWidth = displayHeight * videoAspect;
             }
 
@@ -892,7 +947,7 @@ namespace TsukiVox.AudioPrototype
 
             if (screenCanvasRect != null)
             {
-                var scale = ScreenSafeSize.x / DefaultTextureWidth;
+                var scale = screenSafeSize.x / DefaultTextureWidth;
                 screenCanvasRect.sizeDelta = new Vector2(displayWidth / scale, displayHeight / scale);
             }
         }

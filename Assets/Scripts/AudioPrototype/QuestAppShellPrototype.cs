@@ -10,9 +10,11 @@ namespace TsukiVox.AudioPrototype
 {
     public sealed class QuestAppShellPrototype : MonoBehaviour
     {
-        public static readonly Vector3 ControlPanelWorldPosition = new Vector3(0f, 1.22f, 1.82f);
-        public static readonly Quaternion ControlPanelWorldRotation = Quaternion.Euler(10f, 0f, 0f);
-        public static readonly Vector3 ControlPanelWorldScale = Vector3.one * 0.002f;
+        // V0.5: the control shell rests above the coffee table like a KTV song-picker
+        // tablet, tilted back so it stays readable without blocking the video screen.
+        public static readonly Vector3 ControlPanelWorldPosition = new Vector3(0f, 0.78f, 1.35f);
+        public static readonly Quaternion ControlPanelWorldRotation = Quaternion.Euler(58f, 0f, 0f);
+        public static readonly Vector3 ControlPanelWorldScale = Vector3.one * 0.0012f;
         public static readonly Vector2 ControlPanelSize = new Vector2(1320f, 760f);
 
         private const string CanvasName = "Prototype Canvas";
@@ -83,6 +85,7 @@ namespace TsukiVox.AudioPrototype
             audioPrototype = audioPrototype != null ? audioPrototype : FindAnyObjectByType<QuestAudioPrototype>();
             playlistPrototype = playlistPrototype != null ? playlistPrototype : QuestPlaylistPrototype.EnsureScenePrototype();
             videoScreenPrototype = videoScreenPrototype != null ? videoScreenPrototype : QuestVideoScreenPrototype.EnsureScenePrototype();
+            QuestKtvRoomPrototype.EnsureSceneRoom();
 
             controlCanvas = controlCanvas != null ? controlCanvas : FindOrCreateControlCanvas();
             if (controlCanvas == null)
@@ -144,7 +147,7 @@ namespace TsukiVox.AudioPrototype
                 ? "helper connected"
                 : "helper offline";
             var micStatus = audioPrototype != null && audioPrototype.IsMonitoring ? "mic active" : "mic standby";
-            appStatusText.text = $"V0.4 Quest app shell  {playlistStatus}  {micStatus}  {Application.platform}";
+            appStatusText.text = $"V0.5 KTV room shell  {playlistStatus}  {micStatus}  {Application.platform}";
         }
 
         private string BuildAppDebugInfo()

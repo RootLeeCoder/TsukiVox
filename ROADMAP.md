@@ -62,7 +62,7 @@ WebXR 项目不是被废弃，而是作为迁移源。接下来要复用它已�
 
 ## 当前状态
 
-状态：V0.1 Quest 3 音频验证、V0.2 PC Helper 兼容客户端、V0.3 Unity 视频大屏与播放同步、V0.4 原生 Quest App 壳和头显内 UI 都已经完成第一版。Unity 客户端已经具备“读 PC 点歌队列、加载当前 ready 视频、在 Quest 头显内操作播放与麦克风返听”的可演示闭环。下一步主线是 V0.5 最小 VR KTV 房间。
+状态：V0.1 Quest 3 音频验证、V0.2 PC Helper 兼容客户端、V0.3 Unity 视频大屏与播放同步、V0.4 原生 Quest App 壳和头显内 UI、V0.5 最小 VR KTV 房间都已经完成第一版。Unity 客户端已经具备“进入 KTV 包厢、读 PC 点歌队列、在房间大屏播放当前 ready 视频、麦克风返听驱动房间灯光”的可演示闭环。下一步主线是 V0.6 手柄麦克风、荧光棒和 VR 控制。
 
 已完成：
 
@@ -95,7 +95,12 @@ WebXR 项目不是被废弃，而是作为迁移源。接下来要复用它已�
 - 新增 `Copy App Debug`，可复制平台、包名、版本、DSP buffer、playlist、音频状态、视频缓存和面板文本等诊断信息。
 - `QuestUiPointer` 已升级为控制器射线 UI 指针，支持 trigger / primary button / grip 点击、hover、press、drag 和可视射线/reticle。
 - `QuestXrBootstrap` 会确保主相机使用 HMD tracking，并记录 XR loader 状态。
-- Android 构建预处理会固化应用名 `TsukiVox Quest`、GameActivity、New Input System、OpenXR loader / Quest Touch 控制器配置，并确保构建场景中存在 playlist、video screen 和 app shell。
+- Android 构建预处理会固化应用名 `TsukiVox Quest`、GameActivity、New Input System、OpenXR loader / Quest Touch 控制器配置，并确保构建场景中存在 playlist、video screen、app shell 和 KTV 房间。
+- 新增 `QuestKtvRoomPrototype`，按 WebXR 版本验证过的布局在脚本中程序化生成 V0.5 KTV 包厢：地板、四墙、软包墙板、黄铜饰条、后沙发、左右贵妃椅和茶几。
+- 房间几何、灯光反馈和锚点分别挂在 Geometry / Feedback / Anchors 三个子根下，所有材质集中在一个命名调色板里，为以后可换房间主题保留结构。
+- 视频大屏布局改为由房间下发：`QuestVideoScreenPrototype` 新增 `ApplyScreenLayout`，屏幕嵌入前墙黑色边框内并保留安全显示区与宽高比适配。
+- 屏幕两侧新增麦克风电平条，天花板/侧墙灯带 emissive、screen glow 和 lounge glow 随麦克风输入电平响应（曲线参考 WebXR `feedback.ts`）。
+- 用户默认位于沙发与茶几之间、正对大屏的世界原点；V0.4 控制面板移到茶几上方，倾斜成点歌平板式布局，不遮挡大屏。
 
 已观察到的问题：
 
@@ -215,17 +220,19 @@ WebXR 项目不是被废弃，而是作为迁移源。接下来要复用它已�
 
 目标：重建 WebXR 版本里最核心的 KTV 包厢体验，但先控制视觉复杂度。
 
-状态：下一步主线。
+状态：已完成第一版，等待 Quest 3 真机回归。
 
-范围：
+已实现范围：
 
-- 创建简化 KTV 房间、大屏、沙发起点和茶几。
-- 用户进入后默认位于适合看大屏和唱歌的位置。
-- 大屏播放来自 PC helper 的当前歌曲。
-- 房间灯光和屏幕两侧电平根据麦克风输入响应。
-- 保留调试面板入口，但主要体验在 VR 空间内完成。
+- `QuestKtvRoomPrototype` 程序化生成简化 KTV 包厢：房间壳、软包墙板、饰条、后沙发、左右贵妃椅、茶几和大屏边框；尺寸与配色移植自 WebXR `ktvRoom.ts` / `materials.ts` 的验证布局。
+- 用户进入后默认位于沙发前、正对大屏的位置（追踪原点即沙发起点）。
+- 大屏嵌入前墙，由房间统一下发位置/朝向/安全区，继续播放来自 PC helper 的当前歌曲。
+- 屏幕两侧电平条、天花板/侧墙灯带、screen glow 和 lounge glow 随麦克风输入电平响应。
+- V0.4 控制面板保留为茶几上的点歌平板式入口，主要体验在 VR 空间内完成。
+- 房间材质集中在命名调色板中，几何/反馈/锚点分层，为后续房间主题预留结构。
+- 场景生成器与 Android 构建预处理会自动补齐房间组件。
 
-验收标准：
+验收标准（需真机回归确认）：
 
 - 用户戴上 Quest 3 后进入一个可唱歌的小房间。
 - 视频在大屏上播放，音频返听和混响可用。
@@ -351,20 +358,15 @@ WebXR 项目不是被废弃，而是作为迁移源。接下来要复用它已�
 
 ## 当前优先级
 
-下一步不优先重建漂亮房间，也不优先做歌词或持久歌单。
+V0.5 第一版已经落地，当前最重要的切片是真机回归加 V0.6：
 
-当前最重要的切片是 V0.5：
+1. 在 Quest 3 真机回归 V0.5：房间可读性、默认站位、控制面板可点、大屏播放、灯光电平响应、帧率稳定，以及视频播放 + 返听 + 混响共存。
+2. 保持现有 Quest 3 低延迟返听链路可用。
+3. 保持 V0.2 的 PC helper / playlist API 接入可回归。
+4. 保持 V0.3 的 `VideoPlayer + RenderTexture` 视频大屏、远端缓存和播放同步可回归。
+5. 开始 V0.6：右手手柄麦克风、左手荧光棒、grip 指针开关和输入电平驱动的手持道具反馈。
 
-1. 保持现有 Quest 3 低延迟返听链路可用。
-2. 保持 V0.2 的 PC helper / playlist API 接入可回归。
-3. 保持 V0.3 的 `VideoPlayer + RenderTexture` 视频大屏、远端缓存和播放同步可回归。
-4. 保持 V0.4 的头显内控制壳、控制器射线和 App Debug 可回归。
-5. 建立最小 KTV 房间：大屏、用户默认站位/坐位、简化墙面/地面/空间边界。
-6. 把视频大屏放进房间体验，而不是停留在独立调试屏幕。
-7. 让房间灯光或电平反馈响应麦克风输入，并继续验证视频播放、人声返听和混响可以同时稳定工作。
-8. 再开始做手柄麦克风、荧光棒和更完整的空间表现。
-
-完成这个切片后，TsukiVox Unity 才真正从“头显内可操作的技术原型”进入“有 KTV 空间感的 Quest K 歌客户端”阶段。
+完成真机回归后，TsukiVox Unity 才真正从“头显内可操作的技术原型”进入“有 KTV 空间感的 Quest K 歌客户端”阶段。
 
 ## 待决策问题
 
@@ -372,6 +374,6 @@ WebXR 项目不是被废弃，而是作为迁移源。接下来要复用它已�
 - Unity 客户端连接 helper 的地址配置方式：手动输入、局域网扫描，还是二维码/配置文件。
 - helper API 是否需要为 Unity 增加更明确的 health endpoint。
 - 视频文件分辨率默认策略是否继续沿用 WebXR 版本的 Bilibili 480P、YouTube H.264 720P 上限，以及是否需要限制单个缓存文件大小。
-- V0.5 房间应该先走脚本生成的极简几何，还是尽早引入 prefab / ProBuilder / 美术资产。
+- V0.5 房间已选择脚本生成的极简几何；何时引入 prefab / ProBuilder / 美术资产升级房间观感仍待定。
 - 蓝牙音频是否因为延迟过高而明确标记为不支持。
 - Oboe / AAudio 是保留为备用分支，还是在 Unity 路线跑稳后继续作为高级音频引擎投入。

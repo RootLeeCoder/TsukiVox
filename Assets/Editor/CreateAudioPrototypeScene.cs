@@ -38,14 +38,6 @@ namespace TsukiVox.AudioPrototype.Editor
             poseDriver.trackingType = TrackedPoseDriver.TrackingType.RotationAndPosition;
             poseDriver.updateType = TrackedPoseDriver.UpdateType.UpdateAndBeforeRender;
 
-            var lightObject = new GameObject("Key Light");
-            var light = lightObject.AddComponent<Light>();
-            light.type = LightType.Directional;
-            light.intensity = 1.15f;
-            lightObject.transform.rotation = Quaternion.Euler(48f, -28f, 0f);
-
-            CreateMeters();
-
             var audioObject = new GameObject("Quest Audio Prototype");
             var source = audioObject.AddComponent<AudioSource>();
             var reverb = audioObject.AddComponent<AudioReverbFilter>();
@@ -134,6 +126,7 @@ namespace TsukiVox.AudioPrototype.Editor
             CreateQuestPointer(canvasObject);
             CreateVideoScreen(playlistPrototype, copyVideoDebug);
             CreateAppShell(canvasObject, panel, prototype, playlistPrototype, copyAppDebug);
+            CreateKtvRoom(prototype);
 
             var so = new SerializedObject(prototype);
             so.FindProperty("monitorSource").objectReferenceValue = source;
@@ -178,27 +171,6 @@ namespace TsukiVox.AudioPrototype.Editor
             EditorSceneManager.SaveScene(scene, ScenePath);
             AddSceneToBuildSettings(ScenePath);
             Debug.Log($"Created {ScenePath}");
-        }
-
-        private static void CreateMeters()
-        {
-            CreateMeter("Input Meter Preview", new Vector3(-1.55f, 1.05f, 2.35f), new Color(0.2f, 0.92f, 0.8f));
-            CreateMeter("Output Meter Preview", new Vector3(1.55f, 1.05f, 2.35f), new Color(1f, 0.78f, 0.28f));
-        }
-
-        private static void CreateMeter(string name, Vector3 position, Color color)
-        {
-            var meter = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            meter.name = name;
-            meter.transform.position = position;
-            meter.transform.localScale = new Vector3(0.22f, 1.25f, 0.04f);
-            var renderer = meter.GetComponent<MeshRenderer>();
-            renderer.sharedMaterial = new Material(Shader.Find("Standard"))
-            {
-                color = color * 0.65f,
-            };
-            renderer.sharedMaterial.SetColor("_EmissionColor", color * 0.35f);
-            renderer.sharedMaterial.EnableKeyword("_EMISSION");
         }
 
         private static GameObject CreateCanvas(Camera camera)
@@ -427,6 +399,29 @@ namespace TsukiVox.AudioPrototype.Editor
             so.FindProperty("playlistPrototype").objectReferenceValue = playlistPrototype;
             so.FindProperty("copyDebugButton").objectReferenceValue = copyDebugButton;
             so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void CreateKtvRoom(QuestAudioPrototype audioPrototype)
+        {
+            var room = QuestKtvRoomPrototype.EnsureSceneRoom();
+            var so = new SerializedObject(room);
+            so.FindProperty("audioPrototype").objectReferenceValue = audioPrototype;
+            so.FindProperty("videoScreenPrototype").objectReferenceValue = Object.FindAnyObjectByType<QuestVideoScreenPrototype>();
+            so.ApplyModifiedPropertiesWithoutUndo();
+            room.ConfigureSceneReferences();
+        }
+
+        public static QuestKtvRoomPrototype EnsureKtvRoomInCurrentScene(QuestVideoScreenPrototype videoScreen)
+        {
+            var room = QuestKtvRoomPrototype.EnsureSceneRoom();
+            var so = new SerializedObject(room);
+            so.FindProperty("audioPrototype").objectReferenceValue = Object.FindAnyObjectByType<QuestAudioPrototype>();
+            so.FindProperty("videoScreenPrototype").objectReferenceValue = videoScreen;
+            so.ApplyModifiedPropertiesWithoutUndo();
+            room.ConfigureSceneReferences();
+            EditorUtility.SetDirty(room);
+            EditorSceneManager.MarkSceneDirty(room.gameObject.scene);
+            return room;
         }
 
         private static void CreateAppShell(
