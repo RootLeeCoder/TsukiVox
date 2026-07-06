@@ -11,9 +11,10 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestAppShellPrototype : MonoBehaviour
     {
         // V0.5: the control shell rests above the coffee table like a KTV song-picker
-        // tablet, tilted back so it stays readable without blocking the video screen.
-        public static readonly Vector3 ControlPanelWorldPosition = new Vector3(0f, 0.78f, 1.35f);
-        public static readonly Quaternion ControlPanelWorldRotation = Quaternion.Euler(58f, 0f, 0f);
+        // tablet, laid back at a low angle so the seated sightline clears its top edge
+        // and never blocks the video screen behind it.
+        public static readonly Vector3 ControlPanelWorldPosition = new Vector3(0f, 0.74f, 1.1f);
+        public static readonly Quaternion ControlPanelWorldRotation = Quaternion.Euler(68f, 0f, 0f);
         public static readonly Vector3 ControlPanelWorldScale = Vector3.one * 0.0012f;
         public static readonly Vector2 ControlPanelSize = new Vector2(1320f, 760f);
 
@@ -32,6 +33,7 @@ namespace TsukiVox.AudioPrototype
         [SerializeField] private RectTransform panel;
         [SerializeField] private Text appStatusText;
         [SerializeField] private Button copyAppDebugButton;
+        [SerializeField] private Toggle videoDebugToggle;
         [SerializeField] private QuestAudioPrototype audioPrototype;
         [SerializeField] private QuestPlaylistPrototype playlistPrototype;
         [SerializeField] private QuestVideoScreenPrototype videoScreenPrototype;
@@ -110,6 +112,10 @@ namespace TsukiVox.AudioPrototype
                 ? copyAppDebugButton
                 : FindOrCreateButton(panel, "Copy App Debug", "Copy App Debug", new Vector2(522f, -300f), new Vector2(176f, 42f), 13);
             WireCopyButton();
+            videoDebugToggle = videoDebugToggle != null
+                ? videoDebugToggle
+                : FindOrCreateToggle(panel, "Video Debug", new Vector2(-240f, -300f), new Vector2(176f, 38f), false);
+            WireVideoDebugToggle();
             RefreshAppStatus();
         }
 
@@ -134,6 +140,26 @@ namespace TsukiVox.AudioPrototype
 
             copyAppDebugButton.onClick.RemoveListener(CopyAppDebugInfoToClipboard);
             copyAppDebugButton.onClick.AddListener(CopyAppDebugInfoToClipboard);
+        }
+
+        private void WireVideoDebugToggle()
+        {
+            if (videoDebugToggle == null)
+            {
+                return;
+            }
+
+            videoDebugToggle.SetIsOnWithoutNotify(videoScreenPrototype != null && videoScreenPrototype.IsStatusOverlayVisible);
+            videoDebugToggle.onValueChanged.RemoveListener(HandleVideoDebugToggleChanged);
+            videoDebugToggle.onValueChanged.AddListener(HandleVideoDebugToggleChanged);
+        }
+
+        private void HandleVideoDebugToggleChanged(bool visible)
+        {
+            if (videoScreenPrototype != null)
+            {
+                videoScreenPrototype.SetStatusOverlayVisible(visible);
+            }
         }
 
         private void RefreshAppStatus()
@@ -367,6 +393,7 @@ namespace TsukiVox.AudioPrototype
             MoveRect(helperRoot, new[] { "Helper Replay", "Replay" }, new Vector2(452f, -210f), new Vector2(104f, 46f));
 
             MoveRect(panelRect, "Copy Debug", new Vector2(-420f, -300f), new Vector2(154f, 42f));
+            MoveRect(panelRect, "Video Debug", new Vector2(-240f, -300f), new Vector2(176f, 38f));
             ApplyVisualStyle(panelRect);
         }
 
@@ -520,6 +547,45 @@ namespace TsukiVox.AudioPrototype
             var labelText = FindOrCreateText(buttonObject.transform, "Label", label, fontSize, FontStyle.Bold, Vector2.zero, size, TextAnchor.MiddleCenter);
             labelText.color = TextPrimary;
             return button;
+        }
+
+        private static Toggle FindOrCreateToggle(Transform parent, string name, Vector2 position, Vector2 size, bool value)
+        {
+            var existing = parent.Find(name);
+            if (existing != null && existing.TryGetComponent<Toggle>(out var existingToggle))
+            {
+                SetRect(existing.GetComponent<RectTransform>(), position, size);
+                return existingToggle;
+            }
+
+            var toggleObject = new GameObject(name);
+            toggleObject.transform.SetParent(parent, false);
+            var rect = toggleObject.AddComponent<RectTransform>();
+            SetRect(rect, position, size);
+
+            var background = new GameObject("Checkmark Background");
+            background.transform.SetParent(toggleObject.transform, false);
+            var backgroundRect = background.AddComponent<RectTransform>();
+            SetRect(backgroundRect, new Vector2(-size.x * 0.5f + 20f, 0f), new Vector2(28f, 28f));
+            var backgroundImage = background.AddComponent<Image>();
+            backgroundImage.color = new Color(0.12f, 0.16f, 0.18f);
+
+            var checkmark = new GameObject("Checkmark");
+            checkmark.transform.SetParent(background.transform, false);
+            var checkmarkRect = checkmark.AddComponent<RectTransform>();
+            SetRect(checkmarkRect, Vector2.zero, new Vector2(18f, 18f));
+            var checkmarkImage = checkmark.AddComponent<Image>();
+            checkmarkImage.color = Accent;
+
+            var label = FindOrCreateText(toggleObject.transform, "Label", name, 14, FontStyle.Normal, new Vector2(22f, 0f), new Vector2(size.x - 56f, size.y), TextAnchor.MiddleLeft);
+            label.color = TextSecondary;
+
+            var toggle = toggleObject.AddComponent<Toggle>();
+            toggle.targetGraphic = backgroundImage;
+            toggle.graphic = checkmarkImage;
+            toggle.isOn = value;
+            toggle.colors = CreateSelectableColors();
+            return toggle;
         }
 
         private static void SetButtonLabel(Button button, string label, int fontSize)

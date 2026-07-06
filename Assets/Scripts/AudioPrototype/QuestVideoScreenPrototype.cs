@@ -31,6 +31,9 @@ namespace TsukiVox.AudioPrototype
         [SerializeField] private MeshRenderer matteRenderer;
         [SerializeField] private Text statusText;
         [SerializeField] private Button copyDebugButton;
+        // V0.5: the on-screen status/debug overlay is hidden by default; the coffee
+        // table panel exposes a toggle so it can be brought back when troubleshooting.
+        [SerializeField] private bool showStatusOverlay;
         [SerializeField] private int renderTextureWidth = DefaultTextureWidth;
         [SerializeField] private int renderTextureHeight = DefaultTextureHeight;
 
@@ -46,6 +49,7 @@ namespace TsukiVox.AudioPrototype
         [SerializeField, Min(5f)] private float downloadTimeoutSeconds = 90f;
 
         private readonly StringBuilder debugBuilder = new StringBuilder(2048);
+        private GameObject statusCanvasObject;
         private VideoPlayer videoPlayer;
         private AudioSource videoAudioSource;
         private RenderTexture renderTexture;
@@ -151,7 +155,46 @@ namespace TsukiVox.AudioPrototype
             ConfigureVideoOutput();
             EnsureStatusText();
             EnsureDebugCopyUi();
+            ApplyStatusOverlayVisibility();
             SubscribePlaylist();
+        }
+
+        public bool IsStatusOverlayVisible => showStatusOverlay;
+
+        public void SetStatusOverlayVisible(bool visible)
+        {
+            showStatusOverlay = visible;
+            ApplyStatusOverlayVisibility();
+        }
+
+        private void ApplyStatusOverlayVisibility()
+        {
+            var canvasObject = ResolveStatusCanvasObject();
+            if (canvasObject != null && canvasObject.activeSelf != showStatusOverlay)
+            {
+                canvasObject.SetActive(showStatusOverlay);
+            }
+        }
+
+        private GameObject ResolveStatusCanvasObject()
+        {
+            if (statusCanvasObject != null)
+            {
+                return statusCanvasObject;
+            }
+
+            if (statusText != null)
+            {
+                var canvas = statusText.GetComponentInParent<Canvas>(true);
+                if (canvas != null)
+                {
+                    statusCanvasObject = canvas.gameObject;
+                    return statusCanvasObject;
+                }
+            }
+
+            statusCanvasObject = GameObject.Find("V0.3 Video Screen Status Canvas");
+            return statusCanvasObject;
         }
 
         private void EnsureVideoPlayer()
@@ -254,8 +297,8 @@ namespace TsukiVox.AudioPrototype
 
         private void ApplyStatusCanvasLayout()
         {
-            var statusCanvasObject = GameObject.Find("V0.3 Video Screen Status Canvas");
-            if (statusCanvasObject == null || !statusCanvasObject.TryGetComponent<RectTransform>(out var rect))
+            var canvasObject = ResolveStatusCanvasObject();
+            if (canvasObject == null || !canvasObject.TryGetComponent<RectTransform>(out var rect))
             {
                 return;
             }
@@ -473,13 +516,14 @@ namespace TsukiVox.AudioPrototype
 
         private Canvas FindOrCreateStatusCanvas()
         {
-            var existing = GameObject.Find("V0.3 Video Screen Status Canvas");
+            var existing = ResolveStatusCanvasObject();
             if (existing != null && existing.TryGetComponent<Canvas>(out var existingCanvas))
             {
                 return existingCanvas;
             }
 
             var canvasObject = new GameObject("V0.3 Video Screen Status Canvas");
+            statusCanvasObject = canvasObject;
             var canvas = canvasObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.WorldSpace;
             canvas.worldCamera = Camera.main;

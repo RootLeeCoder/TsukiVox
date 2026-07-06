@@ -17,8 +17,11 @@ namespace TsukiVox.AudioPrototype
         public static readonly Vector3 PlayerStartPosition = Vector3.zero;
         public static readonly Vector3 ScreenPosition = new Vector3(0f, 1.72f, 4.14f);
         public static readonly Quaternion ScreenRotation = Quaternion.identity;
-        public static readonly Vector2 ScreenMatteSize = new Vector2(3.8f, 2.14f);
-        public static readonly Vector2 ScreenSafeSize = new Vector2(3.04f, 1.71f);
+        // The matte is exactly 16:9 and the safe area equals it, so 16:9 videos fill
+        // the screen with zero border. Other aspect ratios keep the full picture and
+        // letterbox against the matte, which is unavoidable without cropping.
+        public static readonly Vector2 ScreenMatteSize = new Vector2(3.8f, 2.1375f);
+        public static readonly Vector2 ScreenSafeSize = ScreenMatteSize;
 
         private const string GeometryRootName = "Geometry";
         private const string FeedbackRootName = "Feedback";
@@ -238,7 +241,7 @@ namespace TsukiVox.AudioPrototype
         {
             var tableRoot = new GameObject("coffee table").transform;
             tableRoot.SetParent(geometryRoot, false);
-            tableRoot.localPosition = new Vector3(0f, 0f, 1.4f);
+            tableRoot.localPosition = new Vector3(0f, 0f, 1.1f);
 
             CreateBox(tableRoot, "table top", new Vector3(1.9f, 0.09f, 0.9f), new Vector3(0f, 0.5f, 0f), palette.Table);
             CreateBox(tableRoot, "table shelf", new Vector3(1.6f, 0.05f, 0.66f), new Vector3(0f, 0.26f, 0f), palette.Table);

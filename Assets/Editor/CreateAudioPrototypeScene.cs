@@ -122,10 +122,11 @@ namespace TsukiVox.AudioPrototype.Editor
             var replay = CreateButton(panel.transform, "Helper Replay", "Replay", new Vector2(485f, -230f));
             var copyVideoDebug = CreateButton(panel.transform, "Copy Debug", new Vector2(300f, -292f), new Vector2(150f, 38f), 13);
             var copyAppDebug = CreateButton(panel.transform, "Copy App Debug", new Vector2(522f, -300f), new Vector2(176f, 42f), 13);
+            var videoDebugToggle = CreateToggle(panel.transform, "Video Debug", new Vector2(-240f, -300f), false);
             CreateEventSystem();
             CreateQuestPointer(canvasObject);
             CreateVideoScreen(playlistPrototype, copyVideoDebug);
-            CreateAppShell(canvasObject, panel, prototype, playlistPrototype, copyAppDebug);
+            CreateAppShell(canvasObject, panel, prototype, playlistPrototype, copyAppDebug, videoDebugToggle);
             CreateKtvRoom(prototype);
 
             var so = new SerializedObject(prototype);
@@ -429,7 +430,8 @@ namespace TsukiVox.AudioPrototype.Editor
             RectTransform panel,
             QuestAudioPrototype audioPrototype,
             QuestPlaylistPrototype playlistPrototype,
-            Button copyAppDebugButton)
+            Button copyAppDebugButton,
+            Toggle videoDebugToggle)
         {
             var shellObject = new GameObject("Quest App Shell Prototype");
             var shell = shellObject.AddComponent<QuestAppShellPrototype>();
@@ -437,6 +439,7 @@ namespace TsukiVox.AudioPrototype.Editor
             so.FindProperty("controlCanvas").objectReferenceValue = canvasObject.GetComponent<Canvas>();
             so.FindProperty("panel").objectReferenceValue = panel;
             so.FindProperty("copyAppDebugButton").objectReferenceValue = copyAppDebugButton;
+            so.FindProperty("videoDebugToggle").objectReferenceValue = videoDebugToggle;
             so.FindProperty("audioPrototype").objectReferenceValue = audioPrototype;
             so.FindProperty("playlistPrototype").objectReferenceValue = playlistPrototype;
             so.FindProperty("videoScreenPrototype").objectReferenceValue = Object.FindAnyObjectByType<QuestVideoScreenPrototype>();
