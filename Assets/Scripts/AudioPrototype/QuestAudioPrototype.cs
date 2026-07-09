@@ -127,6 +127,7 @@ namespace TsukiVox.AudioPrototype
             QuestVideoScreenPrototype.EnsureScenePrototype();
             QuestAppShellPrototype.EnsureSceneShell();
             QuestKtvRoomPrototype.EnsureSceneRoom();
+            QuestHandheldPropsPrototype.EnsureSceneProps();
             currentPreset = initialPreset;
             ApplyPreset(currentPreset);
             ApplyMonitorVolume(monitorVolume);

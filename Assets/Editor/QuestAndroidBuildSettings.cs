@@ -69,6 +69,7 @@ namespace TsukiVox.AudioPrototype.Editor
                     var videoScreen = CreateAudioPrototypeScene.EnsureVideoScreenPrototypeInCurrentScene(prototype);
                     CreateAudioPrototypeScene.EnsureAppShellInCurrentScene(prototype, videoScreen);
                     CreateAudioPrototypeScene.EnsureKtvRoomInCurrentScene(videoScreen);
+                    CreateAudioPrototypeScene.EnsureHandheldPropsInCurrentScene();
                     EditorSceneManager.MarkSceneDirty(openedScene);
                     EditorSceneManager.SaveScene(openedScene);
                 }

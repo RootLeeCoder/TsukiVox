@@ -128,6 +128,7 @@ namespace TsukiVox.AudioPrototype.Editor
             CreateVideoScreen(playlistPrototype, copyVideoDebug);
             CreateAppShell(canvasObject, panel, prototype, playlistPrototype, copyAppDebug, videoDebugToggle);
             CreateKtvRoom(prototype);
+            CreateHandheldProps(prototype);
 
             var so = new SerializedObject(prototype);
             so.FindProperty("monitorSource").objectReferenceValue = source;
@@ -410,6 +411,27 @@ namespace TsukiVox.AudioPrototype.Editor
             so.FindProperty("videoScreenPrototype").objectReferenceValue = Object.FindAnyObjectByType<QuestVideoScreenPrototype>();
             so.ApplyModifiedPropertiesWithoutUndo();
             room.ConfigureSceneReferences();
+        }
+
+        private static void CreateHandheldProps(QuestAudioPrototype audioPrototype)
+        {
+            var props = QuestHandheldPropsPrototype.EnsureSceneProps();
+            var so = new SerializedObject(props);
+            so.FindProperty("audioPrototype").objectReferenceValue = audioPrototype;
+            so.ApplyModifiedPropertiesWithoutUndo();
+            props.ConfigureSceneReferences();
+        }
+
+        public static QuestHandheldPropsPrototype EnsureHandheldPropsInCurrentScene()
+        {
+            var props = QuestHandheldPropsPrototype.EnsureSceneProps();
+            var so = new SerializedObject(props);
+            so.FindProperty("audioPrototype").objectReferenceValue = Object.FindAnyObjectByType<QuestAudioPrototype>();
+            so.ApplyModifiedPropertiesWithoutUndo();
+            props.ConfigureSceneReferences();
+            EditorUtility.SetDirty(props);
+            EditorSceneManager.MarkSceneDirty(props.gameObject.scene);
+            return props;
         }
 
         public static QuestKtvRoomPrototype EnsureKtvRoomInCurrentScene(QuestVideoScreenPrototype videoScreen)
