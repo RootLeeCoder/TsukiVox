@@ -30,7 +30,12 @@ namespace TsukiVox.AudioPrototype
         [SerializeField] private GraphicRaycaster raycaster;
         [SerializeField] private UnityEngine.XR.XRNode preferredHand = UnityEngine.XR.XRNode.RightHand;
         [SerializeField] private float maxPointerDistance = 4.5f;
-        [SerializeField] private bool showPointerRay = true;
+
+        // VRSing controllers.ts: ray starts hidden (isPointerVisible = false), toggled via squeezeend.
+        private bool isPointerVisibleLeft;
+        private bool isPointerVisibleRight;
+        private bool wasGripPressedLeft;
+        private bool wasGripPressedRight;
 
         private readonly List<RaycastResult> raycastResults = new List<RaycastResult>();
         private bool isConfigured;
@@ -77,7 +82,33 @@ namespace TsukiVox.AudioPrototype
                 ConfigureSceneReferences();
             }
 
+            UpdateGripToggle();
             UpdateControllerPointer();
+        }
+
+        private void UpdateGripToggle()
+        {
+            // VRSing controllers.ts onPointerToggle: squeeze button toggles ray visibility per hand.
+            UpdateGripToggleForHand(rightHand: true, ref wasGripPressedRight, ref isPointerVisibleRight);
+            UpdateGripToggleForHand(rightHand: false, ref wasGripPressedLeft, ref isPointerVisibleLeft);
+        }
+
+        private static void UpdateGripToggleForHand(bool rightHand, ref bool wasPressed, ref bool isVisible)
+        {
+            var device = GetControllerDevice(rightHand);
+            if (device == null)
+            {
+                wasPressed = false;
+                return;
+            }
+
+            var pressed = IsButtonPressed(device, "gripButton") || IsButtonPressed(device, "gripPressed");
+            if (pressed && !wasPressed)
+            {
+                isVisible = !isVisible;
+            }
+
+            wasPressed = pressed;
         }
 
         private void ConfigureSceneReferences()
@@ -402,10 +433,22 @@ namespace TsukiVox.AudioPrototype
             var preferRightHand = preferredHand != UnityEngine.XR.XRNode.LeftHand;
             if (TryGetPointerPoseForHand(preferRightHand, out device, out position, out rotation))
             {
-                return true;
+                // Only return the pose if this hand's ray is toggled on.
+                var isVisible = preferRightHand ? isPointerVisibleRight : isPointerVisibleLeft;
+                if (isVisible)
+                {
+                    return true;
+                }
             }
 
-            return TryGetPointerPoseForHand(!preferRightHand, out device, out position, out rotation);
+            // Fallback to the other hand if the preferred hand's ray is hidden.
+            if (TryGetPointerPoseForHand(!preferRightHand, out device, out position, out rotation))
+            {
+                var isVisible = preferRightHand ? isPointerVisibleLeft : isPointerVisibleRight;
+                return isVisible;
+            }
+
+            return false;
         }
 
         private static bool TryGetPointerPoseForHand(bool rightHand, out InputSystemDevice device, out Vector3 position, out Quaternion rotation)
@@ -438,6 +481,27 @@ namespace TsukiVox.AudioPrototype
 
             device = null;
             return false;
+        }
+
+        private static InputSystemDevice GetControllerDevice(bool rightHand)
+        {
+            var controller = rightHand ? XRController.rightHand : XRController.leftHand;
+            if (controller != null && IsControllerTracked(controller))
+            {
+                return controller;
+            }
+
+            var devices = InputSystem.devices;
+            for (var i = 0; i < devices.Count; i += 1)
+            {
+                var candidate = devices[i];
+                if (candidate is XRController && HasHandUsage(candidate, rightHand) && IsControllerTracked(candidate))
+                {
+                    return candidate;
+                }
+            }
+
+            return null;
         }
 
         private static bool TryReadPointerPose(InputSystemDevice device, out Vector3 position, out Quaternion rotation)
@@ -635,12 +699,7 @@ namespace TsukiVox.AudioPrototype
 
         private void UpdatePointerVisuals(Vector3 origin, Vector3 endPoint, bool hasCanvasHit, bool hasTarget, bool pressed)
         {
-            if (!showPointerRay)
-            {
-                HidePointerVisuals();
-                return;
-            }
-
+            // The grip toggle now controls ray visibility; always draw when a pose is active.
             EnsurePointerVisuals();
             var color = !hasCanvasHit ? PointerMissColor : pressed ? PointerPressedColor : hasTarget ? PointerHoverColor : PointerIdleColor;
             if (pointerMaterial != null)

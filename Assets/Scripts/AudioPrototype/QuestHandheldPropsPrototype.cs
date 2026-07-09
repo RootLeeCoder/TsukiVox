@@ -68,9 +68,9 @@ namespace TsukiVox.AudioPrototype
         [SerializeField] private Vector3 micLocalPosition = new Vector3(0f, GripMountOffsetY, GripMountOffsetZ);
         [SerializeField] private Vector3 micLocalEuler = Vector3.zero;
         [SerializeField] private Vector3 glowstickLocalPosition = new Vector3(0f, GripMountOffsetY, GripMountOffsetZ);
-        // WebXR tilted the glowstick by +0.2 rad about grip X; the handedness flip
-        // negates that angle, so the Unity default tilts by roughly -11.5 degrees.
-        [SerializeField] private Vector3 glowstickLocalEuler = new Vector3(-11.5f, 0f, 0f);
+        // VRSing: glowstick.rotation.set(0.2, 0, 0) tilts forward by ~11.46° about grip X.
+        // Unity's Z-flip preserves this forward tilt as a positive X rotation.
+        [SerializeField] private Vector3 glowstickLocalEuler = new Vector3(11.46f, 0f, 0f);
 
         [Header("Runtime")]
         [SerializeField] private bool buildOnAwake = true;
