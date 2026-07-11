@@ -13,17 +13,18 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 2;
+        public const int CurrentDesignRevision = 4;
 
         // Player start is the world/tracking origin; recentering returns the user to the sofa.
         public static readonly Vector3 PlayerStartPosition = Vector3.zero;
         public static readonly Vector3 ScreenPosition = new Vector3(0f, 1.72f, 4.14f);
         public static readonly Quaternion ScreenRotation = Quaternion.identity;
-        // The matte is exactly 16:9 and the safe area equals it, so 16:9 videos fill
-        // the screen with zero border. Other aspect ratios keep the full picture and
-        // letterbox against the matte, which is unavoidable without cropping.
+        // Keep a slim optical bezel around 16:9 content. Source aspect ratios are
+        // handled separately with contain semantics, so this margin is not needed
+        // to prevent video cropping.
+        private const float ScreenSafeScale = 0.96f;
         public static readonly Vector2 ScreenMatteSize = new Vector2(3.8f, 2.1375f);
-        public static readonly Vector2 ScreenSafeSize = ScreenMatteSize;
+        public static readonly Vector2 ScreenSafeSize = ScreenMatteSize * ScreenSafeScale;
 
         private const string GeometryRootName = "Geometry";
         private const string FeedbackRootName = "Feedback";

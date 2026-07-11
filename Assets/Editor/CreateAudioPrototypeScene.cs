@@ -430,7 +430,8 @@ namespace TsukiVox.AudioPrototype.Editor
         {
             var videoObject = new GameObject("Quest Video Screen Prototype");
             videoObject.AddComponent<AudioSource>();
-            videoObject.AddComponent<VideoPlayer>();
+            var videoPlayer = videoObject.AddComponent<VideoPlayer>();
+            videoPlayer.aspectRatio = VideoAspectRatio.Stretch;
             var videoScreen = videoObject.AddComponent<QuestVideoScreenPrototype>();
 
             var so = new SerializedObject(videoScreen);

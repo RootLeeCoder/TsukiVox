@@ -446,6 +446,9 @@ namespace TsukiVox.AudioPrototype
 
             videoPlayer.renderMode = VideoRenderMode.RenderTexture;
             videoPlayer.targetTexture = renderTexture;
+            // Preserve every source pixel in the fixed-size RenderTexture. The screen
+            // quad then applies the source aspect ratio with contain semantics.
+            videoPlayer.aspectRatio = VideoAspectRatio.Stretch;
             SetScreenTexture(renderTexture);
         }
 
@@ -1067,6 +1070,7 @@ namespace TsukiVox.AudioPrototype
                 debugBuilder.AppendLine($"vpCanSetTime {videoPlayer.canSetTime}");
                 debugBuilder.AppendLine($"vpCanSetPlaybackSpeed {videoPlayer.canSetPlaybackSpeed}");
                 debugBuilder.AppendLine($"vpCanStep {videoPlayer.canStep}");
+                debugBuilder.AppendLine($"vpAspectRatio {videoPlayer.aspectRatio}");
                 debugBuilder.AppendLine($"vpAudioTrackCount {videoPlayer.audioTrackCount}");
                 debugBuilder.AppendLine($"vpControlledAudioTrackCount {videoPlayer.controlledAudioTrackCount}");
                 var texture = videoPlayer.texture;
