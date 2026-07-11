@@ -15,10 +15,44 @@ namespace TsukiVox.AudioPrototype.Editor
     {
         private const string ScenePath = "Assets/Scenes/AudioPrototype.unity";
 
+        [InitializeOnLoadMethod]
+        private static void ScheduleRoomDesignRefresh()
+        {
+            EditorApplication.delayCall += RefreshOpenPrototypeSceneIfNeeded;
+        }
+
+        private static void RefreshOpenPrototypeSceneIfNeeded()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                return;
+            }
+
+            var activeScene = EditorSceneManager.GetActiveScene();
+            if (activeScene.path != ScenePath)
+            {
+                return;
+            }
+
+            var room = Object.FindAnyObjectByType<QuestKtvRoomPrototype>();
+            if (room == null || !room.NeedsDesignRefresh)
+            {
+                return;
+            }
+
+            room.ConfigureSceneReferences();
+            GenerateRoomLightmapUvs(room);
+            EditorUtility.SetDirty(room);
+            EditorSceneManager.MarkSceneDirty(activeScene);
+            EditorSceneManager.SaveScene(activeScene);
+            Debug.Log($"Updated {ScenePath} to KTV room design revision {QuestKtvRoomPrototype.CurrentDesignRevision}.");
+        }
+
         [MenuItem("TsukiVox/Create Audio Prototype Scene")]
         public static void CreateScene()
         {
             Directory.CreateDirectory("Assets/Scenes");
+            PlayerSettings.colorSpace = ColorSpace.Linear;
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             RenderSettings.ambientLight = new Color(0.18f, 0.2f, 0.22f);
@@ -30,6 +64,8 @@ namespace TsukiVox.AudioPrototype.Editor
             camera.backgroundColor = new Color(0.03f, 0.04f, 0.05f);
             camera.nearClipPlane = 0.02f;
             camera.farClipPlane = 40f;
+            camera.allowHDR = true;
+            camera.allowMSAA = true;
             cameraObject.transform.position = new Vector3(0f, 1.55f, 0f);
             cameraObject.transform.rotation = Quaternion.identity;
             cameraObject.tag = "MainCamera";
@@ -411,6 +447,7 @@ namespace TsukiVox.AudioPrototype.Editor
             so.FindProperty("videoScreenPrototype").objectReferenceValue = Object.FindAnyObjectByType<QuestVideoScreenPrototype>();
             so.ApplyModifiedPropertiesWithoutUndo();
             room.ConfigureSceneReferences();
+            GenerateRoomLightmapUvs(room);
         }
 
         private static void CreateHandheldProps(QuestAudioPrototype audioPrototype)
@@ -442,9 +479,25 @@ namespace TsukiVox.AudioPrototype.Editor
             so.FindProperty("videoScreenPrototype").objectReferenceValue = videoScreen;
             so.ApplyModifiedPropertiesWithoutUndo();
             room.ConfigureSceneReferences();
+            GenerateRoomLightmapUvs(room);
             EditorUtility.SetDirty(room);
             EditorSceneManager.MarkSceneDirty(room.gameObject.scene);
             return room;
+        }
+
+        private static void GenerateRoomLightmapUvs(QuestKtvRoomPrototype room)
+        {
+            var meshFilters = room.GetComponentsInChildren<MeshFilter>(true);
+            for (var index = 0; index < meshFilters.Length; index += 1)
+            {
+                var mesh = meshFilters[index].sharedMesh;
+                if (mesh == null || !mesh.name.EndsWith(" beveled mesh"))
+                {
+                    continue;
+                }
+
+                Unwrapping.GenerateSecondaryUVSet(mesh);
+            }
         }
 
         private static void CreateAppShell(

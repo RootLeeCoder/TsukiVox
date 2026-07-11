@@ -14,12 +14,21 @@ namespace TsukiVox.AudioPrototype
             var existing = FindAnyObjectByType<QuestXrBootstrap>();
             if (existing != null)
             {
+                if (Application.isPlaying)
+                {
+                    DontDestroyOnLoad(existing.gameObject);
+                }
+
                 EnsureMainCameraTracking();
                 return existing;
             }
 
             var bootstrapObject = new GameObject("Quest XR Bootstrap");
-            DontDestroyOnLoad(bootstrapObject);
+            if (Application.isPlaying)
+            {
+                DontDestroyOnLoad(bootstrapObject);
+            }
+
             EnsureMainCameraTracking();
             return bootstrapObject.AddComponent<QuestXrBootstrap>();
         }

@@ -640,51 +640,77 @@ namespace TsukiVox.AudioPrototype
 
         private void EnsurePointerVisuals()
         {
+            if (pointerLine == null)
+            {
+                var existingLine = transform.Find("Quest Controller UI Ray");
+                pointerLine = existingLine != null ? existingLine.GetComponent<LineRenderer>() : null;
+            }
+
+            if (reticle == null)
+            {
+                reticle = transform.Find("Quest UI Reticle");
+            }
+
+            if (pointerMaterial == null)
+            {
+                pointerMaterial = pointerLine != null ? pointerLine.sharedMaterial : null;
+                if (pointerMaterial == null && reticle != null && reticle.TryGetComponent<MeshRenderer>(out var existingRenderer))
+                {
+                    pointerMaterial = existingRenderer.sharedMaterial;
+                }
+            }
+
             if (pointerLine != null && reticle != null)
             {
                 return;
             }
 
-            var shader = Shader.Find("Unlit/Color");
-            if (shader == null)
+            if (pointerMaterial == null)
             {
-                shader = Shader.Find("Sprites/Default");
+                var shader = Shader.Find("Unlit/Color");
+                if (shader == null)
+                {
+                    shader = Shader.Find("Sprites/Default");
+                }
+
+                pointerMaterial = new Material(shader)
+                {
+                    color = PointerIdleColor,
+                };
             }
 
-            pointerMaterial = new Material(shader)
+            if (pointerLine == null)
             {
-                color = PointerIdleColor,
-            };
-
-            var lineObject = new GameObject("Quest Controller UI Ray");
-            lineObject.transform.SetParent(transform, false);
-            pointerLine = lineObject.AddComponent<LineRenderer>();
-            pointerLine.sharedMaterial = pointerMaterial;
-            pointerLine.positionCount = 2;
-            pointerLine.useWorldSpace = true;
-            pointerLine.startWidth = 0.012f;
-            pointerLine.endWidth = 0.004f;
-            pointerLine.numCapVertices = 4;
-            pointerLine.enabled = false;
-
-            var reticleObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            reticleObject.name = "Quest UI Reticle";
-            reticleObject.transform.SetParent(transform, false);
-            reticle = reticleObject.transform;
-            reticle.localScale = Vector3.one * 0.035f;
-            var collider = reticleObject.GetComponent<Collider>();
-            if (collider != null)
-            {
-                Destroy(collider);
+                var lineObject = new GameObject("Quest Controller UI Ray");
+                lineObject.transform.SetParent(transform, false);
+                pointerLine = lineObject.AddComponent<LineRenderer>();
+                pointerLine.sharedMaterial = pointerMaterial;
+                pointerLine.positionCount = 2;
+                pointerLine.useWorldSpace = true;
+                pointerLine.startWidth = 0.012f;
+                pointerLine.endWidth = 0.004f;
+                pointerLine.numCapVertices = 4;
+                pointerLine.enabled = false;
             }
 
-            var renderer = reticleObject.GetComponent<MeshRenderer>();
-            if (renderer != null)
+            if (reticle == null)
             {
-                renderer.sharedMaterial = pointerMaterial;
-            }
+                var reticleObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                reticleObject.name = "Quest UI Reticle";
+                reticleObject.transform.SetParent(transform, false);
+                reticle = reticleObject.transform;
+                reticle.localScale = Vector3.one * 0.035f;
+                var collider = reticleObject.GetComponent<Collider>();
+                DestroyForCurrentMode(collider);
 
-            reticleObject.SetActive(false);
+                var renderer = reticleObject.GetComponent<MeshRenderer>();
+                if (renderer != null)
+                {
+                    renderer.sharedMaterial = pointerMaterial;
+                }
+
+                reticleObject.SetActive(false);
+            }
         }
 
         private void UpdatePointerVisuals(Vector3 origin, Vector3 endPoint, bool hasCanvasHit, bool hasTarget, bool pressed)
@@ -730,7 +756,7 @@ namespace TsukiVox.AudioPrototype
                 var standalone = EventSystem.current.GetComponent<StandaloneInputModule>();
                 if (standalone != null)
                 {
-                    Destroy(standalone);
+                    DestroyForCurrentMode(standalone);
                 }
 
                 if (EventSystem.current.GetComponent<InputSystemUIInputModule>() == null)
@@ -744,6 +770,23 @@ namespace TsukiVox.AudioPrototype
             var eventSystemObject = new GameObject("EventSystem");
             eventSystemObject.AddComponent<EventSystem>();
             eventSystemObject.AddComponent<InputSystemUIInputModule>();
+        }
+
+        private static void DestroyForCurrentMode(Object target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            if (Application.isPlaying)
+            {
+                Destroy(target);
+            }
+            else
+            {
+                DestroyImmediate(target);
+            }
         }
 
         private static Canvas FindPrototypeCanvas()
