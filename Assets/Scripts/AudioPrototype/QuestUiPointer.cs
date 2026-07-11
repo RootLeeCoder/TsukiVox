@@ -183,7 +183,7 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
-            var pressed = IsControllerPressed(device);
+            var pressed = IsControllerTriggerPressed(device);
             var ray = new Ray(origin, rotation * Vector3.forward);
             var hasCanvasHit = TryGetCanvasHit(ray, out var canvasHitPoint, out _);
 
@@ -559,7 +559,7 @@ namespace TsukiVox.AudioPrototype
             return (state & required) == required;
         }
 
-        private static bool IsControllerPressed(InputSystemDevice device)
+        private static bool IsControllerTriggerPressed(InputSystemDevice device)
         {
             if (IsButtonPressed(device, "triggerPressed"))
             {
@@ -567,17 +567,7 @@ namespace TsukiVox.AudioPrototype
             }
 
             var trigger = device.TryGetChildControl<AxisControl>("trigger");
-            if (trigger != null && trigger.ReadValue() >= TriggerPressThreshold)
-            {
-                return true;
-            }
-
-            if (IsButtonPressed(device, "primaryButton"))
-            {
-                return true;
-            }
-
-            return IsButtonPressed(device, "gripPressed");
+            return trigger != null && trigger.ReadValue() >= TriggerPressThreshold;
         }
 
         private static bool IsButtonPressed(InputSystemDevice device, string controlName)
