@@ -15,8 +15,8 @@ namespace TsukiVox.AudioPrototype
         // and never blocks the video screen behind it.
         public static readonly Vector3 ControlPanelWorldPosition = new Vector3(0f, 0.74f, 1.1f);
         public static readonly Quaternion ControlPanelWorldRotation = Quaternion.Euler(68f, 0f, 0f);
-        public static readonly Vector3 ControlPanelWorldScale = Vector3.one * 0.0012f;
-        public static readonly Vector2 ControlPanelSize = new Vector2(1320f, 760f);
+        public static readonly Vector3 ControlPanelWorldScale = Vector3.one * 0.001f;
+        public static readonly Vector2 ControlPanelSize = new Vector2(1120f, 560f);
 
         private const string CanvasName = "Prototype Canvas";
         private const string PanelName = "Panel";
@@ -37,6 +37,7 @@ namespace TsukiVox.AudioPrototype
         [SerializeField] private QuestAudioPrototype audioPrototype;
         [SerializeField] private QuestPlaylistPrototype playlistPrototype;
         [SerializeField] private QuestVideoScreenPrototype videoScreenPrototype;
+        [SerializeField] private QuestConsumerUiPrototype consumerUi;
 
         [Header("Runtime")]
         [SerializeField] private bool organizePanelOnAwake = true;
@@ -102,7 +103,8 @@ namespace TsukiVox.AudioPrototype
 
             if (organizePanelOnAwake && panel != null)
             {
-                OrganizeControlPanel(panel);
+                panel.sizeDelta = ControlPanelSize;
+                EnsurePanelImage(panel);
             }
 
             appStatusText = appStatusText != null
@@ -116,6 +118,9 @@ namespace TsukiVox.AudioPrototype
                 ? videoDebugToggle
                 : FindOrCreateToggle(panel, "Video Debug", new Vector2(-240f, -300f), new Vector2(176f, 38f), false);
             WireVideoDebugToggle();
+            consumerUi = consumerUi != null ? consumerUi : GetComponent<QuestConsumerUiPrototype>();
+            consumerUi = consumerUi != null ? consumerUi : gameObject.AddComponent<QuestConsumerUiPrototype>();
+            consumerUi.Configure(panel, audioPrototype, playlistPrototype, videoScreenPrototype, this);
             RefreshAppStatus();
         }
 
@@ -129,6 +134,34 @@ namespace TsukiVox.AudioPrototype
             }
 
             Debug.Log($"[TsukiVox App Shell] Copied app debug info:\n{debugInfo}");
+        }
+
+        public void CopyCompleteDebugInfoToClipboard()
+        {
+            var appDebugInfo = BuildAppDebugInfo();
+            var videoDebugInfo = videoScreenPrototype != null ? videoScreenPrototype.GetDebugInfo() : string.Empty;
+            debugBuilder.Clear();
+            debugBuilder.Append(appDebugInfo);
+            if (!string.IsNullOrEmpty(videoDebugInfo))
+            {
+                debugBuilder.AppendLine();
+                debugBuilder.AppendLine("--- Video Diagnostics ---");
+                debugBuilder.Append(videoDebugInfo);
+            }
+
+            var debugInfo = debugBuilder.ToString();
+            TsukiVoxClipboard.CopyPlainText("TsukiVox Complete Debug", debugInfo);
+            if (appStatusText != null)
+            {
+                appStatusText.text = "Complete diagnostics copied to clipboard.";
+            }
+
+            Debug.Log($"[TsukiVox App Shell] Copied complete diagnostics:\n{debugInfo}");
+        }
+
+        public string GetAppDebugInfo()
+        {
+            return BuildAppDebugInfo();
         }
 
         private void WireCopyButton()
@@ -313,7 +346,7 @@ namespace TsukiVox.AudioPrototype
             var existing = canvasTransform.Find(PanelName) as RectTransform;
             if (existing != null)
             {
-                existing.sizeDelta = new Vector2(1240f, 690f);
+                existing.sizeDelta = ControlPanelSize;
                 EnsurePanelImage(existing);
                 return existing;
             }
@@ -324,7 +357,7 @@ namespace TsukiVox.AudioPrototype
             rect.anchorMin = new Vector2(0.5f, 0.5f);
             rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.anchoredPosition = Vector2.zero;
-            rect.sizeDelta = new Vector2(1240f, 690f);
+            rect.sizeDelta = ControlPanelSize;
             EnsurePanelImage(rect);
             return rect;
         }
@@ -332,7 +365,7 @@ namespace TsukiVox.AudioPrototype
         private static void EnsurePanelImage(RectTransform panelRect)
         {
             var image = panelRect.GetComponent<Image>() ?? panelRect.gameObject.AddComponent<Image>();
-            image.color = PanelBackground;
+            image.color = new Color(0.024f, 0.04f, 0.039f, 1f);
         }
 
         private static void OrganizeControlPanel(RectTransform panelRect)

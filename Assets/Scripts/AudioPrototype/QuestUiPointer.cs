@@ -148,7 +148,7 @@ namespace TsukiVox.AudioPrototype
             if (scaler != null)
             {
                 scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-                scaler.referenceResolution = new Vector2(1280f, 720f);
+                scaler.referenceResolution = QuestAppShellPrototype.ControlPanelSize;
                 scaler.matchWidthOrHeight = 0.5f;
                 scaler.dynamicPixelsPerUnit = 12f;
             }
@@ -823,8 +823,14 @@ namespace TsukiVox.AudioPrototype
             };
 
             var selectables = root.GetComponentsInChildren<Selectable>(true);
+            var consumerRoot = root.Find("Panel/Consumer UI");
             for (var i = 0; i < selectables.Length; i += 1)
             {
+                if (consumerRoot != null && selectables[i].transform.IsChildOf(consumerRoot))
+                {
+                    continue;
+                }
+
                 selectables[i].colors = colors;
             }
         }

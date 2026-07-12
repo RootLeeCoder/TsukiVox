@@ -100,11 +100,23 @@ namespace TsukiVox.AudioPrototype
 
         public string CurrentPresetName => FormatPresetName(currentPreset);
 
+        public int CurrentPresetIndex => (int)currentPreset;
+
+        public int PresetCount => Enum.GetValues(typeof(PrototypePreset)).Length;
+
         public float MonitorVolume => monitorVolume;
+
+        public float MonitorVolumeMaximum => MaximumMonitorVolume;
 
         public float InputLevel => Mathf.Clamp01(smoothedInputLevel);
 
         public float OutputLevel => Mathf.Clamp01(smoothedOutputLevel);
+
+        public bool IsMonitorOutputEnabled => monitorOutputEnabled;
+
+        public bool IsSafetyLimiterEnabled => safetyLimiterEnabled;
+
+        public bool PrefersNativeOboeBackend => preferNativeOboeBackend;
 
         private void Reset()
         {
@@ -259,6 +271,44 @@ namespace TsukiVox.AudioPrototype
             backendNote = "Backend stopped.";
             SetStatus("Stopped.");
             RefreshUi();
+        }
+
+        public void ToggleMonitoring()
+        {
+            if (isMonitoring)
+            {
+                StopMonitoring();
+            }
+            else
+            {
+                StartMonitoring();
+            }
+        }
+
+        public void SelectPreset(int presetIndex)
+        {
+            var count = Enum.GetValues(typeof(PrototypePreset)).Length;
+            ApplyPreset((PrototypePreset)Mathf.Clamp(presetIndex, 0, count - 1));
+        }
+
+        public void SetMonitorVolume(float value)
+        {
+            ApplyMonitorVolume(value);
+        }
+
+        public void SetMonitorOutput(bool enabled)
+        {
+            SetMonitorOutputEnabled(enabled);
+        }
+
+        public void SetPreferNativeBackend(bool enabled)
+        {
+            ApplyNativePreference(enabled);
+        }
+
+        public void SetSafetyLimiterEnabled(bool enabled)
+        {
+            ApplySafetyState(enabled);
         }
 
         public void SelectPreviousPreset()

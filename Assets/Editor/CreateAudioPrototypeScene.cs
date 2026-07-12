@@ -206,6 +206,8 @@ namespace TsukiVox.AudioPrototype.Editor
             playlistSo.FindProperty("defaultHostButton").objectReferenceValue = defaultHost;
             playlistSo.ApplyModifiedPropertiesWithoutUndo();
 
+            QuestAppShellPrototype.EnsureSceneShell();
+
             EditorSceneManager.SaveScene(scene, ScenePath);
             AddSceneToBuildSettings(ScenePath);
             Debug.Log($"Created {ScenePath}");

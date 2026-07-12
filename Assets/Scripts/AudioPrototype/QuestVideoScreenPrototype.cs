@@ -161,6 +161,12 @@ namespace TsukiVox.AudioPrototype
 
         public bool IsStatusOverlayVisible => showStatusOverlay;
 
+        public string StatusSummary => lastStatusMessage;
+
+        public bool IsPreparing => isPreparingVideo;
+
+        public bool IsPlaying => videoPlayer != null && videoPlayer.isPlaying;
+
         public void SetStatusOverlayVisible(bool visible)
         {
             showStatusOverlay = visible;
@@ -1014,6 +1020,11 @@ namespace TsukiVox.AudioPrototype
             CopyToClipboard(debugInfo);
             SetStatus($"Video: debug info copied.\n{GetVideoDiagnostics()}");
             Debug.Log($"[TsukiVox Video] Copied debug info:\n{debugInfo}");
+        }
+
+        public string GetDebugInfo()
+        {
+            return BuildDebugInfo();
         }
 
         private string BuildDebugInfo()

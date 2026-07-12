@@ -13,7 +13,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 4;
+        public const int CurrentDesignRevision = 6;
 
         // Player start is the world/tracking origin; recentering returns the user to the sofa.
         public static readonly Vector3 PlayerStartPosition = Vector3.zero;
@@ -143,11 +143,13 @@ namespace TsukiVox.AudioPrototype
             videoScreenPrototype = videoScreenPrototype != null ? videoScreenPrototype : FindAnyObjectByType<QuestVideoScreenPrototype>();
 
             EnsureRoots();
-            if (geometryRoot.childCount == 0)
+            if (geometryRoot.childCount == 0 || NeedsDesignRefresh)
             {
-                // Runtime generation remains as a recovery path for old or incomplete scenes.
+                // Runtime generation also upgrades scenes that have not yet been
+                // resaved by the editor design-revision refresh.
                 BuildRoom();
                 ConfigureLighting();
+                generatedDesignRevision = CurrentDesignRevision;
             }
             else
             {
@@ -239,7 +241,9 @@ namespace TsukiVox.AudioPrototype
             CreateBox(geometryRoot, "rug right trim", new Vector3(0.04f, 0.03f, 1.9f), new Vector3(1.62f, 0.02f, 1.4f), palette.Trim);
 
             CreateBox(geometryRoot, "ceiling inset", new Vector3(5.7f, 0.08f, roomDepth - 0.72f), new Vector3(0f, RoomHeight - 0.07f, roomCenterZ), palette.CeilingInset);
-            CreateBox(geometryRoot, "ceiling front drop", new Vector3(6.3f, 0.18f, 0.18f), new Vector3(0f, RoomHeight - 0.16f, FrontWallZ - 0.44f), palette.Ceiling);
+            // Keep the front drop attached to the ceiling so it cannot hide the
+            // screen's upper matte edge from seated headset viewpoints.
+            CreateBox(geometryRoot, "ceiling front drop", new Vector3(6.3f, 0.18f, 0.18f), new Vector3(0f, RoomHeight - 0.09f, FrontWallZ - 0.44f), palette.Ceiling);
             CreateBox(geometryRoot, "ceiling back drop", new Vector3(6.3f, 0.18f, 0.18f), new Vector3(0f, RoomHeight - 0.16f, BackWallZ + 0.44f), palette.Ceiling);
             CreateBox(geometryRoot, "ceiling left drop", new Vector3(0.18f, 0.18f, roomDepth - 0.7f), new Vector3(-3.15f, RoomHeight - 0.16f, roomCenterZ), palette.Ceiling);
             CreateBox(geometryRoot, "ceiling right drop", new Vector3(0.18f, 0.18f, roomDepth - 0.7f), new Vector3(3.15f, RoomHeight - 0.16f, roomCenterZ), palette.Ceiling);
@@ -331,8 +335,16 @@ namespace TsukiVox.AudioPrototype
             CreateBox(tableRoot, "table rim back", new Vector3(2.16f, 0.04f, 0.04f), new Vector3(0f, 0.58f, -0.5f), palette.Trim);
             CreateBox(tableRoot, "table rim left", new Vector3(0.04f, 0.04f, 1.0f), new Vector3(-1.08f, 0.58f, 0f), palette.Trim);
             CreateBox(tableRoot, "table rim right", new Vector3(0.04f, 0.04f, 1.0f), new Vector3(1.08f, 0.58f, 0f), palette.Trim);
-            CreateBeveledBox(tableRoot, "tablet body", new Vector3(1.08f, 0.045f, 0.56f), new Vector3(-0.28f, 0.59f, -0.08f), palette.Table, 0.025f);
-            CreateBeveledBox(tableRoot, "tablet glow", new Vector3(0.96f, 0.018f, 0.46f), new Vector3(-0.28f, 0.621f, -0.08f), palette.Accent, 0.018f, false, false, false);
+
+            var tabletAnchor = new GameObject("Tablet Anchor").transform;
+            tabletAnchor.SetParent(tableRoot, false);
+            tabletAnchor.localPosition = new Vector3(0f, 0.74f, 0f);
+            tabletAnchor.localRotation = Quaternion.Euler(68f, 0f, 0f);
+
+            // The tablet uses the same XY plane as the world-space control Canvas.
+            // Its dark screen sits just behind that plane to avoid depth fighting.
+            CreateBeveledBox(tabletAnchor, "tablet body", new Vector3(1.24f, 0.68f, 0.045f), new Vector3(0f, 0f, 0.0315f), palette.Table, 0.025f);
+            CreateBeveledBox(tabletAnchor, "tablet screen", new Vector3(1.12f, 0.56f, 0.008f), new Vector3(0f, 0f, 0.005f), palette.ScreenFrame, 0.018f, false, false, false);
 
             for (var index = 0; index < 4; index += 1)
             {
@@ -340,15 +352,6 @@ namespace TsukiVox.AudioPrototype
                 var z = index < 2 ? -0.36f : 0.36f;
                 CreateCylinder(tableRoot, $"table leg {index}", 0.035f, 0.46f, new Vector3(x, 0.23f, z), palette.Trim);
             }
-
-            CreateCup(tableRoot, "left cup", new Vector3(0.48f, 0.66f, 0.16f), palette);
-            CreateCup(tableRoot, "right cup", new Vector3(0.72f, 0.66f, 0.12f), palette);
-        }
-
-        private void CreateCup(Transform parent, string objectName, Vector3 position, RoomPalette palette)
-        {
-            var cup = CreateCylinder(parent, objectName, 0.055f, 0.12f, position, palette.Ceramic);
-            cup.transform.localScale = new Vector3(0.11f, 0.06f, 0.11f);
         }
 
         private void BuildScreenSurround(RoomPalette palette)
@@ -915,7 +918,6 @@ namespace TsukiVox.AudioPrototype
             public Material SofaShadow;
             public Material Table;
             public Material Glass;
-            public Material Ceramic;
             public Material Speaker;
             public Material SpeakerCone;
             public Material Accent;
@@ -940,7 +942,6 @@ namespace TsukiVox.AudioPrototype
                     SofaShadow = CreateMaterial("V0.5 Sofa Shadow", new Color(0.075f, 0.02f, 0.035f, 1f), 0.1f, 0f),
                     Table = CreateMaterial("V0.5 Table", new Color(0.035f, 0.065f, 0.068f, 1f), 0.58f, 0.22f),
                     Glass = CreateMaterial("V0.5 Smoked Glass", new Color(0.045f, 0.14f, 0.145f, 0.68f), 0.82f, 0.18f, 0f, true),
-                    Ceramic = CreateMaterial("V0.5 Ceramic", new Color(0.72f, 0.75f, 0.72f, 1f), 0.38f, 0.02f),
                     Speaker = CreateMaterial("V0.5 Speaker Cloth", new Color(0.018f, 0.024f, 0.026f, 1f), 0.06f, 0f),
                     SpeakerCone = CreateMaterial("V0.5 Speaker Cone", new Color(0.045f, 0.05f, 0.052f, 1f), 0.3f, 0.05f),
                     Accent = CreateMaterial("V0.5 Accent", AccentColor, 0.72f, 0.1f, 0.8f),

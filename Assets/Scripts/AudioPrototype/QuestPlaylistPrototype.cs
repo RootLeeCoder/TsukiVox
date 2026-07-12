@@ -59,6 +59,14 @@ namespace TsukiVox.AudioPrototype
 
         public bool CanSendControl => isConnected && !isRequestInFlight;
 
+        public bool IsRequestInFlight => isRequestInFlight;
+
+        public string HelperHost => helperHost;
+
+        public string LastConnectionError => lastError;
+
+        public string ConnectionStatusMessage => pendingStatus;
+
         public string PlaylistOrigin => client != null ? client.PlaylistOrigin : playlistOrigin;
 
         public string DownloadOrigin => client != null ? client.DownloadOrigin : downloadOrigin;
@@ -138,6 +146,11 @@ namespace TsukiVox.AudioPrototype
         public void ApplyDefaultHelperHost()
         {
             ApplyHelperHost(DefaultHelperHostAddress, true);
+        }
+
+        public void ApplyHelperHost(string nextHelperHost)
+        {
+            ApplyHelperHost(nextHelperHost, true);
         }
 
         public void SendPlayPause()
