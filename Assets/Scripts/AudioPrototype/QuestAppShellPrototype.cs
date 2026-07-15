@@ -15,7 +15,7 @@ namespace TsukiVox.AudioPrototype
         // and never blocks the video screen behind it.
         public static readonly Vector3 ControlPanelWorldPosition = new Vector3(0f, 0.74f, 1.1f);
         public static readonly Quaternion ControlPanelWorldRotation = Quaternion.Euler(68f, 0f, 0f);
-        public static readonly Vector3 ControlPanelWorldScale = Vector3.one * 0.001f;
+        public static readonly Vector3 ControlPanelWorldScale = Vector3.one * 0.00115f;
         public static readonly Vector2 ControlPanelSize = new Vector2(1120f, 560f);
 
         private const string CanvasName = "Prototype Canvas";
@@ -38,6 +38,7 @@ namespace TsukiVox.AudioPrototype
         [SerializeField] private QuestPlaylistPrototype playlistPrototype;
         [SerializeField] private QuestVideoScreenPrototype videoScreenPrototype;
         [SerializeField] private QuestConsumerUiPrototype consumerUi;
+        [SerializeField] private QuestTabletTiltController tabletTiltController;
 
         [Header("Runtime")]
         [SerializeField] private bool organizePanelOnAwake = true;
@@ -98,6 +99,13 @@ namespace TsukiVox.AudioPrototype
 
             ConfigureControlCanvas(controlCanvas);
             panel = panel != null ? panel : FindOrCreatePanel(controlCanvas.transform);
+            tabletTiltController = tabletTiltController != null
+                ? tabletTiltController
+                : GetComponent<QuestTabletTiltController>();
+            tabletTiltController = tabletTiltController != null
+                ? tabletTiltController
+                : gameObject.AddComponent<QuestTabletTiltController>();
+            tabletTiltController.Configure(controlCanvas, panel);
             EnsureEventSystem();
             QuestUiPointer.EnsureScenePointer();
 
@@ -231,6 +239,7 @@ namespace TsukiVox.AudioPrototype
             debugBuilder.AppendLine($"audioPrototype {audioPrototype != null}");
             debugBuilder.AppendLine($"playlistPrototype {playlistPrototype != null}");
             debugBuilder.AppendLine($"videoScreenPrototype {videoScreenPrototype != null}");
+            debugBuilder.AppendLine($"tabletTilt {(tabletTiltController == null ? "missing" : $"{tabletTiltController.CurrentTiltAngle:0}deg step {tabletTiltController.CurrentStepIndex} animating {tabletTiltController.IsAnimating}")}");
 
             if (playlistPrototype != null)
             {
@@ -320,7 +329,7 @@ namespace TsukiVox.AudioPrototype
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = ControlPanelSize;
             scaler.matchWidthOrHeight = 0.5f;
-            scaler.dynamicPixelsPerUnit = 14f;
+            scaler.dynamicPixelsPerUnit = 24f;
 
             var raycaster = canvas.GetComponent<GraphicRaycaster>() ?? canvas.gameObject.AddComponent<GraphicRaycaster>();
             raycaster.ignoreReversedGraphics = false;

@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -11,6 +12,7 @@ namespace TsukiVox.AudioPrototype
         IPointerUpHandler
     {
         [SerializeField] private Text hoverLabel;
+        [SerializeField] private TMP_Text tmpHoverLabel;
         [SerializeField] private string hoverText;
 
         private bool isHovered;
@@ -19,6 +21,14 @@ namespace TsukiVox.AudioPrototype
         public void Configure(Text label, string labelText)
         {
             hoverLabel = label;
+            tmpHoverLabel = null;
+            hoverText = labelText;
+        }
+
+        public void Configure(TMP_Text label, string labelText)
+        {
+            hoverLabel = null;
+            tmpHoverLabel = label;
             hoverText = labelText;
         }
 
@@ -45,6 +55,11 @@ namespace TsukiVox.AudioPrototype
             {
                 hoverLabel.text = hoverText;
             }
+
+            if (tmpHoverLabel != null)
+            {
+                tmpHoverLabel.text = hoverText;
+            }
         }
 
         public void OnPointerExit(PointerEventData eventData)
@@ -69,6 +84,11 @@ namespace TsukiVox.AudioPrototype
             if (hoverLabel != null && hoverLabel.text == hoverText)
             {
                 hoverLabel.text = string.Empty;
+            }
+
+            if (tmpHoverLabel != null && tmpHoverLabel.text == hoverText)
+            {
+                tmpHoverLabel.text = string.Empty;
             }
         }
     }

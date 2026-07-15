@@ -16,6 +16,7 @@ namespace TsukiVox.AudioPrototype
     {
         private const int PointerId = -32025;
         private const float TriggerPressThreshold = 0.65f;
+        private const float ClickReleaseTolerancePixels = 42f;
 
         private static readonly Vector3 PanelWorldPosition = QuestAppShellPrototype.ControlPanelWorldPosition;
         private static readonly Quaternion PanelWorldRotation = QuestAppShellPrototype.ControlPanelWorldRotation;
@@ -38,6 +39,7 @@ namespace TsukiVox.AudioPrototype
         private bool wasGripPressedRight;
 
         private readonly List<RaycastResult> raycastResults = new List<RaycastResult>();
+        private readonly List<Canvas> interactionCanvases = new List<Canvas>();
         private bool isConfigured;
         private bool wasPressed;
         private bool hasLastPointerPosition;
@@ -54,6 +56,7 @@ namespace TsukiVox.AudioPrototype
         private LineRenderer pointerLine;
         private Transform reticle;
         private Material pointerMaterial;
+        private float nextCanvasRefreshAt;
 
         public static QuestUiPointer EnsureScenePointer()
         {
@@ -80,6 +83,15 @@ namespace TsukiVox.AudioPrototype
             if (!isConfigured || targetCanvas == null || raycaster == null || targetCanvas.worldCamera == null)
             {
                 ConfigureSceneReferences();
+            }
+
+            if (Time.unscaledTime >= nextCanvasRefreshAt)
+            {
+                nextCanvasRefreshAt = Time.unscaledTime + 0.5f;
+                if (NeedsCanvasRefresh())
+                {
+                    RefreshInteractionCanvases();
+                }
             }
 
             UpdateGripToggle();
@@ -121,6 +133,7 @@ namespace TsukiVox.AudioPrototype
 
             ConfigureCanvas(targetCanvas);
             raycaster = raycaster != null ? raycaster : targetCanvas.GetComponent<GraphicRaycaster>();
+            RefreshInteractionCanvases();
             EnsureEventSystem();
             EnsurePointerEventData();
             EnsurePointerVisuals();
@@ -137,10 +150,13 @@ namespace TsukiVox.AudioPrototype
             canvas.sortingOrder = 10;
 
             var rect = canvas.GetComponent<RectTransform>();
-            canvas.transform.SetParent(null, false);
-            rect.position = PanelWorldPosition;
-            rect.rotation = PanelWorldRotation;
-            rect.localScale = PanelWorldScale;
+            if (canvas.transform.parent == null || canvas.transform.parent.name != QuestTabletTiltController.TabletPivotName)
+            {
+                rect.position = PanelWorldPosition;
+                rect.rotation = PanelWorldRotation;
+                rect.localScale = PanelWorldScale;
+            }
+
             rect.sizeDelta = QuestAppShellPrototype.ControlPanelSize;
             rect.pivot = new Vector2(0.5f, 0.5f);
 
@@ -150,7 +166,7 @@ namespace TsukiVox.AudioPrototype
                 scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
                 scaler.referenceResolution = QuestAppShellPrototype.ControlPanelSize;
                 scaler.matchWidthOrHeight = 0.5f;
-                scaler.dynamicPixelsPerUnit = 12f;
+                scaler.dynamicPixelsPerUnit = 24f;
             }
 
             var canvasRaycaster = canvas.GetComponent<GraphicRaycaster>();
@@ -164,7 +180,7 @@ namespace TsukiVox.AudioPrototype
 
         private void UpdateControllerPointer()
         {
-            if (!isConfigured || targetCanvas == null || raycaster == null || EventSystem.current == null)
+            if (!isConfigured || interactionCanvases.Count == 0 || EventSystem.current == null)
             {
                 HidePointerVisuals();
                 return;
@@ -185,14 +201,7 @@ namespace TsukiVox.AudioPrototype
 
             var pressed = IsControllerTriggerPressed(device);
             var ray = new Ray(origin, rotation * Vector3.forward);
-            var hasCanvasHit = TryGetCanvasHit(ray, out var canvasHitPoint, out _);
-
-            var currentRaycast = default(RaycastResult);
-            var currentTarget = hasCanvasHit ? RaycastCanvas(canvasHitPoint, out currentRaycast) : null;
-            if (!hasCanvasHit)
-            {
-                currentRaycast = default;
-            }
+            var hasCanvasHit = TryRaycastCanvases(ray, out var canvasHitPoint, out var currentTarget, out var currentRaycast);
 
             ProcessHover(currentTarget);
 
@@ -296,7 +305,10 @@ namespace TsukiVox.AudioPrototype
             }
 
             var clickTarget = currentTarget != null ? ExecuteEvents.GetEventHandler<IPointerClickHandler>(currentTarget) : null;
-            if (eligibleForClick && pressedObject != null && pressedObject == clickTarget)
+            var releasedNearPress = Vector2.Distance(pointerEventData.position, pressPosition) <= ClickReleaseTolerancePixels;
+            if (eligibleForClick &&
+                pressedObject != null &&
+                (pressedObject == clickTarget || (clickTarget == null && releasedNearPress)))
             {
                 ExecuteEvents.Execute(pressedObject, pointerEventData, ExecuteEvents.pointerClickHandler);
             }
@@ -350,25 +362,143 @@ namespace TsukiVox.AudioPrototype
             hoveredObject = null;
         }
 
-        private GameObject RaycastCanvas(Vector3 worldPoint, out RaycastResult currentRaycast)
+        private GameObject RaycastCanvas(
+            Canvas canvas,
+            GraphicRaycaster canvasRaycaster,
+            Vector3 worldPoint,
+            out RaycastResult currentRaycast)
         {
             currentRaycast = default;
-            var camera = targetCanvas.worldCamera != null ? targetCanvas.worldCamera : Camera.main;
-            if (camera == null)
+            if (canvas == null || canvasRaycaster == null)
             {
                 return null;
+            }
+
+            if (!PreparePointerEventData(canvas, worldPoint))
+            {
+                return null;
+            }
+
+            raycastResults.Clear();
+            canvasRaycaster.Raycast(pointerEventData, raycastResults);
+            if (raycastResults.Count == 0)
+            {
+                return null;
+            }
+
+            currentRaycast = raycastResults[0];
+            pointerEventData.pointerCurrentRaycast = currentRaycast;
+            return currentRaycast.gameObject;
+        }
+
+        private bool TryRaycastCanvases(
+            Ray ray,
+            out Vector3 hitPoint,
+            out GameObject currentTarget,
+            out RaycastResult currentRaycast)
+        {
+            hitPoint = ray.origin + ray.direction * maxPointerDistance;
+            currentTarget = null;
+            currentRaycast = default;
+            var nearestSurfaceDistance = float.MaxValue;
+            var nearestTargetDistance = float.MaxValue;
+            var nearestSurfacePoint = hitPoint;
+            var nearestTargetPoint = hitPoint;
+            Canvas nearestSurfaceCanvas = null;
+            Canvas nearestTargetCanvas = null;
+            var hasSurfaceHit = false;
+
+            for (var index = 0; index < interactionCanvases.Count; index += 1)
+            {
+                var canvas = interactionCanvases[index];
+                if (!TryGetCanvasHit(canvas, ray, out var candidatePoint, out var candidateDistance))
+                {
+                    continue;
+                }
+
+                hasSurfaceHit = true;
+                if (candidateDistance < nearestSurfaceDistance)
+                {
+                    nearestSurfaceDistance = candidateDistance;
+                    nearestSurfacePoint = candidatePoint;
+                    nearestSurfaceCanvas = canvas;
+                }
+
+                var canvasRaycaster = canvas.GetComponent<GraphicRaycaster>();
+                var candidateTarget = RaycastCanvas(canvas, canvasRaycaster, candidatePoint, out var candidateRaycast);
+                if (candidateTarget == null || candidateDistance >= nearestTargetDistance)
+                {
+                    continue;
+                }
+
+                nearestTargetDistance = candidateDistance;
+                nearestTargetPoint = candidatePoint;
+                nearestTargetCanvas = canvas;
+                currentTarget = candidateTarget;
+                currentRaycast = candidateRaycast;
+            }
+
+            if (!hasSurfaceHit)
+            {
+                return false;
+            }
+
+            var selectedCanvas = currentTarget != null ? nearestTargetCanvas : nearestSurfaceCanvas;
+            hitPoint = currentTarget != null ? nearestTargetPoint : nearestSurfacePoint;
+            if (selectedCanvas != null && PreparePointerEventData(selectedCanvas, hitPoint))
+            {
+                pointerEventData.pointerCurrentRaycast = currentRaycast;
+                lastPointerPosition = pointerEventData.position;
+                hasLastPointerPosition = true;
+            }
+
+            return true;
+        }
+
+        private bool TryGetCanvasHit(Canvas canvas, Ray ray, out Vector3 hitPoint, out float distance)
+        {
+            hitPoint = Vector3.zero;
+            distance = maxPointerDistance;
+            if (canvas == null || !canvas.isActiveAndEnabled)
+            {
+                return false;
+            }
+
+            var camera = canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
+            var canvasPlane = new Plane(canvas.transform.forward, canvas.transform.position);
+            if (camera == null ||
+                !canvasPlane.Raycast(ray, out distance) ||
+                distance < 0f ||
+                distance > maxPointerDistance)
+            {
+                return false;
+            }
+
+            hitPoint = ray.GetPoint(distance);
+            var rect = canvas.GetComponent<RectTransform>();
+            var screenPoint = camera.WorldToScreenPoint(hitPoint);
+            return screenPoint.z > camera.nearClipPlane &&
+                   (rect == null || RectTransformUtility.RectangleContainsScreenPoint(rect, screenPoint, camera));
+        }
+
+        private bool PreparePointerEventData(Canvas canvas, Vector3 worldPoint)
+        {
+            var camera = canvas != null && canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
+            if (camera == null)
+            {
+                return false;
             }
 
             EnsurePointerEventData();
             if (pointerEventData == null)
             {
-                return null;
+                return false;
             }
 
             var cameraPoint = camera.WorldToScreenPoint(worldPoint);
             if (cameraPoint.z <= camera.nearClipPlane)
             {
-                return null;
+                return false;
             }
 
             var screenPoint = new Vector2(cameraPoint.x, cameraPoint.y);
@@ -384,48 +514,7 @@ namespace TsukiVox.AudioPrototype
             pointerEventData.rawPointerPress = rawPressedObject;
             pointerEventData.pointerDrag = draggedObject;
             pointerEventData.eligibleForClick = eligibleForClick;
-
-            lastPointerPosition = screenPoint;
-            hasLastPointerPosition = true;
-
-            raycastResults.Clear();
-            raycaster.Raycast(pointerEventData, raycastResults);
-            if (raycastResults.Count == 0)
-            {
-                return null;
-            }
-
-            currentRaycast = raycastResults[0];
-            pointerEventData.pointerCurrentRaycast = currentRaycast;
-            return currentRaycast.gameObject;
-        }
-
-        private bool TryGetCanvasHit(Ray ray, out Vector3 hitPoint, out float distance)
-        {
-            hitPoint = Vector3.zero;
-            distance = maxPointerDistance;
-            if (targetCanvas == null)
-            {
-                return false;
-            }
-
-            var canvasPlane = new Plane(targetCanvas.transform.forward, targetCanvas.transform.position);
-            if (!canvasPlane.Raycast(ray, out distance) || distance < 0f || distance > maxPointerDistance)
-            {
-                return false;
-            }
-
-            hitPoint = ray.GetPoint(distance);
-            var rect = targetCanvas.GetComponent<RectTransform>();
-            return rect == null || RectTransformUtility.RectangleContainsScreenPoint(rect, GetScreenPoint(hitPoint), targetCanvas.worldCamera);
-        }
-
-        private Vector2 GetScreenPoint(Vector3 worldPoint)
-        {
-            var camera = targetCanvas != null && targetCanvas.worldCamera != null ? targetCanvas.worldCamera : Camera.main;
-            return camera != null
-                ? (Vector2)camera.WorldToScreenPoint(worldPoint)
-                : RectTransformUtility.WorldToScreenPoint(null, worldPoint);
+            return true;
         }
 
         private bool TryGetPointerPose(out InputSystemDevice device, out Vector3 position, out Quaternion rotation)
@@ -807,6 +896,47 @@ namespace TsukiVox.AudioPrototype
             }
 
             return firstRaycastCanvas != null ? firstRaycastCanvas : (canvases.Length > 0 ? canvases[0] : null);
+        }
+
+        private void RefreshInteractionCanvases()
+        {
+            interactionCanvases.Clear();
+            var canvases = FindObjectsByType<Canvas>(FindObjectsInactive.Exclude);
+            var camera = Camera.main;
+            for (var index = 0; index < canvases.Length; index += 1)
+            {
+                var canvas = canvases[index];
+                if (canvas.name != "Prototype Canvas" && canvas.name != QuestTabletTiltController.SwitchCanvasName)
+                {
+                    continue;
+                }
+
+                if (canvas.GetComponent<GraphicRaycaster>() == null)
+                {
+                    continue;
+                }
+
+                canvas.worldCamera = camera;
+                interactionCanvases.Add(canvas);
+            }
+        }
+
+        private bool NeedsCanvasRefresh()
+        {
+            if (interactionCanvases.Count < 2)
+            {
+                return true;
+            }
+
+            for (var index = 0; index < interactionCanvases.Count; index += 1)
+            {
+                if (interactionCanvases[index] == null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void ConfigureSelectableFeedback(Transform root)

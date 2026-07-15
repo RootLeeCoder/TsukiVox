@@ -31,9 +31,10 @@ namespace TsukiVox.AudioPrototype
         [SerializeField] private MeshRenderer matteRenderer;
         [SerializeField] private Text statusText;
         [SerializeField] private Button copyDebugButton;
-        // V0.5: the on-screen status/debug overlay is hidden by default; the coffee
-        // table panel exposes a toggle so it can be brought back when troubleshooting.
+        // The legacy world-space status overlay stays disabled for consumer builds.
+        // Diagnostics are surfaced inside the coffee-table control panel instead.
         [SerializeField] private bool showStatusOverlay;
+        [SerializeField] private bool allowWorldStatusOverlay;
         [SerializeField] private int renderTextureWidth = DefaultTextureWidth;
         [SerializeField] private int renderTextureHeight = DefaultTextureHeight;
 
@@ -148,6 +149,7 @@ namespace TsukiVox.AudioPrototype
 
         private void ConfigureSceneReferences()
         {
+            showStatusOverlay = showStatusOverlay && allowWorldStatusOverlay;
             playlistPrototype = playlistPrototype != null ? playlistPrototype : QuestPlaylistPrototype.EnsureScenePrototype();
             EnsureVideoPlayer();
             EnsureRenderTexture();
@@ -169,7 +171,7 @@ namespace TsukiVox.AudioPrototype
 
         public void SetStatusOverlayVisible(bool visible)
         {
-            showStatusOverlay = visible;
+            showStatusOverlay = visible && allowWorldStatusOverlay;
             ApplyStatusOverlayVisibility();
         }
 

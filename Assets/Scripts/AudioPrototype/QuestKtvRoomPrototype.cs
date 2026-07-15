@@ -13,7 +13,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 6;
+        public const int CurrentDesignRevision = 9;
 
         // Player start is the world/tracking origin; recentering returns the user to the sofa.
         public static readonly Vector3 PlayerStartPosition = Vector3.zero;
@@ -75,7 +75,11 @@ namespace TsukiVox.AudioPrototype
             var existing = FindAnyObjectByType<QuestKtvRoomPrototype>();
             if (existing != null)
             {
-                if (!Application.isPlaying)
+                if (Application.isPlaying)
+                {
+                    existing.ConfigureRuntimeReferences();
+                }
+                else
                 {
                     existing.ConfigureSceneReferences();
                 }
@@ -127,6 +131,7 @@ namespace TsukiVox.AudioPrototype
             videoScreenPrototype = videoScreenPrototype != null ? videoScreenPrototype : FindAnyObjectByType<QuestVideoScreenPrototype>();
 
             EnsureRoots();
+            DetachControlCanvasFromGeneratedGeometry();
             RemoveLegacySceneProps();
             BuildRoom();
             ConfigureLighting();
@@ -143,6 +148,7 @@ namespace TsukiVox.AudioPrototype
             videoScreenPrototype = videoScreenPrototype != null ? videoScreenPrototype : FindAnyObjectByType<QuestVideoScreenPrototype>();
 
             EnsureRoots();
+            DetachControlCanvasFromGeneratedGeometry();
             if (geometryRoot.childCount == 0 || NeedsDesignRefresh)
             {
                 // Runtime generation also upgrades scenes that have not yet been
@@ -336,15 +342,33 @@ namespace TsukiVox.AudioPrototype
             CreateBox(tableRoot, "table rim left", new Vector3(0.04f, 0.04f, 1.0f), new Vector3(-1.08f, 0.58f, 0f), palette.Trim);
             CreateBox(tableRoot, "table rim right", new Vector3(0.04f, 0.04f, 1.0f), new Vector3(1.08f, 0.58f, 0f), palette.Trim);
 
+            var tabletPivot = new GameObject(QuestTabletTiltController.TabletPivotName).transform;
+            tabletPivot.SetParent(tableRoot, false);
+            tabletPivot.localPosition = new Vector3(0f, 0.62f, -0.32f);
+            tabletPivot.localRotation = Quaternion.Euler(30f, 0f, 0f);
+
             var tabletAnchor = new GameObject("Tablet Anchor").transform;
-            tabletAnchor.SetParent(tableRoot, false);
-            tabletAnchor.localPosition = new Vector3(0f, 0.74f, 0f);
-            tabletAnchor.localRotation = Quaternion.Euler(68f, 0f, 0f);
+            tabletAnchor.SetParent(tabletPivot, false);
+            tabletAnchor.localPosition = new Vector3(0f, 0.39f, 0f);
+            tabletAnchor.localRotation = Quaternion.identity;
 
             // The tablet uses the same XY plane as the world-space control Canvas.
             // Its dark screen sits just behind that plane to avoid depth fighting.
-            CreateBeveledBox(tabletAnchor, "tablet body", new Vector3(1.24f, 0.68f, 0.045f), new Vector3(0f, 0f, 0.0315f), palette.Table, 0.025f);
-            CreateBeveledBox(tabletAnchor, "tablet screen", new Vector3(1.12f, 0.56f, 0.008f), new Vector3(0f, 0f, 0.005f), palette.ScreenFrame, 0.018f, false, false, false);
+            CreateBeveledBox(tabletAnchor, "tablet body", new Vector3(1.42f, 0.78f, 0.045f), new Vector3(0f, 0f, 0.0315f), palette.Table, 0.025f, true, true, false);
+            CreateBeveledBox(tabletAnchor, "tablet screen", new Vector3(1.30f, 0.66f, 0.008f), new Vector3(0f, 0f, 0.005f), palette.ScreenFrame, 0.018f, false, false, false);
+            var leftHinge = CreateCylinder(tabletPivot, "tablet hinge left", 0.03f, 0.14f, new Vector3(-0.60f, 0f, 0.025f), palette.Trim, true, true, false);
+            leftHinge.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+            var rightHinge = CreateCylinder(tabletPivot, "tablet hinge right", 0.03f, 0.14f, new Vector3(0.60f, 0f, 0.025f), palette.Trim, true, true, false);
+            rightHinge.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+
+            var tiltSwitchHousing = CreateBeveledBox(
+                tableRoot,
+                "tablet tilt switch housing",
+                new Vector3(0.44f, 0.035f, 0.13f),
+                new Vector3(0.79f, 0.598f, -0.436f),
+                palette.Table,
+                0.012f);
+            tiltSwitchHousing.transform.localRotation = Quaternion.Euler(-12f, 0f, 0f);
 
             for (var index = 0; index < 4; index += 1)
             {
@@ -604,6 +628,24 @@ namespace TsukiVox.AudioPrototype
             var child = new GameObject(childName).transform;
             child.SetParent(parent, false);
             return child;
+        }
+
+        private void DetachControlCanvasFromGeneratedGeometry()
+        {
+            if (geometryRoot == null)
+            {
+                return;
+            }
+
+            var canvases = FindObjectsByType<Canvas>(FindObjectsInactive.Include);
+            for (var index = 0; index < canvases.Length; index += 1)
+            {
+                if (canvases[index].name == "Prototype Canvas" && canvases[index].transform.IsChildOf(geometryRoot))
+                {
+                    canvases[index].transform.SetParent(null, true);
+                    return;
+                }
+            }
         }
 
         private static void ClearChildren(Transform parent)
