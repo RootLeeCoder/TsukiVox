@@ -150,7 +150,7 @@ namespace TsukiVox.AudioPrototype
             canvas.sortingOrder = 10;
 
             var rect = canvas.GetComponent<RectTransform>();
-            if (canvas.transform.parent == null || canvas.transform.parent.name != QuestTabletTiltController.TabletPivotName)
+            if (!IsMountedOnTablet(canvas.transform))
             {
                 rect.position = PanelWorldPosition;
                 rect.rotation = PanelWorldRotation;
@@ -176,6 +176,22 @@ namespace TsukiVox.AudioPrototype
             }
 
             canvasRaycaster.ignoreReversedGraphics = false;
+        }
+
+        private static bool IsMountedOnTablet(Transform canvasTransform)
+        {
+            var current = canvasTransform.parent;
+            while (current != null)
+            {
+                if (current.name == QuestTabletTiltController.TabletPivotName)
+                {
+                    return true;
+                }
+
+                current = current.parent;
+            }
+
+            return false;
         }
 
         private void UpdateControllerPointer()

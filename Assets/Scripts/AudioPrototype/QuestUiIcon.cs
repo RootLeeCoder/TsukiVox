@@ -20,6 +20,8 @@ namespace TsukiVox.AudioPrototype
         Close,
         Copy,
         Volume,
+        BrandRing,
+        BrandSmile,
     }
 
     /// <summary>
@@ -102,8 +104,10 @@ namespace TsukiVox.AudioPrototype
                     }
                     break;
                 case QuestUiIconKind.Replay:
-                    AddArc(vertexHelper, rect, 12f, 12f, 8f, -44f, 292f, thickness);
-                    AddPolyline(vertexHelper, rect, thickness, 3.8f, 4.1f, 3.8f, 9.1f, 8.6f, 9.1f);
+                    // Lucide RotateCcw, matching the WebXR control icon geometry.
+                    AddArc(vertexHelper, rect, 12f, 12f, 9f, 180f, -270f, thickness);
+                    AddPolyline(vertexHelper, rect, thickness, 12f, 3f, 9.2f, 3.5f, 6.8f, 4.7f, 5.25f, 5.75f, 3f, 8f);
+                    AddPolyline(vertexHelper, rect, thickness, 3f, 3f, 3f, 8f, 8f, 8f);
                     break;
                 case QuestUiIconKind.Previous:
                     AddLine(vertexHelper, rect, 5f, 5f, 5f, 19f, thickness);
@@ -147,6 +151,12 @@ namespace TsukiVox.AudioPrototype
                     AddPolyline(vertexHelper, rect, thickness, 3f, 9f, 7f, 9f, 12f, 5f, 12f, 19f, 7f, 15f, 3f, 15f, 3f, 9f);
                     AddArc(vertexHelper, rect, 12f, 12f, 5f, -55f, 110f, thickness);
                     AddArc(vertexHelper, rect, 12f, 12f, 9f, -45f, 90f, thickness);
+                    break;
+                case QuestUiIconKind.BrandRing:
+                    AddCircle(vertexHelper, rect, 12f, 12f, 7.5f, thickness);
+                    break;
+                case QuestUiIconKind.BrandSmile:
+                    AddPolyline(vertexHelper, rect, thickness, 7.5f, 15.4f, 9f, 16.3f, 10.5f, 16.8f, 12f, 17f, 13.8f, 16.9f, 15.5f, 16.5f, 16.9f, 15.8f);
                     break;
             }
         }

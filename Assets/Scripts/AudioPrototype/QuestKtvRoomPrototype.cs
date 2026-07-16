@@ -148,11 +148,11 @@ namespace TsukiVox.AudioPrototype
             videoScreenPrototype = videoScreenPrototype != null ? videoScreenPrototype : FindAnyObjectByType<QuestVideoScreenPrototype>();
 
             EnsureRoots();
-            DetachControlCanvasFromGeneratedGeometry();
             if (geometryRoot.childCount == 0 || NeedsDesignRefresh)
             {
                 // Runtime generation also upgrades scenes that have not yet been
                 // resaved by the editor design-revision refresh.
+                DetachControlCanvasFromGeneratedGeometry();
                 BuildRoom();
                 ConfigureLighting();
                 generatedDesignRevision = CurrentDesignRevision;

@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -12,8 +13,8 @@ namespace TsukiVox.AudioPrototype
         public static readonly Vector3 SwitchWorldPosition = new Vector3(0.79f, 0.621f, 0.659f);
         public static readonly Quaternion SwitchWorldRotation = Quaternion.Euler(78f, 0f, 0f);
 
-        private const string TiltStepPrefsKey = "TsukiVox.TabletTiltStep";
-        private const int DefaultStepIndex = 2;
+        private const string TiltStepPrefsKey = "TsukiVox.TabletTiltStep.v2";
+        private const int DefaultStepIndex = 1;
         private const float CanvasCenterFromHinge = 0.39f;
         private const float SwitchCanvasScale = 0.001f;
 
@@ -22,10 +23,11 @@ namespace TsukiVox.AudioPrototype
 
         private static readonly Color DockSurface = new Color(0.025f, 0.045f, 0.047f, 0.98f);
         private static readonly Color ButtonSurface = new Color(0.07f, 0.095f, 0.1f, 1f);
-        private static readonly Color ActiveSurface = new Color(0.08f, 0.24f, 0.2f, 1f);
+        private static readonly Color ActiveSurface = new Color(0.24f, 0.9f, 0.74f, 1f);
         private static readonly Color TextPrimary = new Color(0.9f, 0.96f, 0.96f, 1f);
         private static readonly Color TextSecondary = new Color(0.57f, 0.68f, 0.69f, 1f);
         private static readonly Color Accent = new Color(0.25f, 0.95f, 0.72f, 1f);
+        private static readonly Color AccentInk = new Color(0.012f, 0.075f, 0.059f, 1f);
 
         [Header("Scene References")]
         [SerializeField] private Canvas controlCanvas;
@@ -35,12 +37,12 @@ namespace TsukiVox.AudioPrototype
 
         [Header("Motion")]
         [SerializeField, Range(0, 3)] private int currentStepIndex = DefaultStepIndex;
-        [SerializeField] private float currentTiltAngle = 60f;
+        [SerializeField] private float currentTiltAngle = 30f;
         [SerializeField] private bool isAnimating;
 
         private readonly Button[] stepButtons = new Button[4];
         private readonly QuestUiSurface[] stepSurfaces = new QuestUiSurface[4];
-        private readonly Text[] stepLabels = new Text[4];
+        private readonly TMP_Text[] stepLabels = new TMP_Text[4];
         private readonly QuestUiSurface[] stepLights = new QuestUiSurface[4];
 
         private CanvasGroup controlPanelGroup;
@@ -51,7 +53,7 @@ namespace TsukiVox.AudioPrototype
         private float animationStartAngle;
         private float animationTargetAngle;
         private float nextHierarchyResolveAt;
-        private Font uiFont;
+        private TMP_FontAsset uiFont;
 
         public float CurrentTiltAngle => currentTiltAngle;
         public int CurrentStepIndex => currentStepIndex;
@@ -61,7 +63,7 @@ namespace TsukiVox.AudioPrototype
         {
             controlCanvas = canvas != null ? canvas : controlCanvas;
             controlPanel = panel != null ? panel : controlPanel;
-            uiFont = Resources.Load<Font>("Fonts/NotoSansSC-VF") ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            uiFont = ResolveUiFont();
 
             currentStepIndex = Application.isPlaying
                 ? Mathf.Clamp(PlayerPrefs.GetInt(TiltStepPrefsKey, DefaultStepIndex), 0, TiltAngles.Length - 1)
@@ -126,6 +128,11 @@ namespace TsukiVox.AudioPrototype
                     ApplyTiltImmediate(currentTiltAngle);
                 }
             }
+            else if (tabletPivot != null && !IsControlCanvasAttached())
+            {
+                TryConfigureTabletHierarchy();
+                ApplyTiltImmediate(currentTiltAngle);
+            }
 
             if (!isAnimating || tabletPivot == null)
             {
@@ -165,18 +172,21 @@ namespace TsukiVox.AudioPrototype
                 return false;
             }
 
+            var tabletAnchor = tabletPivot.Find("Tablet Anchor");
             if (controlCanvas != null)
             {
                 var rect = controlCanvas.GetComponent<RectTransform>();
-                rect.SetParent(tabletPivot, false);
-                rect.localPosition = new Vector3(0f, CanvasCenterFromHinge, 0f);
+                var panelMount = tabletAnchor != null ? tabletAnchor : tabletPivot;
+                rect.SetParent(panelMount, false);
+                rect.localPosition = tabletAnchor != null
+                    ? Vector3.zero
+                    : new Vector3(0f, CanvasCenterFromHinge, 0f);
                 rect.localRotation = Quaternion.identity;
                 rect.localScale = QuestAppShellPrototype.ControlPanelWorldScale;
                 rect.sizeDelta = QuestAppShellPrototype.ControlPanelSize;
                 rect.pivot = new Vector2(0.5f, 0.5f);
             }
 
-            var tabletAnchor = tabletPivot.Find("Tablet Anchor");
             if (tabletAnchor != null)
             {
                 tabletAnchor.localPosition = new Vector3(0f, CanvasCenterFromHinge, 0f);
@@ -184,6 +194,19 @@ namespace TsukiVox.AudioPrototype
             }
 
             return true;
+        }
+
+        private bool IsControlCanvasAttached()
+        {
+            if (controlCanvas == null || tabletPivot == null)
+            {
+                return true;
+            }
+
+            var tabletAnchor = tabletPivot.Find("Tablet Anchor");
+            var expectedParent = tabletAnchor != null ? tabletAnchor : tabletPivot;
+            return controlCanvas.transform.parent == expectedParent &&
+                   Quaternion.Angle(controlCanvas.transform.localRotation, Quaternion.identity) < 0.01f;
         }
 
         private void ApplyTiltImmediate(float tiltAngle)
@@ -268,7 +291,7 @@ namespace TsukiVox.AudioPrototype
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = switchRect.sizeDelta;
             scaler.matchWidthOrHeight = 0.5f;
-            scaler.dynamicPixelsPerUnit = 14f;
+            scaler.dynamicPixelsPerUnit = 32f;
 
             var raycaster = switchCanvas.GetComponent<GraphicRaycaster>() ?? switchCanvas.gameObject.AddComponent<GraphicRaycaster>();
             raycaster.ignoreReversedGraphics = false;
@@ -301,7 +324,7 @@ namespace TsukiVox.AudioPrototype
 
                 stepButtons[index] = button;
                 stepSurfaces[index] = surface;
-                stepLabels[index] = step.Find("Label")?.GetComponent<Text>();
+                stepLabels[index] = step.Find("Label")?.GetComponent<TMP_Text>();
                 stepLights[index] = step.Find("Selected Light")?.GetComponent<QuestUiSurface>();
                 if (stepLabels[index] == null || stepLights[index] == null)
                 {
@@ -317,6 +340,8 @@ namespace TsukiVox.AudioPrototype
             var existingDock = parent.Find("Dock");
             if (existingDock != null)
             {
+                existingDock.name = "Dock Legacy";
+                existingDock.gameObject.SetActive(false);
                 DestroyForCurrentMode(existingDock.gameObject);
             }
 
@@ -329,16 +354,17 @@ namespace TsukiVox.AudioPrototype
                 var surface = CreateSurface(dock.rectTransform, $"Angle {index}", new Vector2(88f, 88f), new Vector2(x, 0f), ButtonSurface, 8f);
                 var button = surface.gameObject.AddComponent<Button>();
                 button.targetGraphic = surface;
+                button.transition = Selectable.Transition.None;
                 button.navigation = new Navigation { mode = Navigation.Mode.None };
                 button.colors = CreateButtonColors();
                 surface.raycastTarget = true;
 
-                var label = CreateText(surface.rectTransform, "Label", TiltLabels[index], 18, TextPrimary, Vector2.zero, new Vector2(82f, 72f));
+                var label = CreateText(surface.rectTransform, "Label", TiltLabels[index], 19, TextPrimary, Vector2.zero, new Vector2(82f, 72f));
                 var light = CreateSurface(surface.rectTransform, "Selected Light", new Vector2(42f, 4f), new Vector2(0f, -37f), Accent, 2f);
                 light.raycastTarget = false;
 
                 var feedback = surface.gameObject.AddComponent<QuestUiButtonFeedback>();
-                feedback.Configure((Text)null, TiltLabels[index].Replace('\n', ' '));
+                feedback.Configure((TMP_Text)null, string.Empty);
 
                 stepButtons[index] = button;
                 stepSurfaces[index] = surface;
@@ -352,6 +378,10 @@ namespace TsukiVox.AudioPrototype
             for (var index = 0; index < stepButtons.Length; index += 1)
             {
                 var capturedIndex = index;
+                stepButtons[index].transition = Selectable.Transition.None;
+                var feedback = stepButtons[index].GetComponent<QuestUiButtonFeedback>() ??
+                               stepButtons[index].gameObject.AddComponent<QuestUiButtonFeedback>();
+                feedback.Configure((TMP_Text)null, string.Empty);
                 stepButtons[index].onClick.RemoveAllListeners();
                 stepButtons[index].onClick.AddListener(() => SetTiltStep(capturedIndex));
             }
@@ -367,8 +397,9 @@ namespace TsukiVox.AudioPrototype
                 }
 
                 var isActive = index == currentStepIndex;
+                stepLabels[index].text = TiltLabels[index];
                 stepSurfaces[index].color = isActive ? ActiveSurface : ButtonSurface;
-                stepLabels[index].color = isActive ? Accent : TextSecondary;
+                stepLabels[index].color = isActive ? AccentInk : TextPrimary;
                 var lightAlpha = isActive ? 1f : 0f;
                 if (isActive && motionProgress >= 0f)
                 {
@@ -400,7 +431,7 @@ namespace TsukiVox.AudioPrototype
             return surface;
         }
 
-        private Text CreateText(
+        private TMP_Text CreateText(
             Transform parent,
             string objectName,
             string value,
@@ -411,19 +442,32 @@ namespace TsukiVox.AudioPrototype
         {
             var textObject = new GameObject(objectName, typeof(RectTransform));
             textObject.transform.SetParent(parent, false);
-            var text = textObject.AddComponent<Text>();
+            var text = textObject.AddComponent<TextMeshProUGUI>();
             text.font = uiFont;
             text.text = value;
             text.fontSize = fontSize;
-            text.fontStyle = FontStyle.Normal;
-            text.alignment = TextAnchor.MiddleCenter;
+            text.fontStyle = FontStyles.Bold;
+            text.alignment = TextAlignmentOptions.Center;
             text.color = color;
-            text.horizontalOverflow = HorizontalWrapMode.Wrap;
-            text.verticalOverflow = VerticalWrapMode.Truncate;
+            text.textWrappingMode = TextWrappingModes.Normal;
+            text.overflowMode = TextOverflowModes.Truncate;
+            text.extraPadding = true;
             text.raycastTarget = false;
             text.rectTransform.sizeDelta = size;
             text.rectTransform.anchoredPosition = position;
             return text;
+        }
+
+        private static TMP_FontAsset ResolveUiFont()
+        {
+            var font = Resources.Load<TMP_FontAsset>("Fonts/NotoSansSC-SDF");
+            if (font != null)
+            {
+                font.isMultiAtlasTexturesEnabled = true;
+                return font;
+            }
+
+            return TMP_Settings.defaultFontAsset;
         }
 
         private static ColorBlock CreateButtonColors()
