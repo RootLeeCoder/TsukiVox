@@ -247,6 +247,22 @@ namespace TsukiVox.AudioPrototype
             debugBuilder.AppendLine($"videoScreenPrototype {videoScreenPrototype != null}");
             debugBuilder.AppendLine($"tabletTilt {(tabletTiltController == null ? "missing" : $"{tabletTiltController.CurrentTiltAngle:0}deg step {tabletTiltController.CurrentStepIndex} animating {tabletTiltController.IsAnimating}")}");
 
+            var handheldProps = FindAnyObjectByType<QuestHandheldPropsPrototype>();
+            if (handheldProps != null)
+            {
+                var faceClearance = float.IsPositiveInfinity(handheldProps.MicrophoneFaceSurfaceClearance)
+                    ? "unavailable"
+                    : $"{handheldProps.MicrophoneFaceSurfaceClearance * 100f:0.0}cm";
+                debugBuilder.AppendLine(
+                    $"micFaceProximity clearance {faceClearance} " +
+                    $"warningAt {handheldProps.MicFaceWarningClearance * 100f:0.0}cm " +
+                    $"criticalAt {handheldProps.MicFaceCriticalClearance * 100f:0.0}cm " +
+                    $"strength {handheldProps.MicFaceHapticStrength:0.00} " +
+                    $"enabled {handheldProps.MicFaceHapticsEnabled} " +
+                    $"intensity {handheldProps.MicrophoneFaceProximity:0.00} " +
+                    $"warning {handheldProps.IsMicrophoneFaceWarningActive}");
+            }
+
             if (playlistPrototype != null)
             {
                 var state = playlistPrototype.CurrentState;

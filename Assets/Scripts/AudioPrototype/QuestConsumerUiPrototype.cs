@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.TextCore.LowLevel;
@@ -14,6 +15,7 @@ namespace TsukiVox.AudioPrototype
         private const int QueueRowCount = 5;
         private const float RefreshIntervalSeconds = 0.1f;
         private const float ContentWidth = 992f;
+        private const float MicClearanceStep = 0.0025f;
 
         private static readonly Color ScreenBackground = new Color(0.024f, 0.04f, 0.039f, 1f);
         private static readonly Color Surface = new Color(0.048f, 0.073f, 0.071f, 1f);
@@ -38,6 +40,7 @@ namespace TsukiVox.AudioPrototype
             Voice,
             Queue,
             Settings,
+            MicProtection,
         }
 
         private RectTransform panel;
@@ -46,6 +49,7 @@ namespace TsukiVox.AudioPrototype
         private RectTransform voicePage;
         private RectTransform queuePage;
         private RectTransform settingsPage;
+        private RectTransform micProtectionPage;
         private RectTransform debugScrim;
         private RectTransform debugDrawer;
         private RectTransform rawDetailsRoot;
@@ -54,12 +58,14 @@ namespace TsukiVox.AudioPrototype
         private CanvasGroup voiceGroup;
         private CanvasGroup queueGroup;
         private CanvasGroup settingsGroup;
+        private CanvasGroup micProtectionGroup;
         private CanvasGroup debugScrimGroup;
         private CanvasGroup debugDrawerGroup;
 
         private QuestAudioPrototype audioPrototype;
         private QuestPlaylistPrototype playlistPrototype;
         private QuestVideoScreenPrototype videoScreenPrototype;
+        private QuestHandheldPropsPrototype handheldPropsPrototype;
         private QuestAppShellPrototype appShellPrototype;
         private QuestPlaylistPrototype subscribedPlaylist;
         private static TMP_FontAsset sharedUiFont;
@@ -106,6 +112,9 @@ namespace TsukiVox.AudioPrototype
         private TMP_Text queueFooterText;
 
         private Button settingsBackButton;
+        private Button openMicProtectionButton;
+        private QuestUiSurface openMicProtectionSurface;
+        private QuestUiIcon openMicProtectionIcon;
         private TMP_Text settingsConnectionText;
         private TMP_InputField helperHostInput;
         private Button applyHostButton;
@@ -115,6 +124,21 @@ namespace TsukiVox.AudioPrototype
         private Toggle nativeToggle;
         private Button openDiagnosticsButton;
         private TMP_Text settingsBuildText;
+
+        private Button micProtectionBackButton;
+        private Toggle micProtectionToggle;
+        private Slider micWarningDistanceSlider;
+        private Slider micCriticalDistanceSlider;
+        private Slider micHapticStrengthSlider;
+        private TMP_Text micLiveDistanceText;
+        private TMP_Text micLiveStateText;
+        private TMP_Text micWarningDistanceValueText;
+        private TMP_Text micCriticalDistanceValueText;
+        private TMP_Text micHapticStrengthValueText;
+        private TMP_Text micCalibrationStatusText;
+        private Button captureWarningDistanceButton;
+        private Button captureCriticalDistanceButton;
+        private Button resetMicProtectionButton;
 
         private Button closeDiagnosticsButton;
         private Button debugScrimButton;
@@ -132,6 +156,7 @@ namespace TsukiVox.AudioPrototype
         private float nextRefreshAt;
         private Coroutine pageTransition;
         private Coroutine drawerTransition;
+        private Coroutine micCalibrationCoroutine;
 
         public void Configure(
             RectTransform targetPanel,
@@ -144,6 +169,7 @@ namespace TsukiVox.AudioPrototype
             audioPrototype = audio;
             playlistPrototype = playlist;
             videoScreenPrototype = video;
+            handheldPropsPrototype = FindAnyObjectByType<QuestHandheldPropsPrototype>();
             appShellPrototype = appShell;
             uiFont = ResolveUiFont();
             videoScreenPrototype?.SetStatusOverlayVisible(false);
@@ -169,6 +195,7 @@ namespace TsukiVox.AudioPrototype
 
         private void OnDisable()
         {
+            CancelMicFaceCalibration();
             UnsubscribePlaylist();
         }
 
@@ -205,11 +232,13 @@ namespace TsukiVox.AudioPrototype
             voicePage = EnsurePage(consumerRoot, "Voice Page", out voiceGroup);
             queuePage = EnsurePage(consumerRoot, "Queue Page", out queueGroup);
             settingsPage = EnsurePage(consumerRoot, "Settings Page", out settingsGroup);
+            micProtectionPage = EnsurePage(consumerRoot, "Mic Protection Page", out micProtectionGroup);
 
             BuildHomePage();
             BuildVoicePage();
             BuildQueuePage();
             BuildSettingsPage();
+            BuildMicProtectionPage();
             BuildDebugDrawer();
             HideLegacyUi();
             consumerRoot.SetAsLastSibling();
@@ -335,6 +364,10 @@ namespace TsukiVox.AudioPrototype
         private void BuildSettingsPage()
         {
             BuildSubpageHeader(settingsPage, "设置", out settingsBackButton);
+            openMicProtectionButton = CreateSurfaceButton(settingsPage, "Open Mic Protection", new Vector2(396f, 232f), new Vector2(200f, 52f), Surface, Line);
+            openMicProtectionSurface = openMicProtectionButton.targetGraphic as QuestUiSurface;
+            openMicProtectionIcon = EnsureIcon(openMicProtectionButton.transform, "Icon", QuestUiIconKind.Microphone, new Vector2(-70f, 0f), new Vector2(24f, 24f), Accent);
+            CreateText(openMicProtectionButton.transform, "Label", "防碰撞", 17, FontStyle.Bold, new Vector2(22f, 0f), new Vector2(118f, 34f), TextAnchor.MiddleCenter, TextPrimary);
 
             CreateText(settingsPage, "Service Section", "点歌服务", 16, FontStyle.Bold, new Vector2(-396f, 150f), new Vector2(200f, 30f), TextAnchor.MiddleLeft, TextSecondary);
             settingsConnectionText = CreateText(settingsPage, "Service Status", "正在连接", 17, FontStyle.Bold, new Vector2(350f, 150f), new Vector2(290f, 32f), TextAnchor.MiddleRight, Accent);
@@ -354,6 +387,46 @@ namespace TsukiVox.AudioPrototype
             CreateText(openDiagnosticsButton.transform, "Title", "诊断与支持", 19, FontStyle.Bold, new Vector2(-340f, 11f), new Vector2(300f, 32f), TextAnchor.MiddleLeft, TextPrimary);
             settingsBuildText = CreateText(openDiagnosticsButton.transform, "Hint", QuestBuildInfo.SettingsSummary, 15, FontStyle.Normal, new Vector2(-20f, -17f), new Vector2(840f, 26f), TextAnchor.MiddleLeft, TextSecondary);
             EnsureIcon(openDiagnosticsButton.transform, "Chevron", QuestUiIconKind.ChevronRight, new Vector2(458f, 0f), new Vector2(24f, 24f), TextSecondary);
+        }
+
+        private void BuildMicProtectionPage()
+        {
+            BuildSubpageHeader(micProtectionPage, "麦克风防碰撞", out micProtectionBackButton);
+
+            CreateText(micProtectionPage, "Enable Title", "防贴脸震动", 21, FontStyle.Bold, new Vector2(-366f, 150f), new Vector2(260f, 36f), TextAnchor.MiddleLeft, TextPrimary);
+            CreateText(micProtectionPage, "Enable Hint", "靠近嘴部时提供渐强触觉反馈", 16, FontStyle.Normal, new Vector2(-270f, 120f), new Vector2(450f, 26f), TextAnchor.MiddleLeft, TextSecondary);
+            micProtectionToggle = CreateSwitch(micProtectionPage, "Protection Switch", new Vector2(460f, 138f));
+
+            CreateText(micProtectionPage, "Live Label", "当前间隙", 16, FontStyle.Bold, new Vector2(-414f, 76f), new Vector2(150f, 30f), TextAnchor.MiddleLeft, TextSecondary);
+            micLiveDistanceText = CreateText(micProtectionPage, "Live Distance", "-- cm", 27, FontStyle.Bold, new Vector2(-244f, 76f), new Vector2(180f, 42f), TextAnchor.MiddleLeft, TextPrimary);
+            micLiveStateText = CreateText(micProtectionPage, "Live State", "等待右手麦克风", 17, FontStyle.Bold, new Vector2(292f, 76f), new Vector2(380f, 34f), TextAnchor.MiddleRight, TextSecondary);
+            CreateDivider(micProtectionPage, "Live Divider", new Vector2(0f, 52f), new Vector2(ContentWidth, 1f));
+
+            CreateText(micProtectionPage, "Warning Title", "轻震起点", 18, FontStyle.Bold, new Vector2(-402f, 22f), new Vector2(170f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            CreateText(micProtectionPage, "Warning Hint", "网头表面间隙", 14, FontStyle.Normal, new Vector2(-365f, -4f), new Vector2(240f, 24f), TextAnchor.MiddleLeft, TextSecondary);
+            micWarningDistanceSlider = CreateSlider(micProtectionPage, "Warning Distance", new Vector2(70f, 14f), new Vector2(430f, 48f), true);
+            ConfigureWholeNumberSlider(micWarningDistanceSlider, 2f, 32f);
+            micWarningDistanceValueText = CreateText(micProtectionPage, "Warning Value", "6.3 cm", 18, FontStyle.Bold, new Vector2(334f, 14f), new Vector2(92f, 34f), TextAnchor.MiddleRight, AccentStrong);
+            captureWarningDistanceButton = CreateTextButton(micProtectionPage, "Capture Warning", "捕获", new Vector2(454f, 14f), new Vector2(104f, 46f), Surface, TextPrimary);
+            CreateDivider(micProtectionPage, "Warning Divider", new Vector2(0f, -28f), new Vector2(ContentWidth, 1f));
+
+            CreateText(micProtectionPage, "Critical Title", "强震起点", 18, FontStyle.Bold, new Vector2(-402f, -56f), new Vector2(170f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            CreateText(micProtectionPage, "Critical Hint", "必须小于轻震起点", 14, FontStyle.Normal, new Vector2(-345f, -82f), new Vector2(280f, 24f), TextAnchor.MiddleLeft, TextSecondary);
+            micCriticalDistanceSlider = CreateSlider(micProtectionPage, "Critical Distance", new Vector2(70f, -64f), new Vector2(430f, 48f), true);
+            ConfigureWholeNumberSlider(micCriticalDistanceSlider, 0f, 16f);
+            micCriticalDistanceValueText = CreateText(micProtectionPage, "Critical Value", "1.8 cm", 18, FontStyle.Bold, new Vector2(334f, -64f), new Vector2(92f, 34f), TextAnchor.MiddleRight, Warm);
+            captureCriticalDistanceButton = CreateTextButton(micProtectionPage, "Capture Critical", "捕获", new Vector2(454f, -64f), new Vector2(104f, 46f), Surface, TextPrimary);
+            CreateDivider(micProtectionPage, "Critical Divider", new Vector2(0f, -106f), new Vector2(ContentWidth, 1f));
+
+            CreateText(micProtectionPage, "Strength Title", "震动强度", 18, FontStyle.Bold, new Vector2(-402f, -134f), new Vector2(170f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            CreateText(micProtectionPage, "Strength Hint", "同时缩放轻震与强震", 14, FontStyle.Normal, new Vector2(-335f, -160f), new Vector2(300f, 24f), TextAnchor.MiddleLeft, TextSecondary);
+            micHapticStrengthSlider = CreateSlider(micProtectionPage, "Haptic Strength", new Vector2(70f, -142f), new Vector2(430f, 48f), true);
+            ConfigureWholeNumberSlider(micHapticStrengthSlider, 2f, 10f);
+            micHapticStrengthValueText = CreateText(micProtectionPage, "Strength Value", "100%", 18, FontStyle.Bold, new Vector2(356f, -142f), new Vector2(116f, 34f), TextAnchor.MiddleRight, AccentStrong);
+            CreateDivider(micProtectionPage, "Strength Divider", new Vector2(0f, -184f), new Vector2(ContentWidth, 1f));
+
+            micCalibrationStatusText = CreateText(micProtectionPage, "Calibration Status", string.Empty, 16, FontStyle.Bold, new Vector2(-184f, -226f), new Vector2(610f, 40f), TextAnchor.MiddleLeft, AccentStrong);
+            resetMicProtectionButton = CreateTextButton(micProtectionPage, "Reset Protection", "恢复默认", new Vector2(404f, -226f), new Vector2(188f, 52f), Surface, TextPrimary);
         }
 
         private void BuildDebugDrawer()
@@ -407,6 +480,8 @@ namespace TsukiVox.AudioPrototype
             WireButton(voiceBackButton, () => ShowPage(UiPage.Home));
             WireButton(queueBackButton, () => ShowPage(UiPage.Home));
             WireButton(settingsBackButton, () => ShowPage(UiPage.Home));
+            WireButton(openMicProtectionButton, () => ShowPage(UiPage.MicProtection));
+            WireButton(micProtectionBackButton, () => ShowPage(UiPage.Settings));
 
             WireButton(replayButton, () => playlistPrototype?.SendReplay());
             WireButton(previousButton, () => playlistPrototype?.SendPrevious());
@@ -437,6 +512,18 @@ namespace TsukiVox.AudioPrototype
             nativeToggle.onValueChanged.RemoveAllListeners();
             nativeToggle.onValueChanged.AddListener(value => audioPrototype?.SetPreferNativeBackend(value));
 
+            micProtectionToggle.onValueChanged.RemoveAllListeners();
+            micProtectionToggle.onValueChanged.AddListener(value => handheldPropsPrototype?.SetMicFaceHapticsEnabled(value));
+            micWarningDistanceSlider.onValueChanged.RemoveAllListeners();
+            micWarningDistanceSlider.onValueChanged.AddListener(value => handheldPropsPrototype?.SetMicFaceWarningClearance(value * MicClearanceStep));
+            micCriticalDistanceSlider.onValueChanged.RemoveAllListeners();
+            micCriticalDistanceSlider.onValueChanged.AddListener(value => handheldPropsPrototype?.SetMicFaceCriticalClearance(value * MicClearanceStep));
+            micHapticStrengthSlider.onValueChanged.RemoveAllListeners();
+            micHapticStrengthSlider.onValueChanged.AddListener(value => handheldPropsPrototype?.SetMicFaceHapticStrength(value * 0.1f));
+            WireButton(captureWarningDistanceButton, () => StartMicFaceCalibration(captureWarning: true));
+            WireButton(captureCriticalDistanceButton, () => StartMicFaceCalibration(captureWarning: false));
+            WireButton(resetMicProtectionButton, ResetMicProtectionPreferences);
+
             WireButton(openDiagnosticsButton, () => SetDebugDrawerVisible(true));
             WireButton(closeDiagnosticsButton, () => SetDebugDrawerVisible(false));
             WireButton(debugScrimButton, () => SetDebugDrawerVisible(false));
@@ -450,6 +537,7 @@ namespace TsukiVox.AudioPrototype
             RefreshVoice();
             RefreshQueue();
             RefreshSettings();
+            RefreshMicProtection();
             RefreshDiagnostics();
         }
 
@@ -607,6 +695,84 @@ namespace TsukiVox.AudioPrototype
             RefreshSwitchVisual(nativeToggle, Accent);
         }
 
+        private void RefreshMicProtection()
+        {
+            if (handheldPropsPrototype == null)
+            {
+                handheldPropsPrototype = FindAnyObjectByType<QuestHandheldPropsPrototype>();
+            }
+
+            var available = handheldPropsPrototype != null;
+            openMicProtectionButton.interactable = available;
+            openMicProtectionSurface.color = available && handheldPropsPrototype.MicFaceHapticsEnabled
+                ? new Color(0.035f, 0.12f, 0.095f, 1f)
+                : Surface;
+            openMicProtectionIcon.color = available && handheldPropsPrototype.MicFaceHapticsEnabled ? Accent : TextSecondary;
+
+            if (!available)
+            {
+                micLiveDistanceText.text = "-- cm";
+                micLiveStateText.text = "麦克风组件缺失";
+                micLiveStateText.color = Danger;
+                SetMicProtectionControlsInteractable(false);
+                return;
+            }
+
+            micProtectionToggle.SetIsOnWithoutNotify(handheldPropsPrototype.MicFaceHapticsEnabled);
+            RefreshSwitchVisual(micProtectionToggle, Accent);
+            micWarningDistanceSlider.SetValueWithoutNotify(handheldPropsPrototype.MicFaceWarningClearance / MicClearanceStep);
+            micCriticalDistanceSlider.SetValueWithoutNotify(handheldPropsPrototype.MicFaceCriticalClearance / MicClearanceStep);
+            micHapticStrengthSlider.SetValueWithoutNotify(handheldPropsPrototype.MicFaceHapticStrength / 0.1f);
+            micWarningDistanceValueText.text = FormatClearance(handheldPropsPrototype.MicFaceWarningClearance);
+            micCriticalDistanceValueText.text = FormatClearance(handheldPropsPrototype.MicFaceCriticalClearance);
+            micHapticStrengthValueText.text = $"{handheldPropsPrototype.MicFaceHapticStrength:P0}";
+
+            var clearance = handheldPropsPrototype.MicrophoneFaceSurfaceClearance;
+            if (float.IsPositiveInfinity(clearance))
+            {
+                micLiveDistanceText.text = "-- cm";
+                micLiveStateText.text = "等待右手麦克风";
+                micLiveStateText.color = TextSecondary;
+            }
+            else
+            {
+                micLiveDistanceText.text = FormatClearance(clearance);
+                if (!handheldPropsPrototype.MicFaceHapticsEnabled)
+                {
+                    micLiveStateText.text = "震动已关闭";
+                    micLiveStateText.color = TextSecondary;
+                }
+                else if (handheldPropsPrototype.IsMicrophoneFaceCritical)
+                {
+                    micLiveStateText.text = "强震区域";
+                    micLiveStateText.color = Danger;
+                }
+                else if (handheldPropsPrototype.IsMicrophoneFaceWarningActive)
+                {
+                    micLiveStateText.text = "轻震区域";
+                    micLiveStateText.color = Warm;
+                }
+                else
+                {
+                    micLiveStateText.text = "安全距离";
+                    micLiveStateText.color = Accent;
+                }
+            }
+
+            SetMicProtectionControlsInteractable(micCalibrationCoroutine == null);
+        }
+
+        private void SetMicProtectionControlsInteractable(bool interactable)
+        {
+            micProtectionToggle.interactable = interactable;
+            micWarningDistanceSlider.interactable = interactable;
+            micCriticalDistanceSlider.interactable = interactable;
+            micHapticStrengthSlider.interactable = interactable;
+            captureWarningDistanceButton.interactable = interactable;
+            captureCriticalDistanceButton.interactable = interactable;
+            resetMicProtectionButton.interactable = interactable;
+        }
+
         private void RefreshDiagnostics()
         {
             var audioStatus = audioPrototype == null
@@ -634,6 +800,7 @@ namespace TsukiVox.AudioPrototype
                 $"音频后端  {audioPrototype?.ActiveBackendName ?? "missing"}\n" +
                 $"人声预设  {audioPrototype?.CurrentPresetName ?? "missing"}\n" +
                 $"输入/输出  {(audioPrototype?.InputLevel ?? 0f):P0} / {(audioPrototype?.OutputLevel ?? 0f):P0}\n" +
+                $"防碰撞  {(handheldPropsPrototype == null ? "missing" : $"{handheldPropsPrototype.MicFaceWarningClearance * 100f:0.0}/{handheldPropsPrototype.MicFaceCriticalClearance * 100f:0.0}cm {handheldPropsPrototype.MicFaceHapticStrength:P0}")}\n" +
                 $"播放服务  {playlistPrototype?.PlaylistOrigin ?? "missing"}\n" +
                 $"视频状态  {SingleLine(videoScreenPrototype?.StatusSummary)}";
         }
@@ -668,6 +835,97 @@ namespace TsukiVox.AudioPrototype
             }
 
             playlistPrototype?.ApplyDefaultHelperHost();
+        }
+
+        private void StartMicFaceCalibration(bool captureWarning)
+        {
+            if (handheldPropsPrototype == null || !Application.isPlaying)
+            {
+                return;
+            }
+
+            CancelMicFaceCalibration();
+            micCalibrationCoroutine = StartCoroutine(CaptureMicFaceDistance(captureWarning));
+        }
+
+        private IEnumerator CaptureMicFaceDistance(bool captureWarning)
+        {
+            handheldPropsPrototype.SetMicFaceHapticsSuppressed(true);
+            var label = captureWarning ? "轻震起点" : "强震起点";
+            for (var remaining = 3; remaining > 0; remaining -= 1)
+            {
+                micCalibrationStatusText.text = $"{label} · {remaining}";
+                yield return new WaitForSecondsRealtime(1f);
+            }
+
+            micCalibrationStatusText.text = $"{label} · 采样中";
+            var samples = new List<float>(64);
+            const float sampleDuration = 0.7f;
+            var elapsed = 0f;
+            while (elapsed < sampleDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                var clearance = handheldPropsPrototype.MicrophoneFaceSurfaceClearance;
+                if (!float.IsPositiveInfinity(clearance) && !float.IsNaN(clearance))
+                {
+                    samples.Add(clearance);
+                }
+
+                yield return null;
+            }
+
+            if (samples.Count == 0)
+            {
+                micCalibrationStatusText.text = "未检测到右手麦克风";
+            }
+            else
+            {
+                samples.Sort();
+                var capturedClearance = Mathf.Round(samples[samples.Count / 2] / MicClearanceStep) * MicClearanceStep;
+                if (captureWarning)
+                {
+                    handheldPropsPrototype.SetMicFaceWarningClearance(capturedClearance);
+                }
+                else
+                {
+                    handheldPropsPrototype.SetMicFaceCriticalClearance(capturedClearance);
+                }
+
+                var savedClearance = captureWarning
+                    ? handheldPropsPrototype.MicFaceWarningClearance
+                    : handheldPropsPrototype.MicFaceCriticalClearance;
+                micCalibrationStatusText.text = $"{label}已保存 · {FormatClearance(savedClearance)}";
+            }
+
+            handheldPropsPrototype.SetMicFaceHapticsSuppressed(false);
+            RefreshMicProtection();
+            yield return new WaitForSecondsRealtime(1.2f);
+            micCalibrationStatusText.text = string.Empty;
+            micCalibrationCoroutine = null;
+            RefreshMicProtection();
+        }
+
+        private void CancelMicFaceCalibration()
+        {
+            if (micCalibrationCoroutine != null)
+            {
+                StopCoroutine(micCalibrationCoroutine);
+                micCalibrationCoroutine = null;
+            }
+
+            handheldPropsPrototype?.SetMicFaceHapticsSuppressed(false);
+            if (micCalibrationStatusText != null)
+            {
+                micCalibrationStatusText.text = string.Empty;
+            }
+        }
+
+        private void ResetMicProtectionPreferences()
+        {
+            CancelMicFaceCalibration();
+            handheldPropsPrototype?.ResetMicFaceHapticPreferences();
+            micCalibrationStatusText.text = "已恢复默认参数";
+            RefreshMicProtection();
         }
 
         private void ToggleRawDetails()
@@ -707,6 +965,11 @@ namespace TsukiVox.AudioPrototype
 
         private void ShowPage(UiPage page)
         {
+            if (currentPage == UiPage.MicProtection && page != UiPage.MicProtection)
+            {
+                CancelMicFaceCalibration();
+            }
+
             if (pageTransition != null)
             {
                 StopCoroutine(pageTransition);
@@ -777,6 +1040,7 @@ namespace TsukiVox.AudioPrototype
             SetPageGroupImmediate(voiceGroup, page == UiPage.Voice);
             SetPageGroupImmediate(queueGroup, page == UiPage.Queue);
             SetPageGroupImmediate(settingsGroup, page == UiPage.Settings);
+            SetPageGroupImmediate(micProtectionGroup, page == UiPage.MicProtection);
         }
 
         private void SetDebugDrawerVisible(bool visible)
@@ -842,6 +1106,7 @@ namespace TsukiVox.AudioPrototype
                 UiPage.Voice => voiceGroup,
                 UiPage.Queue => queueGroup,
                 UiPage.Settings => settingsGroup,
+                UiPage.MicProtection => micProtectionGroup,
                 _ => homeGroup,
             };
         }
@@ -963,6 +1228,13 @@ namespace TsukiVox.AudioPrototype
             slider.navigation = new Navigation { mode = Navigation.Mode.None };
             slider.interactable = showHandle;
             return slider;
+        }
+
+        private static void ConfigureWholeNumberSlider(Slider slider, float minimum, float maximum)
+        {
+            slider.minValue = minimum;
+            slider.maxValue = maximum;
+            slider.wholeNumbers = true;
         }
 
         private Toggle CreateSwitch(Transform parent, string name, Vector2 position)
@@ -1238,6 +1510,11 @@ namespace TsukiVox.AudioPrototype
                 3 => "柔和",
                 _ => "KTV",
             };
+        }
+
+        private static string FormatClearance(float clearance)
+        {
+            return $"{Mathf.Max(0f, clearance) * 100f:0.0} cm";
         }
 
         private static string FormatSource(string sourceType)

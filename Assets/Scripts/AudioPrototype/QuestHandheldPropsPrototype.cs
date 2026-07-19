@@ -21,12 +21,29 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestHandheldPropsPrototype : MonoBehaviour
     {
         public const string RootName = "V0.6 Handheld Props";
+        public const float MicrophoneGrilleRadius = 0.0375f;
+        public const float MinimumWarningClearance = 0.005f;
+        public const float MaximumWarningClearance = 0.08f;
+        public const float MinimumCriticalClearance = 0f;
+        public const float MaximumCriticalClearance = 0.04f;
+        public const float MinimumClearanceGap = 0.005f;
+        public const float MinimumHapticStrength = 0.2f;
+        public const float MaximumHapticStrength = 1f;
+        public const float DefaultWarningClearance = 0.0625f;
+        public const float DefaultCriticalClearance = 0.0175f;
+        public const float DefaultHapticStrength = 1f;
 
         // WebXR mounted props on the grip at (0, 0.02, +0.055) with geometry extending
         // toward grip -Z. Unity/OpenXR use the same grip pose but flip the Z axis, so
         // the mount Z is negated here and prop geometry is built extending toward +Z.
         private const float GripMountOffsetZ = -0.055f;
         private const float GripMountOffsetY = 0.02f;
+        private const float WarningHapticDuration = 0.035f;
+        private const float CriticalHapticDuration = 0.075f;
+        private const string MicFaceEnabledPrefsKey = "TsukiVox.MicFaceHaptics.Enabled.v1";
+        private const string MicFaceWarningClearancePrefsKey = "TsukiVox.MicFaceHaptics.WarningClearance.v1";
+        private const string MicFaceCriticalClearancePrefsKey = "TsukiVox.MicFaceHaptics.CriticalClearance.v1";
+        private const string MicFaceStrengthPrefsKey = "TsukiVox.MicFaceHaptics.Strength.v1";
 
         public readonly struct GlowstickColor
         {
@@ -72,6 +89,19 @@ namespace TsukiVox.AudioPrototype
         // Unity's Z-flip preserves this forward tilt as a positive X rotation.
         [SerializeField] private Vector3 glowstickLocalEuler = new Vector3(11.46f, 0f, 0f);
 
+        [Header("Microphone Face Proximity Haptics")]
+        [SerializeField] private bool micFaceHapticsEnabled = true;
+        [SerializeField] private Vector3 mouthLocalOffset = new Vector3(0f, -0.11f, 0.06f);
+        [SerializeField, Range(MicrophoneGrilleRadius + MinimumWarningClearance, MicrophoneGrilleRadius + MaximumWarningClearance)] private float micFaceWarningDistance = 0.1f;
+        [SerializeField, Range(MicrophoneGrilleRadius + MinimumCriticalClearance, MicrophoneGrilleRadius + MaximumCriticalClearance)] private float micFaceCriticalDistance = 0.055f;
+        [SerializeField, Range(0.005f, 0.05f)] private float micFaceReleaseHysteresis = 0.005f;
+        [SerializeField, Range(1f, 40f)] private float micFaceDistanceSmoothing = 18f;
+        [SerializeField, Range(0.05f, 1f)] private float micFaceWarningAmplitude = 0.16f;
+        [SerializeField, Range(0.1f, 1f)] private float micFaceCriticalAmplitude = 0.95f;
+        [SerializeField, Range(0.08f, 0.5f)] private float micFaceWarningPulseInterval = 0.32f;
+        [SerializeField, Range(0.04f, 0.2f)] private float micFaceCriticalPulseInterval = 0.1f;
+        [SerializeField, Range(MinimumHapticStrength, MaximumHapticStrength)] private float micFaceHapticStrength = DefaultHapticStrength;
+
         [Header("Runtime")]
         [SerializeField] private bool buildOnAwake = true;
         [SerializeField] private bool driveFeedbackFromMic = true;
@@ -83,6 +113,31 @@ namespace TsukiVox.AudioPrototype
         private float smoothedLevel;
         private bool wasColorPreviousPressed;
         private bool wasColorNextPressed;
+        private bool isRightControllerTracked;
+        private bool isMicFaceWarningActive;
+        private bool wasMicFaceCritical;
+        private bool hasSmoothedMicFaceDistance;
+        private float smoothedMicFaceDistance;
+        private float nextMicFaceHapticTime;
+        private Transform headTransform;
+        private bool suppressMicFaceHaptics;
+
+        public float MicrophoneFaceDistance => hasSmoothedMicFaceDistance
+            ? smoothedMicFaceDistance
+            : float.PositiveInfinity;
+
+        public float MicrophoneFaceSurfaceClearance => hasSmoothedMicFaceDistance
+            ? Mathf.Max(0f, smoothedMicFaceDistance - MicrophoneGrilleRadius)
+            : float.PositiveInfinity;
+
+        public float MicrophoneFaceProximity { get; private set; }
+        public bool IsMicrophoneFaceWarningActive => isMicFaceWarningActive;
+        public bool IsMicrophoneFaceCritical => wasMicFaceCritical;
+        public bool IsMicrophoneTracked => isRightControllerTracked;
+        public bool MicFaceHapticsEnabled => micFaceHapticsEnabled;
+        public float MicFaceWarningClearance => Mathf.Max(0f, micFaceWarningDistance - MicrophoneGrilleRadius);
+        public float MicFaceCriticalClearance => Mathf.Max(0f, micFaceCriticalDistance - MicrophoneGrilleRadius);
+        public float MicFaceHapticStrength => micFaceHapticStrength;
 
         public static QuestHandheldPropsPrototype EnsureSceneProps()
         {
@@ -109,6 +164,7 @@ namespace TsukiVox.AudioPrototype
 
         private void Awake()
         {
+            LoadMicFacePreferences();
             if (buildOnAwake)
             {
                 ConfigureSceneReferences();
@@ -119,6 +175,7 @@ namespace TsukiVox.AudioPrototype
         {
             AssignRolesFromControllers();
             UpdateGlowstickColorControls();
+            UpdateMicrophoneFaceProximityHaptics();
 
             if (!driveFeedbackFromMic)
             {
@@ -151,6 +208,92 @@ namespace TsukiVox.AudioPrototype
             ApplyGlowstickColor();
         }
 
+        public void SetMicFaceHapticsEnabled(bool enabled)
+        {
+            micFaceHapticsEnabled = enabled;
+            if (!enabled)
+            {
+                ClearMicrophoneFaceWarningState();
+            }
+
+            SaveMicFacePreferences();
+        }
+
+        public void SetMicFaceWarningClearance(float clearance)
+        {
+            var warning = Mathf.Clamp(clearance, MinimumWarningClearance, MaximumWarningClearance);
+            var critical = Mathf.Min(MicFaceCriticalClearance, warning - MinimumClearanceGap);
+            micFaceWarningDistance = warning + MicrophoneGrilleRadius;
+            micFaceCriticalDistance = Mathf.Max(MinimumCriticalClearance, critical) + MicrophoneGrilleRadius;
+            SaveMicFacePreferences();
+        }
+
+        public void SetMicFaceCriticalClearance(float clearance)
+        {
+            var critical = Mathf.Clamp(clearance, MinimumCriticalClearance, MaximumCriticalClearance);
+            var warning = Mathf.Max(MicFaceWarningClearance, critical + MinimumClearanceGap);
+            warning = Mathf.Min(warning, MaximumWarningClearance);
+            critical = Mathf.Min(critical, warning - MinimumClearanceGap);
+            micFaceWarningDistance = warning + MicrophoneGrilleRadius;
+            micFaceCriticalDistance = Mathf.Max(MinimumCriticalClearance, critical) + MicrophoneGrilleRadius;
+            SaveMicFacePreferences();
+        }
+
+        public void SetMicFaceHapticStrength(float strength)
+        {
+            micFaceHapticStrength = Mathf.Clamp(strength, MinimumHapticStrength, MaximumHapticStrength);
+            SaveMicFacePreferences();
+        }
+
+        public void SetMicFaceHapticsSuppressed(bool suppressed)
+        {
+            suppressMicFaceHaptics = suppressed;
+            if (suppressed)
+            {
+                ClearMicrophoneFaceWarningState();
+            }
+        }
+
+        public void ResetMicFaceHapticPreferences()
+        {
+            PlayerPrefs.DeleteKey(MicFaceEnabledPrefsKey);
+            PlayerPrefs.DeleteKey(MicFaceWarningClearancePrefsKey);
+            PlayerPrefs.DeleteKey(MicFaceCriticalClearancePrefsKey);
+            PlayerPrefs.DeleteKey(MicFaceStrengthPrefsKey);
+            PlayerPrefs.Save();
+
+            micFaceHapticsEnabled = true;
+            micFaceWarningDistance = DefaultWarningClearance + MicrophoneGrilleRadius;
+            micFaceCriticalDistance = DefaultCriticalClearance + MicrophoneGrilleRadius;
+            micFaceHapticStrength = DefaultHapticStrength;
+            micFaceReleaseHysteresis = 0.005f;
+            ClearMicrophoneFaceWarningState();
+        }
+
+        private void LoadMicFacePreferences()
+        {
+            micFaceHapticsEnabled = PlayerPrefs.GetInt(MicFaceEnabledPrefsKey, micFaceHapticsEnabled ? 1 : 0) != 0;
+            var warning = PlayerPrefs.GetFloat(MicFaceWarningClearancePrefsKey, MicFaceWarningClearance);
+            var critical = PlayerPrefs.GetFloat(MicFaceCriticalClearancePrefsKey, MicFaceCriticalClearance);
+            warning = Mathf.Clamp(warning, MinimumWarningClearance, MaximumWarningClearance);
+            critical = Mathf.Clamp(critical, MinimumCriticalClearance, Mathf.Min(MaximumCriticalClearance, warning - MinimumClearanceGap));
+            micFaceWarningDistance = warning + MicrophoneGrilleRadius;
+            micFaceCriticalDistance = critical + MicrophoneGrilleRadius;
+            micFaceHapticStrength = Mathf.Clamp(
+                PlayerPrefs.GetFloat(MicFaceStrengthPrefsKey, micFaceHapticStrength),
+                MinimumHapticStrength,
+                MaximumHapticStrength);
+        }
+
+        private void SaveMicFacePreferences()
+        {
+            PlayerPrefs.SetInt(MicFaceEnabledPrefsKey, micFaceHapticsEnabled ? 1 : 0);
+            PlayerPrefs.SetFloat(MicFaceWarningClearancePrefsKey, MicFaceWarningClearance);
+            PlayerPrefs.SetFloat(MicFaceCriticalClearancePrefsKey, MicFaceCriticalClearance);
+            PlayerPrefs.SetFloat(MicFaceStrengthPrefsKey, micFaceHapticStrength);
+            PlayerPrefs.Save();
+        }
+
         private void BuildProps()
         {
             for (var index = transform.childCount - 1; index >= 0; index -= 1)
@@ -169,6 +312,7 @@ namespace TsukiVox.AudioPrototype
         {
             if (micProp == null || glowstickProp == null)
             {
+                isRightControllerTracked = false;
                 return;
             }
 
@@ -178,10 +322,12 @@ namespace TsukiVox.AudioPrototype
             {
                 micProp.PlaceAtGrip(rightPosition, rightRotation);
                 micProp.SetVisible(true);
+                isRightControllerTracked = true;
             }
             else
             {
                 micProp.SetVisible(false);
+                isRightControllerTracked = false;
             }
 
             if (TryGetGripPose(rightHand: false, out var leftPosition, out var leftRotation))
@@ -193,6 +339,129 @@ namespace TsukiVox.AudioPrototype
             {
                 glowstickProp.SetVisible(false);
             }
+        }
+
+        private void UpdateMicrophoneFaceProximityHaptics()
+        {
+            if (!isRightControllerTracked || micProp == null)
+            {
+                ResetMicrophoneFaceProximity();
+                return;
+            }
+
+            if (headTransform == null)
+            {
+                var mainCamera = Camera.main;
+                headTransform = mainCamera != null ? mainCamera.transform : null;
+            }
+
+            if (headTransform == null)
+            {
+                ResetMicrophoneFaceProximity();
+                return;
+            }
+
+            var grillePosition = micProp.GrilleWorldPosition;
+            var grilleHeadLocalPosition = headTransform.InverseTransformPoint(grillePosition);
+
+            // Do not warn for a microphone held behind the head. The mouth proxy is
+            // intentionally local to the HMD so it follows both position and rotation.
+            if (grilleHeadLocalPosition.z < -0.02f)
+            {
+                ResetMicrophoneFaceProximity();
+                return;
+            }
+
+            var mouthPosition = headTransform.TransformPoint(mouthLocalOffset);
+            var rawDistance = Vector3.Distance(grillePosition, mouthPosition);
+            if (!hasSmoothedMicFaceDistance)
+            {
+                smoothedMicFaceDistance = rawDistance;
+                hasSmoothedMicFaceDistance = true;
+            }
+            else
+            {
+                var smoothing = 1f - Mathf.Exp(-micFaceDistanceSmoothing * Time.unscaledDeltaTime);
+                smoothedMicFaceDistance = Mathf.Lerp(smoothedMicFaceDistance, rawDistance, smoothing);
+            }
+
+            if (!micFaceHapticsEnabled || suppressMicFaceHaptics)
+            {
+                ClearMicrophoneFaceWarningState();
+                return;
+            }
+
+            var warningDistance = Mathf.Max(micFaceWarningDistance, micFaceCriticalDistance + MinimumClearanceGap);
+            var criticalDistance = Mathf.Min(micFaceCriticalDistance, warningDistance - MinimumClearanceGap);
+            if (isMicFaceWarningActive)
+            {
+                if (smoothedMicFaceDistance > warningDistance + micFaceReleaseHysteresis)
+                {
+                    isMicFaceWarningActive = false;
+                }
+            }
+            else if (smoothedMicFaceDistance <= warningDistance)
+            {
+                isMicFaceWarningActive = true;
+                nextMicFaceHapticTime = Time.unscaledTime;
+            }
+
+            if (!isMicFaceWarningActive)
+            {
+                MicrophoneFaceProximity = 0f;
+                wasMicFaceCritical = false;
+                return;
+            }
+
+            var linearProximity = Mathf.InverseLerp(warningDistance, criticalDistance, smoothedMicFaceDistance);
+            MicrophoneFaceProximity = linearProximity * linearProximity * (3f - 2f * linearProximity);
+            var criticalReleaseDistance = criticalDistance + Mathf.Min(micFaceReleaseHysteresis * 0.5f, 0.01f);
+            var isCritical = smoothedMicFaceDistance <= (wasMicFaceCritical ? criticalReleaseDistance : criticalDistance);
+
+            if (isCritical && !wasMicFaceCritical)
+            {
+                SendRightControllerHaptic(micFaceCriticalAmplitude * micFaceHapticStrength, CriticalHapticDuration);
+                nextMicFaceHapticTime = Time.unscaledTime + micFaceCriticalPulseInterval;
+            }
+            else if (Time.unscaledTime >= nextMicFaceHapticTime)
+            {
+                var amplitude = Mathf.Lerp(micFaceWarningAmplitude, micFaceCriticalAmplitude, MicrophoneFaceProximity);
+                var duration = Mathf.Lerp(WarningHapticDuration, CriticalHapticDuration, MicrophoneFaceProximity);
+                SendRightControllerHaptic(amplitude * micFaceHapticStrength, duration);
+
+                var interval = Mathf.Lerp(micFaceWarningPulseInterval, micFaceCriticalPulseInterval, MicrophoneFaceProximity);
+                nextMicFaceHapticTime = Time.unscaledTime + interval;
+            }
+
+            wasMicFaceCritical = isCritical;
+        }
+
+        private void ResetMicrophoneFaceProximity()
+        {
+            ClearMicrophoneFaceWarningState();
+            hasSmoothedMicFaceDistance = false;
+        }
+
+        private void ClearMicrophoneFaceWarningState()
+        {
+            isMicFaceWarningActive = false;
+            wasMicFaceCritical = false;
+            MicrophoneFaceProximity = 0f;
+            nextMicFaceHapticTime = 0f;
+        }
+
+        private static void SendRightControllerHaptic(float amplitude, float duration)
+        {
+            var device = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.RightHand);
+            if (device.isValid)
+            {
+                device.SendHapticImpulse(0u, Mathf.Clamp01(amplitude), Mathf.Max(0f, duration));
+            }
+        }
+
+        private void OnDisable()
+        {
+            ResetMicrophoneFaceProximity();
         }
 
         private void UpdateGlowstickColorControls()
@@ -393,6 +662,7 @@ namespace TsukiVox.AudioPrototype
             private static readonly Color RingColor = new Color(0.2f, 0.9f, 0.76f, 1f);
 
             private readonly Transform anchor;
+            private readonly Transform grille;
             private readonly Transform ring;
             private readonly Material ringMaterial;
             private readonly Light glow;
@@ -402,9 +672,10 @@ namespace TsukiVox.AudioPrototype
             private readonly Vector3 mountPosition;
             private readonly Quaternion mountRotation;
 
-            private MicProp(Transform anchor, Transform ring, Material ringMaterial, Light glow, GameObject visualRoot, Vector3 mountPosition, Quaternion mountRotation)
+            private MicProp(Transform anchor, Transform grille, Transform ring, Material ringMaterial, Light glow, GameObject visualRoot, Vector3 mountPosition, Quaternion mountRotation)
             {
                 this.anchor = anchor;
+                this.grille = grille;
                 this.ring = ring;
                 this.ringMaterial = ringMaterial;
                 this.glow = glow;
@@ -430,9 +701,9 @@ namespace TsukiVox.AudioPrototype
 
                 // Grille ball at the tip, squashed perpendicular to the mic axis
                 // (VRSing scale.set(1, 0.82, 1)); the axis itself stays full-diameter.
-                var grille = MeshFactory.CreateSphere(anchor, "mic grille", 0.0375f, grilleMaterial);
+                var grille = MeshFactory.CreateSphere(anchor, "mic grille", MicrophoneGrilleRadius, grilleMaterial);
                 grille.transform.localPosition = new Vector3(0f, 0f, 0.145f);
-                grille.transform.localScale = new Vector3(0.0375f * 2f, 0.0375f * 2f * 0.82f, 0.0375f * 2f);
+                grille.transform.localScale = new Vector3(MicrophoneGrilleRadius * 2f, MicrophoneGrilleRadius * 2f * 0.82f, MicrophoneGrilleRadius * 2f);
 
                 // Accent ring around the neck. VRSing (microphone.ts) rotates the torus
                 // rotation.x = PI/2 so its symmetry axis is the prop's local Y, not the
@@ -451,8 +722,10 @@ namespace TsukiVox.AudioPrototype
                 glow.intensity = 0.58f;
                 glow.shadows = LightShadows.None;
 
-                return new MicProp(anchor, ring.transform, ringMaterial, glow, anchor.gameObject, localPosition, localRotation);
+                return new MicProp(anchor, grille.transform, ring.transform, ringMaterial, glow, anchor.gameObject, localPosition, localRotation);
             }
+
+            public Vector3 GrilleWorldPosition => grille != null ? grille.position : anchor.position;
 
             public void PlaceAtGrip(Vector3 gripPosition, Quaternion gripRotation)
             {
