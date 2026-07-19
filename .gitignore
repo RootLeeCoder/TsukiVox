@@ -22,6 +22,8 @@
 sysinfo.txt
 *.apk
 *.aab
+/Assets/Resources/TsukiVoxBuildInfo.json
+/Assets/Resources/TsukiVoxBuildInfo.json.meta
 unity-create.log
 unity-create-scene.log
 unity-verify-after-manifest-fix.log

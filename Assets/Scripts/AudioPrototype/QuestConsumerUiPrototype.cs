@@ -114,6 +114,7 @@ namespace TsukiVox.AudioPrototype
         private Toggle safetyToggle;
         private Toggle nativeToggle;
         private Button openDiagnosticsButton;
+        private TMP_Text settingsBuildText;
 
         private Button closeDiagnosticsButton;
         private Button debugScrimButton;
@@ -351,7 +352,7 @@ namespace TsukiVox.AudioPrototype
             CreateDivider(settingsPage, "Audio Divider", new Vector2(0f, -184f), new Vector2(ContentWidth, 1f));
             openDiagnosticsButton = CreateSurfaceButton(settingsPage, "Open Diagnostics", new Vector2(0f, -228f), new Vector2(ContentWidth, 72f), Surface, Line);
             CreateText(openDiagnosticsButton.transform, "Title", "诊断与支持", 19, FontStyle.Bold, new Vector2(-340f, 11f), new Vector2(300f, 32f), TextAnchor.MiddleLeft, TextPrimary);
-            CreateText(openDiagnosticsButton.transform, "Hint", "视频状态、原始信息与复制诊断", 16, FontStyle.Normal, new Vector2(-250f, -17f), new Vector2(480f, 26f), TextAnchor.MiddleLeft, TextSecondary);
+            settingsBuildText = CreateText(openDiagnosticsButton.transform, "Hint", QuestBuildInfo.SettingsSummary, 15, FontStyle.Normal, new Vector2(-20f, -17f), new Vector2(840f, 26f), TextAnchor.MiddleLeft, TextSecondary);
             EnsureIcon(openDiagnosticsButton.transform, "Chevron", QuestUiIconKind.ChevronRight, new Vector2(458f, 0f), new Vector2(24f, 24f), TextSecondary);
         }
 
@@ -587,6 +588,7 @@ namespace TsukiVox.AudioPrototype
             var connected = playlistPrototype != null && playlistPrototype.IsConnected;
             settingsConnectionText.text = connected ? "已连接" : "未连接";
             settingsConnectionText.color = connected ? Accent : Warm;
+            settingsBuildText.text = QuestBuildInfo.SettingsSummary;
             if (helperHostInput != null && !helperHostInput.isFocused && playlistPrototype != null)
             {
                 helperHostInput.SetTextWithoutNotify(playlistPrototype.HelperHost);
@@ -628,6 +630,7 @@ namespace TsukiVox.AudioPrototype
             diagnosticsVideoText.text = $"视频状态：{videoSummary}\n{SingleLine(videoScreenPrototype?.StatusSummary)}";
 
             rawDiagnosticsText.text =
+                $"构建信息  {QuestBuildInfo.RawSummary}\n" +
                 $"音频后端  {audioPrototype?.ActiveBackendName ?? "missing"}\n" +
                 $"人声预设  {audioPrototype?.CurrentPresetName ?? "missing"}\n" +
                 $"输入/输出  {(audioPrototype?.InputLevel ?? 0f):P0} / {(audioPrototype?.OutputLevel ?? 0f):P0}\n" +
