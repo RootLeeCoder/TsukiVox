@@ -7,6 +7,8 @@ namespace TsukiVox.AudioPrototype
     public enum QuestUiIconKind
     {
         Moon,
+        Search,
+        Plus,
         Queue,
         Settings,
         Replay,
@@ -78,6 +80,14 @@ namespace TsukiVox.AudioPrototype
                 case QuestUiIconKind.Moon:
                     AddArc(vertexHelper, rect, 12f, 12f, 8.5f, 42f, 320f, thickness);
                     AddArc(vertexHelper, rect, 14.6f, 10.5f, 6.6f, 103f, 246f, thickness);
+                    break;
+                case QuestUiIconKind.Search:
+                    AddCircle(vertexHelper, rect, 10.5f, 10.5f, 6.5f, thickness);
+                    AddLine(vertexHelper, rect, 15.1f, 15.1f, 20f, 20f, thickness);
+                    break;
+                case QuestUiIconKind.Plus:
+                    AddLine(vertexHelper, rect, 12f, 5f, 12f, 19f, thickness);
+                    AddLine(vertexHelper, rect, 5f, 12f, 19f, 12f, thickness);
                     break;
                 case QuestUiIconKind.Queue:
                     AddLine(vertexHelper, rect, 3f, 5f, 13f, 5f, thickness);

@@ -12,7 +12,9 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestConsumerUiPrototype : MonoBehaviour
     {
         private const string RootName = "Consumer UI";
+        private const string DefaultSongSearchInput = "BV1Kx4y1h7vR";
         private const int QueueRowCount = 5;
+        private const int SearchResultRowCount = 4;
         private const float RefreshIntervalSeconds = 0.1f;
         private const float ContentWidth = 992f;
         private const float MicClearanceStep = 0.0025f;
@@ -37,6 +39,7 @@ namespace TsukiVox.AudioPrototype
         private enum UiPage
         {
             Home,
+            SongSearch,
             Voice,
             Queue,
             Settings,
@@ -46,6 +49,7 @@ namespace TsukiVox.AudioPrototype
         private RectTransform panel;
         private RectTransform consumerRoot;
         private RectTransform homePage;
+        private RectTransform songSearchPage;
         private RectTransform voicePage;
         private RectTransform queuePage;
         private RectTransform settingsPage;
@@ -55,6 +59,7 @@ namespace TsukiVox.AudioPrototype
         private RectTransform rawDetailsRoot;
 
         private CanvasGroup homeGroup;
+        private CanvasGroup songSearchGroup;
         private CanvasGroup voiceGroup;
         private CanvasGroup queueGroup;
         private CanvasGroup settingsGroup;
@@ -85,6 +90,7 @@ namespace TsukiVox.AudioPrototype
         private QuestUiSurface[] waveBars;
 
         private Button queuePageButton;
+        private Button songSearchPageButton;
         private Button settingsPageButton;
         private Button replayButton;
         private Button previousButton;
@@ -110,6 +116,19 @@ namespace TsukiVox.AudioPrototype
         private readonly TMP_Text[] queueTitleTexts = new TMP_Text[QueueRowCount];
         private readonly TMP_Text[] queueMetaTexts = new TMP_Text[QueueRowCount];
         private TMP_Text queueFooterText;
+
+        private Button songSearchBackButton;
+        private TMP_InputField songSearchInput;
+        private Button songSearchButton;
+        private readonly RectTransform[] searchResultRows = new RectTransform[SearchResultRowCount];
+        private readonly QuestUiSurface[] searchResultSurfaces = new QuestUiSurface[SearchResultRowCount];
+        private readonly TMP_Text[] searchResultTitleTexts = new TMP_Text[SearchResultRowCount];
+        private readonly TMP_Text[] searchResultMetaTexts = new TMP_Text[SearchResultRowCount];
+        private readonly Button[] searchResultAddButtons = new Button[SearchResultRowCount];
+        private Button searchPreviousPageButton;
+        private Button searchNextPageButton;
+        private TMP_Text songSearchStatusText;
+        private int songSearchPageNumber = 1;
 
         private Button settingsBackButton;
         private Button openMicProtectionButton;
@@ -229,12 +248,14 @@ namespace TsukiVox.AudioPrototype
 
             consumerRoot = EnsureRect(panel, RootName, Vector2.zero, QuestAppShellPrototype.ControlPanelSize);
             homePage = EnsurePage(consumerRoot, "Home Page", out homeGroup);
+            songSearchPage = EnsurePage(consumerRoot, "Song Search Page", out songSearchGroup);
             voicePage = EnsurePage(consumerRoot, "Voice Page", out voiceGroup);
             queuePage = EnsurePage(consumerRoot, "Queue Page", out queueGroup);
             settingsPage = EnsurePage(consumerRoot, "Settings Page", out settingsGroup);
             micProtectionPage = EnsurePage(consumerRoot, "Mic Protection Page", out micProtectionGroup);
 
             BuildHomePage();
+            BuildSongSearchPage();
             BuildVoicePage();
             BuildQueuePage();
             BuildSettingsPage();
@@ -262,12 +283,14 @@ namespace TsukiVox.AudioPrototype
             CreateText(homePage, "Brand", "TsukiVox", 23, FontStyle.Bold, new Vector2(-356f, 240f), new Vector2(180f, 32f), TextAnchor.MiddleLeft, TextPrimary);
             CreateText(homePage, "Brand CN", "月读声域", 16, FontStyle.Normal, new Vector2(-356f, 216f), new Vector2(180f, 24f), TextAnchor.MiddleLeft, TextSecondary);
 
-            connectionDot = EnsureSurface(EnsureRect(homePage, "Connection Dot", new Vector2(156f, 232f), new Vector2(12f, 12f)), Accent, 6f, false);
-            connectionText = CreateText(homePage, "Connection", "点歌服务已连接", 17, FontStyle.Normal, new Vector2(267f, 232f), new Vector2(190f, 36f), TextAnchor.MiddleLeft, TextPrimary);
+            connectionDot = EnsureSurface(EnsureRect(homePage, "Connection Dot", new Vector2(84f, 232f), new Vector2(12f, 12f)), Accent, 6f, false);
+            connectionText = CreateText(homePage, "Connection", "点歌服务已连接", 17, FontStyle.Normal, new Vector2(196f, 232f), new Vector2(190f, 36f), TextAnchor.MiddleLeft, TextPrimary);
             SetChildActive(homePage, "Header Hover Label", false);
 
+            songSearchPageButton = CreateIconButton(homePage, "Open Song Search", QuestUiIconKind.Search, new Vector2(336f, 232f), new Vector2(64f, 64f), Accent, AccentInk, out _);
             queuePageButton = CreateIconButton(homePage, "Open Queue", QuestUiIconKind.Queue, new Vector2(408f, 232f), new Vector2(64f, 64f), Surface, TextPrimary, out _);
             settingsPageButton = CreateIconButton(homePage, "Open Settings", QuestUiIconKind.Settings, new Vector2(480f, 232f), new Vector2(64f, 64f), Surface, TextPrimary, out _);
+            ConfigureHover(songSearchPageButton, null, string.Empty);
             ConfigureHover(queuePageButton, null, string.Empty);
             ConfigureHover(settingsPageButton, null, string.Empty);
 
@@ -309,6 +332,76 @@ namespace TsukiVox.AudioPrototype
             voiceModeSummaryText = CreateText(voicePageButton.transform, "Mode", "人声 · KTV", 17, FontStyle.Normal, new Vector2(-110f, 0f), new Vector2(190f, 40f), TextAnchor.MiddleLeft, TextSecondary);
             CreateText(voicePageButton.transform, "Command", "调整人声", 17, FontStyle.Normal, new Vector2(360f, 0f), new Vector2(150f, 40f), TextAnchor.MiddleRight, TextSecondary);
             EnsureIcon(voicePageButton.transform, "Chevron", QuestUiIconKind.ChevronRight, new Vector2(476f, 0f), new Vector2(22f, 22f), TextSecondary);
+        }
+
+        private void BuildSongSearchPage()
+        {
+            BuildSubpageHeader(songSearchPage, "搜索点歌", out songSearchBackButton);
+            songSearchInput = CreateInputField(
+                songSearchPage,
+                "Song Search Input",
+                "输入歌名、歌手或 BV 号",
+                new Vector2(-86f, 145f),
+                new Vector2(800f, 54f));
+            songSearchInput.characterLimit = 80;
+            songSearchInput.SetTextWithoutNotify(DefaultSongSearchInput);
+            songSearchButton = CreateIconButton(
+                songSearchPage,
+                "Search Songs",
+                QuestUiIconKind.Search,
+                new Vector2(446f, 145f),
+                new Vector2(86f, 54f),
+                Accent,
+                AccentInk,
+                out _);
+
+            const float firstY = 76f;
+            for (var index = 0; index < SearchResultRowCount; index += 1)
+            {
+                var row = EnsureRect(
+                    songSearchPage,
+                    $"Search Result {index}",
+                    new Vector2(0f, firstY - index * 70f),
+                    new Vector2(ContentWidth, 62f));
+                searchResultRows[index] = row;
+                searchResultSurfaces[index] = EnsureSurface(row, Surface, 6f, false);
+                searchResultTitleTexts[index] = CreateText(
+                    row,
+                    "Title",
+                    "歌曲",
+                    18,
+                    FontStyle.Bold,
+                    new Vector2(-62f, 12f),
+                    new Vector2(810f, 28f),
+                    TextAnchor.MiddleLeft,
+                    TextPrimary);
+                searchResultTitleTexts[index].enableAutoSizing = true;
+                searchResultTitleTexts[index].fontSizeMin = 15f;
+                searchResultTitleTexts[index].fontSizeMax = 18f;
+                searchResultMetaTexts[index] = CreateText(
+                    row,
+                    "Meta",
+                    "Bilibili",
+                    15,
+                    FontStyle.Normal,
+                    new Vector2(-62f, -16f),
+                    new Vector2(810f, 24f),
+                    TextAnchor.MiddleLeft,
+                    TextSecondary);
+                searchResultAddButtons[index] = CreateIconButton(
+                    row,
+                    "Add",
+                    QuestUiIconKind.Plus,
+                    new Vector2(460f, 0f),
+                    new Vector2(52f, 52f),
+                    SurfaceRaised,
+                    AccentStrong,
+                    out _);
+            }
+
+            searchPreviousPageButton = CreateTextButton(songSearchPage, "Previous Search Page", "上一页", new Vector2(-424f, -226f), new Vector2(128f, 46f), Surface, TextPrimary);
+            songSearchStatusText = CreateText(songSearchPage, "Search Status", "连接 Companion 后即可搜索", 16, FontStyle.Normal, Vector2.zero + new Vector2(0f, -226f), new Vector2(650f, 34f), TextAnchor.MiddleCenter, TextSecondary);
+            searchNextPageButton = CreateTextButton(songSearchPage, "Next Search Page", "下一页", new Vector2(424f, -226f), new Vector2(128f, 46f), Surface, TextPrimary);
         }
 
         private void BuildVoicePage()
@@ -474,10 +567,12 @@ namespace TsukiVox.AudioPrototype
 
         private void WireUi()
         {
+            WireButton(songSearchPageButton, OpenSongSearchPage);
             WireButton(queuePageButton, () => ShowPage(UiPage.Queue));
             WireButton(settingsPageButton, () => ShowPage(UiPage.Settings));
             WireButton(voicePageButton, () => ShowPage(UiPage.Voice));
             WireButton(voiceBackButton, () => ShowPage(UiPage.Home));
+            WireButton(songSearchBackButton, () => ShowPage(UiPage.Home));
             WireButton(queueBackButton, () => ShowPage(UiPage.Home));
             WireButton(settingsBackButton, () => ShowPage(UiPage.Home));
             WireButton(openMicProtectionButton, () => ShowPage(UiPage.MicProtection));
@@ -488,6 +583,17 @@ namespace TsukiVox.AudioPrototype
             WireButton(playPauseButton, () => playlistPrototype?.SendPlayPause());
             WireButton(nextButton, () => playlistPrototype?.SendNext());
             WireButton(microphoneButton, () => audioPrototype?.ToggleMonitoring());
+
+            WireButton(songSearchButton, () => SearchSongs(1));
+            songSearchInput.onSubmit.RemoveAllListeners();
+            songSearchInput.onSubmit.AddListener(_ => SearchSongs(1));
+            WireButton(searchPreviousPageButton, () => SearchSongs(Mathf.Max(1, songSearchPageNumber - 1)));
+            WireButton(searchNextPageButton, () => SearchSongs(songSearchPageNumber + 1));
+            for (var index = 0; index < searchResultAddButtons.Length; index += 1)
+            {
+                var resultIndex = index;
+                WireButton(searchResultAddButtons[index], () => AddSearchResult(resultIndex));
+            }
 
             voiceMicrophoneToggle.onValueChanged.RemoveAllListeners();
             voiceMicrophoneToggle.onValueChanged.AddListener(HandleMicrophoneToggle);
@@ -534,6 +640,7 @@ namespace TsukiVox.AudioPrototype
         private void RefreshAll()
         {
             RefreshHome();
+            RefreshSongSearch();
             RefreshVoice();
             RefreshQueue();
             RefreshSettings();
@@ -558,7 +665,7 @@ namespace TsukiVox.AudioPrototype
             {
                 songMetaText.text = connected ? "播放队列为空" : "点歌服务未连接";
                 songTitleText.text = "等待点歌";
-                songDetailText.text = connected ? "从 PC 添加歌曲后即可开始" : "请在设置中检查 PC IP";
+                songDetailText.text = connected ? "打开搜索点歌选择视频" : "请在设置中检查 PC IP";
             }
             else
             {
@@ -598,6 +705,84 @@ namespace TsukiVox.AudioPrototype
                 var height = Mathf.Lerp(8f, baseHeight + 36f, Mathf.Clamp01(inputLevel * (0.7f + index * 0.05f)));
                 waveBars[index].rectTransform.sizeDelta = new Vector2(6f, height);
                 waveBars[index].color = micLive ? Accent : new Color(0.18f, 0.26f, 0.25f, 1f);
+            }
+        }
+
+        private void RefreshSongSearch()
+        {
+            if (songSearchInput == null || playlistPrototype == null)
+            {
+                return;
+            }
+
+            var response = playlistPrototype.SearchResults;
+            var items = response?.items ?? Array.Empty<BilibiliCatalogItem>();
+            for (var index = 0; index < SearchResultRowCount; index += 1)
+            {
+                var visible = index < items.Length && items[index] != null && items[index].IsValid;
+                searchResultRows[index].gameObject.SetActive(visible);
+                if (!visible)
+                {
+                    continue;
+                }
+
+                var item = items[index];
+                var isPending = playlistPrototype.IsAddingItem && playlistPrototype.PendingAddItem == item;
+                searchResultSurfaces[index].color = isPending
+                    ? new Color(0.035f, 0.16f, 0.13f, 1f)
+                    : Surface;
+                searchResultTitleTexts[index].text = SafeText(item.title, item.bvid);
+                searchResultMetaTexts[index].text = $"{SafeText(item.author, "未知 UP 主")} · {FormatDuration(item)} · {item.bvid}";
+                searchResultAddButtons[index].interactable = playlistPrototype.CanAddItem && !isPending;
+            }
+
+            songSearchButton.interactable = playlistPrototype.IsConnected &&
+                                            !playlistPrototype.IsSearching &&
+                                            !string.IsNullOrWhiteSpace(songSearchInput.text);
+            searchPreviousPageButton.interactable = !playlistPrototype.IsSearching && songSearchPageNumber > 1;
+            searchNextPageButton.interactable = !playlistPrototype.IsSearching && response != null && response.hasMore;
+
+            if (!playlistPrototype.IsConnected)
+            {
+                songSearchStatusText.text = "Companion 未连接，请检查设置中的 PC IP";
+                songSearchStatusText.color = Warm;
+            }
+            else if (playlistPrototype.IsSearching)
+            {
+                songSearchStatusText.text = "正在搜索 Bilibili";
+                songSearchStatusText.color = TextSecondary;
+            }
+            else if (!string.IsNullOrWhiteSpace(playlistPrototype.LastSearchError))
+            {
+                songSearchStatusText.text = SingleLine(playlistPrototype.LastSearchError);
+                songSearchStatusText.color = Danger;
+            }
+            else if (playlistPrototype.IsAddingItem)
+            {
+                songSearchStatusText.text = $"正在点播 · {SafeText(playlistPrototype.PendingAddItem?.title, "视频")}";
+                songSearchStatusText.color = TextSecondary;
+            }
+            else if (!string.IsNullOrWhiteSpace(playlistPrototype.LastAddItemError))
+            {
+                songSearchStatusText.text = SingleLine(playlistPrototype.LastAddItemError);
+                songSearchStatusText.color = Danger;
+            }
+            else if (playlistPrototype.LastAddedItem != null && playlistPrototype.LastAddedItem.IsValid)
+            {
+                songSearchStatusText.text = $"已点播 · {SafeText(playlistPrototype.LastAddedItem.title, playlistPrototype.LastAddedItem.bvid)}";
+                songSearchStatusText.color = Accent;
+            }
+            else if (response != null)
+            {
+                songSearchStatusText.text = items.Length == 0
+                    ? "没有找到相关视频"
+                    : $"第 {Mathf.Max(1, response.page)} 页 · 共 {Mathf.Max(items.Length, response.total)} 个结果";
+                songSearchStatusText.color = TextSecondary;
+            }
+            else
+            {
+                songSearchStatusText.text = "输入关键词后搜索";
+                songSearchStatusText.color = TextSecondary;
             }
         }
 
@@ -827,6 +1012,47 @@ namespace TsukiVox.AudioPrototype
             playlistPrototype?.ApplyHelperHost(helperHostInput != null ? helperHostInput.text : string.Empty);
         }
 
+        private void OpenSongSearchPage()
+        {
+            ShowPage(UiPage.SongSearch);
+            if (playlistPrototype != null &&
+                playlistPrototype.SearchResults == null &&
+                !playlistPrototype.IsSearching)
+            {
+                SearchSongs(1);
+            }
+        }
+
+        private void SearchSongs(int page)
+        {
+            if (playlistPrototype == null || songSearchInput == null)
+            {
+                return;
+            }
+
+            var query = songSearchInput.text?.Trim();
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                songSearchStatusText.text = "请输入歌名、歌手或 BV 号";
+                songSearchStatusText.color = Danger;
+                return;
+            }
+
+            songSearchPageNumber = Mathf.Max(1, page);
+            playlistPrototype.SearchBilibili(query, songSearchPageNumber, SearchResultRowCount);
+        }
+
+        private void AddSearchResult(int index)
+        {
+            var items = playlistPrototype?.SearchResults?.items;
+            if (items == null || index < 0 || index >= items.Length || items[index] == null)
+            {
+                return;
+            }
+
+            playlistPrototype.AddItem(items[index], true);
+        }
+
         private void ApplyDefaultHelperHost()
         {
             if (helperHostInput != null)
@@ -945,6 +1171,8 @@ namespace TsukiVox.AudioPrototype
             UnsubscribePlaylist();
             subscribedPlaylist = playlistPrototype;
             subscribedPlaylist.StateChanged += HandlePlaylistStateChanged;
+            subscribedPlaylist.SearchStateChanged += HandleSearchStateChanged;
+            subscribedPlaylist.AddItemStateChanged += HandleSearchStateChanged;
         }
 
         private void UnsubscribePlaylist()
@@ -955,12 +1183,19 @@ namespace TsukiVox.AudioPrototype
             }
 
             subscribedPlaylist.StateChanged -= HandlePlaylistStateChanged;
+            subscribedPlaylist.SearchStateChanged -= HandleSearchStateChanged;
+            subscribedPlaylist.AddItemStateChanged -= HandleSearchStateChanged;
             subscribedPlaylist = null;
         }
 
         private void HandlePlaylistStateChanged(QuestPlaylistPrototype sender, PlaylistState state)
         {
             RefreshAll();
+        }
+
+        private void HandleSearchStateChanged(QuestPlaylistPrototype sender)
+        {
+            RefreshSongSearch();
         }
 
         private void ShowPage(UiPage page)
@@ -1037,6 +1272,7 @@ namespace TsukiVox.AudioPrototype
         {
             currentPage = page;
             SetPageGroupImmediate(homeGroup, page == UiPage.Home);
+            SetPageGroupImmediate(songSearchGroup, page == UiPage.SongSearch);
             SetPageGroupImmediate(voiceGroup, page == UiPage.Voice);
             SetPageGroupImmediate(queueGroup, page == UiPage.Queue);
             SetPageGroupImmediate(settingsGroup, page == UiPage.Settings);
@@ -1104,6 +1340,7 @@ namespace TsukiVox.AudioPrototype
             return page switch
             {
                 UiPage.Voice => voiceGroup,
+                UiPage.SongSearch => songSearchGroup,
                 UiPage.Queue => queueGroup,
                 UiPage.Settings => settingsGroup,
                 UiPage.MicProtection => micProtectionGroup,
@@ -1269,6 +1506,7 @@ namespace TsukiVox.AudioPrototype
             input.characterLimit = 80;
             input.caretWidth = 3;
             input.navigation = new Navigation { mode = Navigation.Mode.None };
+            QuestAndroidKeyboardInput.Configure(input);
             return input;
         }
 
@@ -1552,6 +1790,17 @@ namespace TsukiVox.AudioPrototype
                 PlaylistClient.StatusError => "准备失败",
                 _ => "等待中",
             };
+        }
+
+        private static string FormatDuration(BilibiliCatalogItem item)
+        {
+            if (!string.IsNullOrWhiteSpace(item?.durationText))
+            {
+                return item.durationText.Trim();
+            }
+
+            var totalSeconds = Mathf.Max(0, item?.durationSeconds ?? 0);
+            return $"{totalSeconds / 60}:{totalSeconds % 60:00}";
         }
 
         private static string SafeText(string value, string fallback)

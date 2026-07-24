@@ -50,16 +50,46 @@ namespace TsukiVox.AudioPrototype
         private bool lastRequestFailed;
         private string lastError = "Not connected.";
         private string pendingStatus = "Connecting to playlist sync...";
+        private Coroutine searchRoutine;
+        private Coroutine addItemRoutine;
+        private BilibiliSearchResponse searchResults;
+        private BilibiliCatalogItem pendingAddItem;
+        private BilibiliCatalogItem lastAddedItem;
+        private bool isSearching;
+        private bool isAddingItem;
+        private int searchSequence;
+        private string lastSearchError = string.Empty;
+        private string lastAddItemError = string.Empty;
 
         public event Action<QuestPlaylistPrototype, PlaylistState> StateChanged;
+
+        public event Action<QuestPlaylistPrototype> SearchStateChanged;
+
+        public event Action<QuestPlaylistPrototype> AddItemStateChanged;
 
         public PlaylistState CurrentState => state;
 
         public bool IsConnected => isConnected;
 
-        public bool CanSendControl => isConnected && !isRequestInFlight;
+        public bool CanSendControl => isConnected && !isRequestInFlight && !isAddingItem;
 
-        public bool IsRequestInFlight => isRequestInFlight;
+        public bool IsRequestInFlight => isRequestInFlight || isAddingItem;
+
+        public BilibiliSearchResponse SearchResults => searchResults;
+
+        public bool IsSearching => isSearching;
+
+        public string LastSearchError => lastSearchError;
+
+        public bool IsAddingItem => isAddingItem;
+
+        public bool CanAddItem => isConnected && !isAddingItem;
+
+        public BilibiliCatalogItem PendingAddItem => pendingAddItem;
+
+        public BilibiliCatalogItem LastAddedItem => lastAddedItem;
+
+        public string LastAddItemError => lastAddItemError;
 
         public string HelperHost => helperHost;
 
@@ -113,6 +143,7 @@ namespace TsukiVox.AudioPrototype
         private void OnDisable()
         {
             StopPolling();
+            CancelCatalogRequests();
         }
 
         public void StartPolling()
@@ -176,6 +207,125 @@ namespace TsukiVox.AudioPrototype
             SendControl(PlaylistClient.ControlReplay);
         }
 
+        public void SearchBilibili(string query, int page = 1, int pageSize = 4)
+        {
+            EnsureClient();
+            CancelSearch();
+
+            var normalizedQuery = string.IsNullOrWhiteSpace(query) ? string.Empty : query.Trim();
+            var normalizedPage = Math.Max(1, page);
+            var normalizedPageSize = Math.Min(30, Math.Max(1, pageSize));
+            searchResults = new BilibiliSearchResponse
+            {
+                query = normalizedQuery,
+                page = normalizedPage,
+                pageSize = normalizedPageSize,
+            };
+            lastSearchError = string.Empty;
+            isSearching = true;
+            searchSequence += 1;
+            var sequence = searchSequence;
+            SearchStateChanged?.Invoke(this);
+            searchRoutine = StartCoroutine(SearchBilibiliRoutine(
+                normalizedQuery,
+                normalizedPage,
+                normalizedPageSize,
+                sequence));
+        }
+
+        public void AddItem(BilibiliCatalogItem item, bool playNow = false)
+        {
+            if (isAddingItem)
+            {
+                lastAddItemError = "另一首歌曲正在加入队列，请稍候。";
+                AddItemStateChanged?.Invoke(this);
+                return;
+            }
+
+            if (item == null || !item.IsValid)
+            {
+                pendingAddItem = item;
+                lastAddItemError = "请选择有效的 Bilibili 视频。";
+                AddItemStateChanged?.Invoke(this);
+                return;
+            }
+
+            EnsureClient();
+            pendingAddItem = item;
+            lastAddItemError = string.Empty;
+            isAddingItem = true;
+            AddItemStateChanged?.Invoke(this);
+            addItemRoutine = StartCoroutine(AddItemRoutine(item, playNow));
+        }
+
+        public string ResolveCatalogAssetUrl(string assetUrl)
+        {
+            EnsureClient();
+            return client.ResolveCatalogAssetUrl(assetUrl);
+        }
+
+        private IEnumerator SearchBilibiliRoutine(string query, int page, int pageSize, int sequence)
+        {
+            BilibiliSearchResponse response = null;
+            string error = null;
+            yield return client.SearchBilibili(
+                query,
+                page,
+                pageSize,
+                value => response = value,
+                value => error = value);
+
+            if (sequence != searchSequence)
+            {
+                yield break;
+            }
+
+            searchRoutine = null;
+            isSearching = false;
+            if (response != null)
+            {
+                searchResults = response;
+                lastSearchError = string.Empty;
+            }
+            else
+            {
+                lastSearchError = string.IsNullOrWhiteSpace(error)
+                    ? "Bilibili 搜索失败，请稍后重试。"
+                    : error.Trim();
+            }
+
+            SearchStateChanged?.Invoke(this);
+        }
+
+        private IEnumerator AddItemRoutine(BilibiliCatalogItem item, bool playNow)
+        {
+            PlaylistState nextState = null;
+            string error = null;
+            yield return client.AddItem(
+                item,
+                playNow,
+                value => nextState = value,
+                value => error = value);
+
+            addItemRoutine = null;
+            isAddingItem = false;
+            if (nextState != null)
+            {
+                lastAddedItem = item;
+                pendingAddItem = null;
+                lastAddItemError = string.Empty;
+                OnStateReceived(nextState);
+            }
+            else
+            {
+                lastAddItemError = string.IsNullOrWhiteSpace(error)
+                    ? "歌曲未能加入队列，请稍后重试。"
+                    : error.Trim();
+            }
+
+            AddItemStateChanged?.Invoke(this);
+        }
+
         private IEnumerator PollLoop()
         {
             while (enabled)
@@ -194,7 +344,7 @@ namespace TsukiVox.AudioPrototype
 
         private void SendControl(string action)
         {
-            if (isRequestInFlight)
+            if (IsRequestInFlight)
             {
                 pendingStatus = "Playlist request already in progress.";
                 RefreshUi();
@@ -218,6 +368,19 @@ namespace TsukiVox.AudioPrototype
 
         private void OnStateReceived(PlaylistState nextState)
         {
+            if (nextState == null)
+            {
+                return;
+            }
+
+            if (state != null &&
+                state.updatedAt > 0L &&
+                nextState.updatedAt > 0L &&
+                nextState.updatedAt < state.updatedAt)
+            {
+                return;
+            }
+
             state = nextState;
             isConnected = true;
             lastRequestFailed = false;
@@ -424,7 +587,7 @@ namespace TsukiVox.AudioPrototype
         {
             var hasQueue = state != null && state.QueueCount > 0;
             var hasReadyItem = state?.CurrentItem != null && state.CurrentItem.IsReady;
-            var canSendControl = isConnected && !isRequestInFlight;
+            var canSendControl = CanSendControl;
 
             if (playPauseButton != null)
             {
@@ -470,6 +633,39 @@ namespace TsukiVox.AudioPrototype
             return client.ResolvePlayableUrl(playableUrl);
         }
 
+        private void EnsureClient()
+        {
+            if (client == null)
+            {
+                client = new PlaylistClient(playlistOrigin, downloadOrigin);
+            }
+        }
+
+        private void CancelCatalogRequests()
+        {
+            CancelSearch();
+            if (addItemRoutine != null)
+            {
+                StopCoroutine(addItemRoutine);
+                addItemRoutine = null;
+            }
+
+            isAddingItem = false;
+            pendingAddItem = null;
+        }
+
+        private void CancelSearch()
+        {
+            searchSequence += 1;
+            if (searchRoutine != null)
+            {
+                StopCoroutine(searchRoutine);
+                searchRoutine = null;
+            }
+
+            isSearching = false;
+        }
+
         private void LoadHelperHost()
         {
             helperHost = NormalizeHelperHost(PlayerPrefs.GetString(HelperHostPrefsKey, helperHost), DefaultHelperHostAddress);
@@ -483,6 +679,7 @@ namespace TsukiVox.AudioPrototype
 
         private void ApplyHelperHost(string nextHelperHost, bool restartPolling)
         {
+            CancelCatalogRequests();
             helperHost = NormalizeHelperHost(nextHelperHost, DefaultHelperHostAddress);
             PlayerPrefs.SetString(HelperHostPrefsKey, helperHost);
             PlayerPrefs.Save();
@@ -503,6 +700,10 @@ namespace TsukiVox.AudioPrototype
             lastRequestFailed = false;
             lastError = string.Empty;
             pendingStatus = "Connecting to playlist sync...";
+            searchResults = null;
+            lastSearchError = string.Empty;
+            lastAddItemError = string.Empty;
+            lastAddedItem = null;
 
             if (restartPolling)
             {
@@ -511,6 +712,8 @@ namespace TsukiVox.AudioPrototype
             }
 
             RefreshUi();
+            SearchStateChanged?.Invoke(this);
+            AddItemStateChanged?.Invoke(this);
         }
 
         private void ApplyOriginsFromHelperHost()

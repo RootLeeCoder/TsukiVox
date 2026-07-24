@@ -210,8 +210,22 @@ if (-not $InstallOnly) {
         }
 
         Write-Host "Building Quest APK with Build ID $buildId in headless Unity ..."
-        & $resolvedUnityPath @unityArguments
-        $unityExitCode = $LASTEXITCODE
+        $unityStartInfo = [Diagnostics.ProcessStartInfo]::new()
+        $unityStartInfo.FileName = $resolvedUnityPath
+        $unityStartInfo.UseShellExecute = $false
+        $unityStartInfo.CreateNoWindow = $true
+        foreach ($unityArgument in $unityArguments) {
+            [void]$unityStartInfo.ArgumentList.Add([string]$unityArgument)
+        }
+
+        $unityProcess = [Diagnostics.Process]::Start($unityStartInfo)
+        try {
+            $unityProcess.WaitForExit()
+            $unityExitCode = $unityProcess.ExitCode
+        }
+        finally {
+            $unityProcess.Dispose()
+        }
         if ($unityExitCode -ne 0 -or -not (Test-Path -LiteralPath $buildReceiptPath -PathType Leaf)) {
             $logTail = if (Test-Path -LiteralPath $unityLogPath) {
                 (Get-Content -LiteralPath $unityLogPath -Tail 80) -join [Environment]::NewLine

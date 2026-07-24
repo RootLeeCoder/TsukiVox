@@ -22,7 +22,10 @@ namespace TsukiVox.AudioPrototype
         private const string DefaultDownloadOrigin = "http://127.0.0.1:5174";
         private const string StatePath = "/api/playlist/state";
         private const string ControlPath = "/api/playlist/control";
+        private const string ItemsPath = "/api/playlist/items";
+        private const string BilibiliSearchPath = "/api/bilibili/search";
         private const int RequestTimeoutSeconds = 6;
+        private const int SearchRequestTimeoutSeconds = 12;
 
         private string playlistOrigin;
         private string downloadOrigin;
@@ -100,6 +103,92 @@ namespace TsukiVox.AudioPrototype
             }
         }
 
+        public IEnumerator SearchBilibili(
+            string query,
+            int page,
+            int pageSize,
+            Action<BilibiliSearchResponse> onSuccess,
+            Action<string> onFailure)
+        {
+            var normalizedQuery = string.IsNullOrWhiteSpace(query) ? string.Empty : query.Trim();
+            if (string.IsNullOrEmpty(normalizedQuery))
+            {
+                onFailure?.Invoke("请输入搜索关键词或 BV 号。");
+                yield break;
+            }
+
+            var normalizedPage = Math.Max(1, page);
+            var normalizedPageSize = Math.Min(30, Math.Max(1, pageSize));
+            var queryString =
+                $"?query={UnityWebRequest.EscapeURL(normalizedQuery)}&page={normalizedPage}&pageSize={normalizedPageSize}";
+
+            using (var request = UnityWebRequest.Get(CombineUrl(downloadOrigin, $"{BilibiliSearchPath}{queryString}")))
+            {
+                ConfigureRequest(request, SearchRequestTimeoutSeconds);
+                yield return request.SendWebRequest();
+
+                if (!IsRequestSuccessful(request))
+                {
+                    onFailure?.Invoke(CreateRequestError(request, "Bilibili search"));
+                    yield break;
+                }
+
+                if (TryParseBilibiliSearchResponse(request.downloadHandler.text, out var response, out var error))
+                {
+                    onSuccess?.Invoke(response);
+                    yield break;
+                }
+
+                onFailure?.Invoke(error);
+            }
+        }
+
+        public IEnumerator AddItem(
+            BilibiliCatalogItem item,
+            bool playNow,
+            Action<PlaylistState> onSuccess,
+            Action<string> onFailure)
+        {
+            if (item == null || !item.IsValid)
+            {
+                onFailure?.Invoke("请选择有效的 Bilibili 视频。");
+                yield break;
+            }
+
+            var requestBody = JsonUtility.ToJson(new PlaylistAddRequest
+            {
+                input = item.bvid.Trim(),
+                playNow = playNow,
+                title = item.title,
+                author = item.author,
+                coverUrl = item.coverUrl,
+                durationSeconds = Math.Max(0, item.durationSeconds),
+                durationText = item.durationText,
+                viewCount = Math.Max(0L, item.viewCount),
+                pageUrl = item.pageUrl,
+            });
+
+            using (var request = CreateJsonPostRequest(CombineUrl(playlistOrigin, ItemsPath), requestBody))
+            {
+                ConfigureRequest(request);
+                yield return request.SendWebRequest();
+
+                if (!IsRequestSuccessful(request))
+                {
+                    onFailure?.Invoke(CreateRequestError(request, "Add song"));
+                    yield break;
+                }
+
+                if (TryParseState(request.downloadHandler.text, out var state, out var error))
+                {
+                    onSuccess?.Invoke(state);
+                    yield break;
+                }
+
+                onFailure?.Invoke(error);
+            }
+        }
+
         public string ResolvePlayableUrl(string playableUrl)
         {
             if (string.IsNullOrWhiteSpace(playableUrl))
@@ -128,9 +217,39 @@ namespace TsukiVox.AudioPrototype
             return CombineUrl(playlistOrigin, trimmed.StartsWith("/", StringComparison.Ordinal) ? trimmed : $"/{trimmed}");
         }
 
-        private static void ConfigureRequest(UnityWebRequest request)
+        public string ResolveCatalogAssetUrl(string assetUrl)
         {
-            request.timeout = RequestTimeoutSeconds;
+            if (string.IsNullOrWhiteSpace(assetUrl))
+            {
+                return string.Empty;
+            }
+
+            var trimmed = assetUrl.Trim();
+            if (Uri.TryCreate(trimmed, UriKind.Absolute, out var absoluteUri) &&
+                (string.Equals(absoluteUri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(absoluteUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)))
+            {
+                return trimmed;
+            }
+
+            return CombineUrl(downloadOrigin, trimmed.StartsWith("/", StringComparison.Ordinal) ? trimmed : $"/{trimmed}");
+        }
+
+        private static UnityWebRequest CreateJsonPostRequest(string url, string requestBody)
+        {
+            var request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST)
+            {
+                uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(requestBody)),
+                downloadHandler = new DownloadHandlerBuffer(),
+            };
+            request.SetRequestHeader("Content-Type", "application/json");
+            request.SetRequestHeader("Accept", "application/json");
+            return request;
+        }
+
+        private static void ConfigureRequest(UnityWebRequest request, int timeoutSeconds = RequestTimeoutSeconds)
+        {
+            request.timeout = timeoutSeconds;
         }
 
         private static bool IsRequestSuccessful(UnityWebRequest request)
@@ -163,7 +282,33 @@ namespace TsukiVox.AudioPrototype
             }
         }
 
-        private static string CreateRequestError(UnityWebRequest request)
+        private static bool TryParseBilibiliSearchResponse(
+            string json,
+            out BilibiliSearchResponse response,
+            out string error)
+        {
+            try
+            {
+                response = JsonUtility.FromJson<BilibiliSearchResponse>(json);
+                if (response == null)
+                {
+                    error = "Bilibili search returned an empty response.";
+                    return false;
+                }
+
+                response.Normalize();
+                error = string.Empty;
+                return true;
+            }
+            catch (Exception exception)
+            {
+                response = null;
+                error = $"Bilibili search returned invalid JSON: {exception.Message}";
+                return false;
+            }
+        }
+
+        private static string CreateRequestError(UnityWebRequest request, string operation = "Playlist sync")
         {
             var serverMessage = TryParseErrorMessage(request.downloadHandler?.text);
             if (!string.IsNullOrEmpty(serverMessage))
@@ -172,7 +317,7 @@ namespace TsukiVox.AudioPrototype
             }
 
             var transportError = string.IsNullOrEmpty(request.error) ? "request failed" : request.error;
-            return $"Playlist sync {transportError} ({request.responseCode}).";
+            return $"{operation} {transportError} ({request.responseCode}).";
         }
 
         private static string TryParseErrorMessage(string json)
@@ -237,9 +382,90 @@ namespace TsukiVox.AudioPrototype
         }
 
         [Serializable]
+        private sealed class PlaylistAddRequest
+        {
+            public string input;
+            public bool playNow;
+            public string title;
+            public string author;
+            public string coverUrl;
+            public int durationSeconds;
+            public string durationText;
+            public long viewCount;
+            public string pageUrl;
+        }
+
+        [Serializable]
         private sealed class PlaylistErrorResponse
         {
             public string error;
+        }
+    }
+
+    [Serializable]
+    public sealed class BilibiliSearchResponse
+    {
+        public string query;
+        public int page = 1;
+        public int pageSize = 4;
+        public int total;
+        public bool hasMore;
+        public BilibiliCatalogItem[] items = Array.Empty<BilibiliCatalogItem>();
+
+        public int ItemCount => items == null ? 0 : items.Length;
+
+        public void Normalize()
+        {
+            query ??= string.Empty;
+            page = Math.Max(1, page);
+            pageSize = Math.Max(1, pageSize);
+            total = Math.Max(0, total);
+            items ??= Array.Empty<BilibiliCatalogItem>();
+            for (var index = 0; index < items.Length; index += 1)
+            {
+                items[index]?.Normalize();
+            }
+        }
+    }
+
+    [Serializable]
+    public sealed class BilibiliCatalogItem
+    {
+        public string bvid;
+        public string title;
+        public string author;
+        public string coverUrl;
+        public int durationSeconds;
+        public string durationText;
+        public long viewCount;
+        public string pageUrl;
+
+        public bool IsValid => !string.IsNullOrWhiteSpace(bvid) &&
+                               bvid.Trim().StartsWith("BV", StringComparison.OrdinalIgnoreCase);
+
+        public void Normalize()
+        {
+            bvid = string.IsNullOrWhiteSpace(bvid) ? string.Empty : bvid.Trim();
+            title = string.IsNullOrWhiteSpace(title) ? bvid : title.Trim();
+            author = string.IsNullOrWhiteSpace(author) ? string.Empty : author.Trim();
+            coverUrl = string.IsNullOrWhiteSpace(coverUrl) ? string.Empty : coverUrl.Trim();
+            durationSeconds = Math.Max(0, durationSeconds);
+            durationText = string.IsNullOrWhiteSpace(durationText) ? FormatDuration(durationSeconds) : durationText.Trim();
+            viewCount = Math.Max(0L, viewCount);
+            pageUrl = string.IsNullOrWhiteSpace(pageUrl)
+                ? (string.IsNullOrEmpty(bvid) ? string.Empty : $"https://www.bilibili.com/video/{bvid}/")
+                : pageUrl.Trim();
+        }
+
+        private static string FormatDuration(int seconds)
+        {
+            var safeSeconds = Math.Max(0, seconds);
+            var hours = safeSeconds / 3600;
+            var minutes = safeSeconds % 3600 / 60;
+            var remainingSeconds = safeSeconds % 60;
+            return hours > 0
+                ? $"{hours}:{minutes:00}:{remainingSeconds:00}"
+                : $"{minutes}:{remainingSeconds:00}";
         }
     }
 
