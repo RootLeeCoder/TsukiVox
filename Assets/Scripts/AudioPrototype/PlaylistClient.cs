@@ -24,15 +24,18 @@ namespace TsukiVox.AudioPrototype
         private const string ControlPath = "/api/playlist/control";
         private const string ItemsPath = "/api/playlist/items";
         private const string BilibiliSearchPath = "/api/bilibili/search";
+        private const string DeviceIdHeader = "X-TsukiVox-Device-Id";
         private const int RequestTimeoutSeconds = 6;
         private const int SearchRequestTimeoutSeconds = 12;
 
         private string playlistOrigin;
         private string downloadOrigin;
+        private string deviceId;
 
-        public PlaylistClient(string playlistOrigin, string downloadOrigin)
+        public PlaylistClient(string playlistOrigin, string downloadOrigin, string deviceId = "")
         {
             SetOrigins(playlistOrigin, downloadOrigin);
+            SetDeviceId(deviceId);
         }
 
         public string PlaylistOrigin => playlistOrigin;
@@ -43,6 +46,11 @@ namespace TsukiVox.AudioPrototype
         {
             playlistOrigin = NormalizeOrigin(nextPlaylistOrigin, DefaultPlaylistOrigin);
             downloadOrigin = NormalizeOrigin(nextDownloadOrigin, DefaultDownloadOrigin);
+        }
+
+        public void SetDeviceId(string nextDeviceId)
+        {
+            deviceId = string.IsNullOrWhiteSpace(nextDeviceId) ? string.Empty : nextDeviceId.Trim();
         }
 
         public IEnumerator FetchState(Action<PlaylistState> onSuccess, Action<string> onFailure)
@@ -247,9 +255,13 @@ namespace TsukiVox.AudioPrototype
             return request;
         }
 
-        private static void ConfigureRequest(UnityWebRequest request, int timeoutSeconds = RequestTimeoutSeconds)
+        private void ConfigureRequest(UnityWebRequest request, int timeoutSeconds = RequestTimeoutSeconds)
         {
             request.timeout = timeoutSeconds;
+            if (!string.IsNullOrEmpty(deviceId))
+            {
+                request.SetRequestHeader(DeviceIdHeader, deviceId);
+            }
         }
 
         private static bool IsRequestSuccessful(UnityWebRequest request)

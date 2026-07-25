@@ -43,6 +43,7 @@ namespace TsukiVox.AudioPrototype
             Voice,
             Queue,
             Settings,
+            Service,
             MicProtection,
         }
 
@@ -53,6 +54,7 @@ namespace TsukiVox.AudioPrototype
         private RectTransform voicePage;
         private RectTransform queuePage;
         private RectTransform settingsPage;
+        private RectTransform servicePage;
         private RectTransform micProtectionPage;
         private RectTransform debugScrim;
         private RectTransform debugDrawer;
@@ -63,6 +65,7 @@ namespace TsukiVox.AudioPrototype
         private CanvasGroup voiceGroup;
         private CanvasGroup queueGroup;
         private CanvasGroup settingsGroup;
+        private CanvasGroup serviceGroup;
         private CanvasGroup micProtectionGroup;
         private CanvasGroup debugScrimGroup;
         private CanvasGroup debugDrawerGroup;
@@ -131,6 +134,7 @@ namespace TsukiVox.AudioPrototype
         private int songSearchPageNumber = 1;
 
         private Button settingsBackButton;
+        private Button openServiceSettingsButton;
         private Button openMicProtectionButton;
         private QuestUiSurface openMicProtectionSurface;
         private QuestUiIcon openMicProtectionIcon;
@@ -138,6 +142,11 @@ namespace TsukiVox.AudioPrototype
         private TMP_InputField helperHostInput;
         private Button applyHostButton;
         private Button defaultHostButton;
+        private Button serviceBackButton;
+        private Button companionModeButton;
+        private Button onlineModeButton;
+        private TMP_Text serviceConnectionText;
+        private TMP_Text serviceModeHintText;
         private Toggle monitorOutputToggle;
         private Toggle safetyToggle;
         private Toggle nativeToggle;
@@ -252,6 +261,7 @@ namespace TsukiVox.AudioPrototype
             voicePage = EnsurePage(consumerRoot, "Voice Page", out voiceGroup);
             queuePage = EnsurePage(consumerRoot, "Queue Page", out queueGroup);
             settingsPage = EnsurePage(consumerRoot, "Settings Page", out settingsGroup);
+            servicePage = EnsurePage(consumerRoot, "Service Page", out serviceGroup);
             micProtectionPage = EnsurePage(consumerRoot, "Mic Protection Page", out micProtectionGroup);
 
             BuildHomePage();
@@ -259,6 +269,7 @@ namespace TsukiVox.AudioPrototype
             BuildVoicePage();
             BuildQueuePage();
             BuildSettingsPage();
+            BuildServicePage();
             BuildMicProtectionPage();
             BuildDebugDrawer();
             HideLegacyUi();
@@ -400,7 +411,7 @@ namespace TsukiVox.AudioPrototype
             }
 
             searchPreviousPageButton = CreateTextButton(songSearchPage, "Previous Search Page", "上一页", new Vector2(-424f, -226f), new Vector2(128f, 46f), Surface, TextPrimary);
-            songSearchStatusText = CreateText(songSearchPage, "Search Status", "连接 Companion 后即可搜索", 16, FontStyle.Normal, Vector2.zero + new Vector2(0f, -226f), new Vector2(650f, 34f), TextAnchor.MiddleCenter, TextSecondary);
+            songSearchStatusText = CreateText(songSearchPage, "Search Status", "连接点歌服务后即可搜索", 16, FontStyle.Normal, Vector2.zero + new Vector2(0f, -226f), new Vector2(650f, 34f), TextAnchor.MiddleCenter, TextSecondary);
             searchNextPageButton = CreateTextButton(songSearchPage, "Next Search Page", "下一页", new Vector2(424f, -226f), new Vector2(128f, 46f), Surface, TextPrimary);
         }
 
@@ -457,29 +468,51 @@ namespace TsukiVox.AudioPrototype
         private void BuildSettingsPage()
         {
             BuildSubpageHeader(settingsPage, "设置", out settingsBackButton);
+            SetChildActive(settingsPage, "Service Section", false);
+            SetChildActive(settingsPage, "Service Status", false);
+            SetChildActive(settingsPage, "Host Label", false);
+            SetChildActive(settingsPage, "Helper Host", false);
+            SetChildActive(settingsPage, "Apply Host", false);
+            SetChildActive(settingsPage, "Default Host", false);
             openMicProtectionButton = CreateSurfaceButton(settingsPage, "Open Mic Protection", new Vector2(396f, 232f), new Vector2(200f, 52f), Surface, Line);
             openMicProtectionSurface = openMicProtectionButton.targetGraphic as QuestUiSurface;
             openMicProtectionIcon = EnsureIcon(openMicProtectionButton.transform, "Icon", QuestUiIconKind.Microphone, new Vector2(-70f, 0f), new Vector2(24f, 24f), Accent);
             CreateText(openMicProtectionButton.transform, "Label", "防碰撞", 17, FontStyle.Bold, new Vector2(22f, 0f), new Vector2(118f, 34f), TextAnchor.MiddleCenter, TextPrimary);
 
-            CreateText(settingsPage, "Service Section", "点歌服务", 16, FontStyle.Bold, new Vector2(-396f, 150f), new Vector2(200f, 30f), TextAnchor.MiddleLeft, TextSecondary);
-            settingsConnectionText = CreateText(settingsPage, "Service Status", "正在连接", 17, FontStyle.Bold, new Vector2(350f, 150f), new Vector2(290f, 32f), TextAnchor.MiddleRight, Accent);
-            CreateText(settingsPage, "Host Label", "PC IP", 17, FontStyle.Bold, new Vector2(-445f, 100f), new Vector2(100f, 44f), TextAnchor.MiddleLeft, TextPrimary);
-            helperHostInput = CreateInputField(settingsPage, "Helper Host", QuestPlaylistPrototype.DefaultHelperHostAddress, new Vector2(-135f, 100f), new Vector2(480f, 52f));
-            applyHostButton = CreateTextButton(settingsPage, "Apply Host", "应用", new Vector2(205f, 100f), new Vector2(132f, 52f), Accent, AccentInk);
-            defaultHostButton = CreateTextButton(settingsPage, "Default Host", "使用默认", new Vector2(394f, 100f), new Vector2(180f, 52f), Surface, TextPrimary);
+            openServiceSettingsButton = CreateSurfaceButton(settingsPage, "Open Service Settings", new Vector2(0f, 132f), new Vector2(ContentWidth, 82f), Surface, Line);
+            CreateText(openServiceSettingsButton.transform, "Title", "点歌服务", 19, FontStyle.Bold, new Vector2(-350f, 13f), new Vector2(260f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            settingsConnectionText = CreateText(openServiceSettingsButton.transform, "Status", "正在连接", 16, FontStyle.Bold, new Vector2(250f, 13f), new Vector2(350f, 30f), TextAnchor.MiddleRight, Accent);
+            CreateText(openServiceSettingsButton.transform, "Hint", "局域网 Companion", 15, FontStyle.Normal, new Vector2(-270f, -18f), new Vector2(420f, 26f), TextAnchor.MiddleLeft, TextSecondary);
+            EnsureIcon(openServiceSettingsButton.transform, "Chevron", QuestUiIconKind.ChevronRight, new Vector2(458f, 0f), new Vector2(24f, 24f), TextSecondary);
 
-            CreateDivider(settingsPage, "Service Divider", new Vector2(0f, 62f), new Vector2(ContentWidth, 1f));
-            CreateText(settingsPage, "Audio Section", "音频高级设置", 16, FontStyle.Bold, new Vector2(-356f, 35f), new Vector2(280f, 30f), TextAnchor.MiddleLeft, TextSecondary);
-            CreateSettingToggle(settingsPage, "Monitor Output", "返听输出", "关闭后仍保留麦克风输入", -8f, out monitorOutputToggle);
-            CreateSettingToggle(settingsPage, "Safety Limiter", "安全保护", "建议始终保持开启", -76f, out safetyToggle);
-            CreateSettingToggle(settingsPage, "Native Backend", "Native 低延迟", "原声路径，不包含 KTV 效果", -144f, out nativeToggle);
+            CreateDivider(settingsPage, "Service Divider", new Vector2(0f, 82f), new Vector2(ContentWidth, 1f));
+            CreateText(settingsPage, "Audio Section", "音频高级设置", 16, FontStyle.Bold, new Vector2(-356f, 55f), new Vector2(280f, 30f), TextAnchor.MiddleLeft, TextSecondary);
+            CreateSettingToggle(settingsPage, "Monitor Output", "返听输出", "关闭后仍保留麦克风输入", 12f, out monitorOutputToggle);
+            CreateSettingToggle(settingsPage, "Safety Limiter", "安全保护", "建议始终保持开启", -56f, out safetyToggle);
+            CreateSettingToggle(settingsPage, "Native Backend", "Native 低延迟", "原声路径，不包含 KTV 效果", -124f, out nativeToggle);
 
             CreateDivider(settingsPage, "Audio Divider", new Vector2(0f, -184f), new Vector2(ContentWidth, 1f));
             openDiagnosticsButton = CreateSurfaceButton(settingsPage, "Open Diagnostics", new Vector2(0f, -228f), new Vector2(ContentWidth, 72f), Surface, Line);
             CreateText(openDiagnosticsButton.transform, "Title", "诊断与支持", 19, FontStyle.Bold, new Vector2(-340f, 11f), new Vector2(300f, 32f), TextAnchor.MiddleLeft, TextPrimary);
             settingsBuildText = CreateText(openDiagnosticsButton.transform, "Hint", QuestBuildInfo.SettingsSummary, 15, FontStyle.Normal, new Vector2(-20f, -17f), new Vector2(840f, 26f), TextAnchor.MiddleLeft, TextSecondary);
             EnsureIcon(openDiagnosticsButton.transform, "Chevron", QuestUiIconKind.ChevronRight, new Vector2(458f, 0f), new Vector2(24f, 24f), TextSecondary);
+        }
+
+        private void BuildServicePage()
+        {
+            BuildSubpageHeader(servicePage, "点歌服务", out serviceBackButton);
+            companionModeButton = CreateTextButton(servicePage, "Companion Mode", "局域网 Companion", new Vector2(-250f, 130f), new Vector2(480f, 64f), Surface, TextPrimary);
+            onlineModeButton = CreateTextButton(servicePage, "Online Mode", "在线服务", new Vector2(250f, 130f), new Vector2(480f, 64f), Surface, TextPrimary);
+
+            CreateText(servicePage, "Address Label", "服务地址", 17, FontStyle.Bold, new Vector2(-402f, 62f), new Vector2(180f, 32f), TextAnchor.MiddleLeft, TextSecondary);
+            serviceConnectionText = CreateText(servicePage, "Connection Status", "正在连接", 17, FontStyle.Bold, new Vector2(330f, 62f), new Vector2(320f, 32f), TextAnchor.MiddleRight, Accent);
+            helperHostInput = CreateInputField(servicePage, "Service Address", QuestPlaylistPrototype.DefaultHelperHostAddress, new Vector2(-90f, 12f), new Vector2(780f, 58f));
+            applyHostButton = CreateTextButton(servicePage, "Apply Service Address", "应用", new Vector2(414f, 12f), new Vector2(168f, 58f), Accent, AccentInk);
+            serviceModeHintText = CreateText(servicePage, "Mode Hint", string.Empty, 16, FontStyle.Normal, new Vector2(0f, -42f), new Vector2(ContentWidth, 34f), TextAnchor.MiddleLeft, TextSecondary);
+
+            CreateDivider(servicePage, "Address Divider", new Vector2(0f, -76f), new Vector2(ContentWidth, 1f));
+            defaultHostButton = CreateTextButton(servicePage, "Default Service Address", "恢复默认地址", new Vector2(-390f, -126f), new Vector2(220f, 52f), Surface, TextPrimary);
+            CreateText(servicePage, "Privacy Note", "局域网模式只连接你的电脑；在线模式会把搜索与媒体请求发送到所填服务。", 15, FontStyle.Normal, new Vector2(115f, -126f), new Vector2(760f, 52f), TextAnchor.MiddleLeft, TextSecondary);
         }
 
         private void BuildMicProtectionPage()
@@ -575,6 +608,8 @@ namespace TsukiVox.AudioPrototype
             WireButton(songSearchBackButton, () => ShowPage(UiPage.Home));
             WireButton(queueBackButton, () => ShowPage(UiPage.Home));
             WireButton(settingsBackButton, () => ShowPage(UiPage.Home));
+            WireButton(openServiceSettingsButton, () => ShowPage(UiPage.Service));
+            WireButton(serviceBackButton, () => ShowPage(UiPage.Settings));
             WireButton(openMicProtectionButton, () => ShowPage(UiPage.MicProtection));
             WireButton(micProtectionBackButton, () => ShowPage(UiPage.Settings));
 
@@ -609,8 +644,10 @@ namespace TsukiVox.AudioPrototype
                 });
             }
 
-            WireButton(applyHostButton, ApplyHelperHost);
-            WireButton(defaultHostButton, ApplyDefaultHelperHost);
+            WireButton(companionModeButton, SelectCompanionService);
+            WireButton(onlineModeButton, SelectOnlineService);
+            WireButton(applyHostButton, ApplyServiceAddress);
+            WireButton(defaultHostButton, ApplyDefaultServiceAddress);
             monitorOutputToggle.onValueChanged.RemoveAllListeners();
             monitorOutputToggle.onValueChanged.AddListener(value => audioPrototype?.SetMonitorOutput(value));
             safetyToggle.onValueChanged.RemoveAllListeners();
@@ -665,7 +702,7 @@ namespace TsukiVox.AudioPrototype
             {
                 songMetaText.text = connected ? "播放队列为空" : "点歌服务未连接";
                 songTitleText.text = "等待点歌";
-                songDetailText.text = connected ? "打开搜索点歌选择视频" : "请在设置中检查 PC IP";
+                songDetailText.text = connected ? "打开搜索点歌选择视频" : "请在设置中检查点歌服务";
             }
             else
             {
@@ -744,7 +781,7 @@ namespace TsukiVox.AudioPrototype
 
             if (!playlistPrototype.IsConnected)
             {
-                songSearchStatusText.text = "Companion 未连接，请检查设置中的 PC IP";
+                songSearchStatusText.text = $"{playlistPrototype.ServiceDisplayName}未连接，请检查服务设置";
                 songSearchStatusText.color = Warm;
             }
             else if (playlistPrototype.IsSearching)
@@ -859,13 +896,43 @@ namespace TsukiVox.AudioPrototype
         private void RefreshSettings()
         {
             var connected = playlistPrototype != null && playlistPrototype.IsConnected;
+            var serviceName = playlistPrototype?.ServiceDisplayName ?? "未配置";
             settingsConnectionText.text = connected ? "已连接" : "未连接";
             settingsConnectionText.color = connected ? Accent : Warm;
+            if (serviceConnectionText != null)
+            {
+                serviceConnectionText.text = connected ? $"已连接 · {serviceName}" : $"未连接 · {serviceName}";
+                serviceConnectionText.color = connected ? Accent : Warm;
+            }
+
+            var settingsHint = openServiceSettingsButton?.transform.Find("Hint")?.GetComponent<TMP_Text>();
+            if (settingsHint != null)
+            {
+                settingsHint.text = SingleLine($"{serviceName} · {playlistPrototype?.ServiceAddress ?? "未配置"}");
+            }
+
             settingsBuildText.text = QuestBuildInfo.SettingsSummary;
             if (helperHostInput != null && !helperHostInput.isFocused && playlistPrototype != null)
             {
-                helperHostInput.SetTextWithoutNotify(playlistPrototype.HelperHost);
+                helperHostInput.SetTextWithoutNotify(playlistPrototype.ServiceAddress);
             }
+
+            if (helperHostInput?.placeholder is TMP_Text placeholder)
+            {
+                placeholder.text = playlistPrototype != null && playlistPrototype.IsOnlineService
+                    ? QuestPlaylistPrototype.DefaultOnlineServiceOrigin
+                    : QuestPlaylistPrototype.DefaultHelperHostAddress;
+            }
+
+            if (serviceModeHintText != null)
+            {
+                serviceModeHintText.text = playlistPrototype != null && playlistPrototype.IsOnlineService
+                    ? "在线服务使用一个完整的 HTTP(S) 地址提供搜索、队列和视频。"
+                    : "Companion 使用同一局域网内 Windows 电脑的 IP 地址。";
+            }
+
+            SetServiceModeButtonVisual(companionModeButton, playlistPrototype == null || !playlistPrototype.IsOnlineService);
+            SetServiceModeButtonVisual(onlineModeButton, playlistPrototype != null && playlistPrototype.IsOnlineService);
 
             if (audioPrototype == null)
             {
@@ -970,8 +1037,8 @@ namespace TsukiVox.AudioPrototype
             diagnosticsHealthText.color = audioPrototype == null || videoScreenPrototype == null ? Warm : TextPrimary;
 
             diagnosticsServiceText.text = playlistPrototype != null && playlistPrototype.IsConnected
-                ? $"点歌服务：已连接 · {playlistPrototype.HelperHost}"
-                : $"点歌服务：未连接 · {playlistPrototype?.HelperHost ?? "未配置"}";
+                ? $"点歌服务：已连接 · {playlistPrototype.ServiceDisplayName}"
+                : $"点歌服务：未连接 · {playlistPrototype?.ServiceDisplayName ?? "未配置"}";
 
             var videoSummary = videoScreenPrototype == null
                 ? "视频组件缺失"
@@ -1007,9 +1074,10 @@ namespace TsukiVox.AudioPrototype
             }
         }
 
-        private void ApplyHelperHost()
+        private void ApplyServiceAddress()
         {
-            playlistPrototype?.ApplyHelperHost(helperHostInput != null ? helperHostInput.text : string.Empty);
+            playlistPrototype?.ApplyServiceAddress(helperHostInput != null ? helperHostInput.text : string.Empty);
+            RefreshSettings();
         }
 
         private void OpenSongSearchPage()
@@ -1053,14 +1121,31 @@ namespace TsukiVox.AudioPrototype
             playlistPrototype.AddItem(items[index], true);
         }
 
-        private void ApplyDefaultHelperHost()
+        private void ApplyDefaultServiceAddress()
         {
             if (helperHostInput != null)
             {
-                helperHostInput.SetTextWithoutNotify(QuestPlaylistPrototype.DefaultHelperHostAddress);
+                helperHostInput.SetTextWithoutNotify(playlistPrototype != null && playlistPrototype.IsOnlineService
+                    ? QuestPlaylistPrototype.DefaultOnlineServiceOrigin
+                    : QuestPlaylistPrototype.DefaultHelperHostAddress);
             }
 
-            playlistPrototype?.ApplyDefaultHelperHost();
+            playlistPrototype?.ApplyDefaultServiceAddress();
+            RefreshSettings();
+        }
+
+        private void SelectCompanionService()
+        {
+            playlistPrototype?.UseCompanionService();
+            helperHostInput?.SetTextWithoutNotify(playlistPrototype?.ServiceAddress ?? QuestPlaylistPrototype.DefaultHelperHostAddress);
+            RefreshSettings();
+        }
+
+        private void SelectOnlineService()
+        {
+            playlistPrototype?.UseOnlineService();
+            helperHostInput?.SetTextWithoutNotify(playlistPrototype?.ServiceAddress ?? QuestPlaylistPrototype.DefaultOnlineServiceOrigin);
+            RefreshSettings();
         }
 
         private void StartMicFaceCalibration(bool captureWarning)
@@ -1276,6 +1361,7 @@ namespace TsukiVox.AudioPrototype
             SetPageGroupImmediate(voiceGroup, page == UiPage.Voice);
             SetPageGroupImmediate(queueGroup, page == UiPage.Queue);
             SetPageGroupImmediate(settingsGroup, page == UiPage.Settings);
+            SetPageGroupImmediate(serviceGroup, page == UiPage.Service);
             SetPageGroupImmediate(micProtectionGroup, page == UiPage.MicProtection);
         }
 
@@ -1343,6 +1429,7 @@ namespace TsukiVox.AudioPrototype
                 UiPage.SongSearch => songSearchGroup,
                 UiPage.Queue => queueGroup,
                 UiPage.Settings => settingsGroup,
+                UiPage.Service => serviceGroup,
                 UiPage.MicProtection => micProtectionGroup,
                 _ => homeGroup,
             };
@@ -1395,6 +1482,33 @@ namespace TsukiVox.AudioPrototype
             CreateText(parent, $"{name} Hint", hint, 16, FontStyle.Normal, new Vector2(-256f, y - 20f), new Vector2(480f, 26f), TextAnchor.MiddleLeft, TextSecondary);
             toggle = CreateSwitch(parent, $"{name} Switch", new Vector2(460f, y - 4f));
             CreateDivider(parent, $"{name} Divider", new Vector2(0f, y - 39f), new Vector2(ContentWidth, 1f));
+        }
+
+        private static void SetServiceModeButtonVisual(Button button, bool selected)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            if (button.targetGraphic is QuestUiSurface surface)
+            {
+                surface.color = selected ? Accent : Surface;
+            }
+            button.colors = CreateButtonColors(selected ? Accent : Surface);
+
+            var outline = button.GetComponent<Outline>();
+            if (outline != null)
+            {
+                outline.effectColor = selected ? AccentStrong : Line;
+                outline.effectDistance = selected ? new Vector2(2f, -2f) : new Vector2(1f, -1f);
+            }
+
+            var label = button.GetComponentInChildren<TMP_Text>(true);
+            if (label != null)
+            {
+                label.color = selected ? AccentInk : TextPrimary;
+            }
         }
 
         private Button CreateIconButton(

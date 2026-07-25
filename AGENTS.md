@@ -13,6 +13,7 @@
 - 如果修改了中文 UI 字符范围、TMP 设置或源字体，运行 `TsukiVox > Generate Consumer UI Font Asset` 重新生成动态多图集 SDF 字体；不要把 V0.65 消费级 UI 改回旧版 `UnityEngine.UI.Text`。
 - 如需把当前默认 PC helper 地址写入场景，可运行 `TsukiVox > Apply Current Helper Host To Scene`。
 - V0.2-V0.65 默认连接局域网 PC：playlist 服务 `http://<PC IP>:5175`，下载文件服务 `http://<PC IP>:5174`。Quest 真机不能用 `127.0.0.1` 或 `localhost` 访问 PC helper，应在头显内设置页的 `PC IP` 输入框中配置局域网地址。
+- 点歌服务支持“局域网 Companion”和“在线服务”两种配置。Companion 继续使用 PC IP 与 `5174/5175`；在线服务使用一个完整的 HTTP(S) origin，并同时承载搜索、队列和媒体下载。当前 Ubuntu 局域网测试地址为 `http://192.168.50.41:8080`，正式公网地址必须使用 HTTPS。
 - Quest 3 日常构建部署使用 `pwsh -NoLogo -NoProfile -File .\Tools\Deploy-Quest.ps1`。脚本会生成 `build/TsukiVox-Quest.apk`，通过 `adb install -r` 保留应用数据地覆盖安装，启动应用，并核对 `logcat` 中的 Build ID。
 - 只构建 APK 使用 `pwsh -NoLogo -NoProfile -File .\Tools\Deploy-Quest.ps1 -BuildOnly`；只安装已有 APK 使用 `pwsh -NoLogo -NoProfile -File .\Tools\Deploy-Quest.ps1 -InstallOnly`。同一项目已在 Unity Editor 中打开时，脚本会向当前编辑器提交一次显式构建请求；编辑器关闭时则自动使用无界面 Unity，不需要手动切换模式。
 - 可用以下命令做无界面启动检查：
@@ -35,7 +36,7 @@
 
 ## 测试指南
 
-当前仓库尚未提交自动化测试。可独立验证的逻辑应使用 Unity Test Runner，并放在 `Assets/Tests/EditMode/` 或 `Assets/Tests/PlayMode/`，测试文件名以 `Tests.cs` 结尾。音频相关改动必须在 Quest 3 真机上验证：麦克风权限、输入/输出电平、返听可听性、预设切换，以及是否存在明显削波、啸叫或反馈。播放队列相关改动需要同时验证 PC helper 可达性、`/api/playlist/state` 轮询、`/api/playlist/control` 控制命令、`playableUrl`/`/downloads/...` 解析，以及断网或 helper 关闭后的 UI 恢复提示。视频相关改动需要验证 ready 条目的 MP4/WebM 加载、远端缓存、首帧显示、宽高比适配、播放/暂停/重播/切歌同步、视频结束后 `next`，以及视频音频与麦克风返听/混响共存；排查时优先使用 `设置 > 诊断与支持 > 复制完整诊断信息`。
+当前仓库尚未提交自动化测试。可独立验证的逻辑应使用 Unity Test Runner，并放在 `Assets/Tests/EditMode/` 或 `Assets/Tests/PlayMode/`，测试文件名以 `Tests.cs` 结尾。音频相关改动必须在 Quest 3 真机上验证：麦克风权限、输入/输出电平、返听可听性、预设切换，以及是否存在明显削波、啸叫或反馈。播放队列相关改动需要同时验证当前所选服务可达性、`/api/playlist/state` 轮询、`/api/playlist/control` 控制命令、稳定的 `X-TsukiVox-Device-Id`、`playableUrl`/`/downloads/...` 解析，以及断网或服务关闭后的 UI 恢复提示。服务配置改动还需回归 Companion/在线服务切换、各自地址持久化和不同设备队列隔离。视频相关改动需要验证 ready 条目的 MP4/WebM 加载、远端缓存、首帧显示、宽高比适配、播放/暂停/重播/切歌同步、视频结束后 `next`，以及视频音频与麦克风返听/混响共存；排查时优先使用 `设置 > 诊断与支持 > 复制完整诊断信息`。
 
 V0.65 控制面板改动必须在 Quest 3 中额外回归：初次启动默认 30 度；0/30/60/90 度下底板与 Canvas 共面；角度开关文字始终可见；主页、播放队列、人声、设置和诊断抽屉无文字重叠；预设和档位选中态足够醒目；右上角图标 hover 不出现多余文字；返回/关闭按钮与分隔线有间距；扳机可操作按钮、输入框、滑杆和开关；原始诊断不会漂到茶几或大屏其他位置。重新构建/安装后还需确认 OpenXR、GameActivity、麦克风权限、helper 地址和 `复制完整诊断信息` 稳定。
 

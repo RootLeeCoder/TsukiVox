@@ -6,18 +6,30 @@ using UnityEngine.UI;
 
 namespace TsukiVox.AudioPrototype
 {
+    public enum TsukiVoxServiceMode
+    {
+        Companion,
+        Online,
+    }
+
     public sealed class QuestPlaylistPrototype : MonoBehaviour
     {
         public const string DefaultHelperHostAddress = "192.168.50.191";
+        public const string DefaultOnlineServiceOrigin = "http://192.168.50.41:8080";
 
         private const float MinimumPollIntervalSeconds = 0.25f;
         private const float MinimumRetryIntervalSeconds = 0.5f;
         private const int PlaylistPort = 5175;
         private const int DownloadPort = 5174;
         private const string HelperHostPrefsKey = "TsukiVox.HelperHost";
+        private const string ServiceModePrefsKey = "TsukiVox.ServiceMode";
+        private const string OnlineServiceOriginPrefsKey = "TsukiVox.OnlineServiceOrigin";
+        private const string DeviceIdPrefsKey = "TsukiVox.DeviceId";
 
-        [Header("Helper Origins")]
+        [Header("Service Origins")]
+        [SerializeField] private TsukiVoxServiceMode serviceMode = TsukiVoxServiceMode.Companion;
         [SerializeField] private string helperHost = DefaultHelperHostAddress;
+        [SerializeField] private string onlineServiceOrigin = DefaultOnlineServiceOrigin;
         [SerializeField] private string playlistOrigin = "http://192.168.50.191:5175";
         [SerializeField] private string downloadOrigin = "http://192.168.50.191:5174";
 
@@ -60,6 +72,7 @@ namespace TsukiVox.AudioPrototype
         private int searchSequence;
         private string lastSearchError = string.Empty;
         private string lastAddItemError = string.Empty;
+        private string deviceId = string.Empty;
 
         public event Action<QuestPlaylistPrototype, PlaylistState> StateChanged;
 
@@ -93,6 +106,14 @@ namespace TsukiVox.AudioPrototype
 
         public string HelperHost => helperHost;
 
+        public TsukiVoxServiceMode ServiceMode => serviceMode;
+
+        public bool IsOnlineService => serviceMode == TsukiVoxServiceMode.Online;
+
+        public string ServiceAddress => IsOnlineService ? onlineServiceOrigin : helperHost;
+
+        public string ServiceDisplayName => IsOnlineService ? "在线服务" : "局域网 Companion";
+
         public string LastConnectionError => lastError;
 
         public string ConnectionStatusMessage => pendingStatus;
@@ -118,10 +139,10 @@ namespace TsukiVox.AudioPrototype
 
         private void Awake()
         {
-            LoadHelperHost();
-            ApplyOriginsFromHelperHost();
+            LoadServiceSettings();
+            ApplyOriginsFromService();
             EnsureUiReferences();
-            client = new PlaylistClient(playlistOrigin, downloadOrigin);
+            client = new PlaylistClient(playlistOrigin, downloadOrigin, deviceId);
             WireUi();
             SyncHostInput();
             RefreshUi();
@@ -154,6 +175,7 @@ namespace TsukiVox.AudioPrototype
             }
 
             client.SetOrigins(playlistOrigin, downloadOrigin);
+            client.SetDeviceId(deviceId);
             pollRoutine = StartCoroutine(PollLoop());
         }
 
@@ -182,6 +204,35 @@ namespace TsukiVox.AudioPrototype
         public void ApplyHelperHost(string nextHelperHost)
         {
             ApplyHelperHost(nextHelperHost, true);
+        }
+
+        public void UseCompanionService()
+        {
+            ApplyServiceMode(TsukiVoxServiceMode.Companion, true);
+        }
+
+        public void UseOnlineService()
+        {
+            ApplyServiceMode(TsukiVoxServiceMode.Online, true);
+        }
+
+        public void ApplyServiceAddress(string nextAddress)
+        {
+            if (IsOnlineService)
+            {
+                onlineServiceOrigin = NormalizeOnlineOrigin(nextAddress, DefaultOnlineServiceOrigin);
+                PlayerPrefs.SetString(OnlineServiceOriginPrefsKey, onlineServiceOrigin);
+                PlayerPrefs.Save();
+                ApplyServiceConfiguration(true);
+                return;
+            }
+
+            ApplyHelperHost(nextAddress, true);
+        }
+
+        public void ApplyDefaultServiceAddress()
+        {
+            ApplyServiceAddress(IsOnlineService ? DefaultOnlineServiceOrigin : DefaultHelperHostAddress);
         }
 
         public void SendPlayPause()
@@ -491,8 +542,8 @@ namespace TsukiVox.AudioPrototype
             }
 
             connectionText.text = isConnected
-                ? $"Helper: Connected  PC {helperHost}\nPlaylist {client?.PlaylistOrigin}  Downloads {client?.DownloadOrigin}"
-                : $"Helper: Disconnected  PC {helperHost}  {pendingStatus}\n{lastError}";
+                ? $"Service: Connected  {ServiceDisplayName}\nPlaylist {client?.PlaylistOrigin}  Downloads {client?.DownloadOrigin}"
+                : $"Service: Disconnected  {ServiceDisplayName}  {pendingStatus}\n{lastError}";
         }
 
         private void RefreshCurrentSongText()
@@ -627,7 +678,7 @@ namespace TsukiVox.AudioPrototype
         {
             if (client == null)
             {
-                client = new PlaylistClient(playlistOrigin, downloadOrigin);
+                client = new PlaylistClient(playlistOrigin, downloadOrigin, deviceId);
             }
 
             return client.ResolvePlayableUrl(playableUrl);
@@ -637,7 +688,7 @@ namespace TsukiVox.AudioPrototype
         {
             if (client == null)
             {
-                client = new PlaylistClient(playlistOrigin, downloadOrigin);
+                client = new PlaylistClient(playlistOrigin, downloadOrigin, deviceId);
             }
         }
 
@@ -666,7 +717,7 @@ namespace TsukiVox.AudioPrototype
             isSearching = false;
         }
 
-        private void LoadHelperHost()
+        private void LoadServiceSettings()
         {
             helperHost = NormalizeHelperHost(PlayerPrefs.GetString(HelperHostPrefsKey, helperHost), DefaultHelperHostAddress);
             if (IsLoopbackHost(helperHost))
@@ -675,24 +726,63 @@ namespace TsukiVox.AudioPrototype
                 PlayerPrefs.SetString(HelperHostPrefsKey, helperHost);
                 PlayerPrefs.Save();
             }
+
+            onlineServiceOrigin = NormalizeOnlineOrigin(
+                PlayerPrefs.GetString(OnlineServiceOriginPrefsKey, onlineServiceOrigin),
+                DefaultOnlineServiceOrigin);
+            var storedMode = PlayerPrefs.GetInt(ServiceModePrefsKey, (int)serviceMode);
+            serviceMode = Enum.IsDefined(typeof(TsukiVoxServiceMode), storedMode)
+                ? (TsukiVoxServiceMode)storedMode
+                : TsukiVoxServiceMode.Companion;
+            deviceId = PlayerPrefs.GetString(DeviceIdPrefsKey, string.Empty).Trim();
+            if (string.IsNullOrEmpty(deviceId))
+            {
+                deviceId = Guid.NewGuid().ToString("N");
+                PlayerPrefs.SetString(DeviceIdPrefsKey, deviceId);
+            }
+
+            PlayerPrefs.SetString(OnlineServiceOriginPrefsKey, onlineServiceOrigin);
+            PlayerPrefs.SetInt(ServiceModePrefsKey, (int)serviceMode);
+            PlayerPrefs.Save();
         }
 
         private void ApplyHelperHost(string nextHelperHost, bool restartPolling)
         {
-            CancelCatalogRequests();
             helperHost = NormalizeHelperHost(nextHelperHost, DefaultHelperHostAddress);
             PlayerPrefs.SetString(HelperHostPrefsKey, helperHost);
+            serviceMode = TsukiVoxServiceMode.Companion;
+            PlayerPrefs.SetInt(ServiceModePrefsKey, (int)serviceMode);
             PlayerPrefs.Save();
-            ApplyOriginsFromHelperHost();
+            ApplyServiceConfiguration(restartPolling);
+        }
+
+        private void ApplyServiceMode(TsukiVoxServiceMode nextMode, bool restartPolling)
+        {
+            if (serviceMode == nextMode)
+            {
+                return;
+            }
+
+            serviceMode = nextMode;
+            PlayerPrefs.SetInt(ServiceModePrefsKey, (int)serviceMode);
+            PlayerPrefs.Save();
+            ApplyServiceConfiguration(restartPolling);
+        }
+
+        private void ApplyServiceConfiguration(bool restartPolling)
+        {
+            CancelCatalogRequests();
+            ApplyOriginsFromService();
             SyncHostInput();
 
             if (client == null)
             {
-                client = new PlaylistClient(playlistOrigin, downloadOrigin);
+                client = new PlaylistClient(playlistOrigin, downloadOrigin, deviceId);
             }
             else
             {
                 client.SetOrigins(playlistOrigin, downloadOrigin);
+                client.SetDeviceId(deviceId);
             }
 
             state = null;
@@ -716,15 +806,22 @@ namespace TsukiVox.AudioPrototype
             AddItemStateChanged?.Invoke(this);
         }
 
-        private void ApplyOriginsFromHelperHost()
+        private void ApplyOriginsFromService()
         {
+            if (IsOnlineService)
+            {
+                playlistOrigin = onlineServiceOrigin;
+                downloadOrigin = onlineServiceOrigin;
+                return;
+            }
+
             playlistOrigin = $"http://{helperHost}:{PlaylistPort}";
             downloadOrigin = $"http://{helperHost}:{DownloadPort}";
         }
 
         private void SyncHostInput()
         {
-            helperHostInput?.SetTextWithoutNotify(helperHost);
+            helperHostInput?.SetTextWithoutNotify(ServiceAddress);
         }
 
         private static void SetButtonLabel(Button button, string label)
@@ -747,6 +844,31 @@ namespace TsukiVox.AudioPrototype
             if (Uri.TryCreate($"http://{trimmed}", UriKind.Absolute, out var hostUri) && !string.IsNullOrWhiteSpace(hostUri.Host))
             {
                 return hostUri.Host;
+            }
+
+            return fallback;
+        }
+
+        private static string NormalizeOnlineOrigin(string input, string fallback)
+        {
+            var trimmed = string.IsNullOrWhiteSpace(input) ? fallback : input.Trim();
+            if (!trimmed.Contains("://", StringComparison.Ordinal))
+            {
+                var firstSegment = trimmed.Split(':')[0];
+                var looksLikeLanAddress = string.Equals(firstSegment, "localhost", StringComparison.OrdinalIgnoreCase) ||
+                                          firstSegment.StartsWith("127.", StringComparison.Ordinal) ||
+                                          firstSegment.StartsWith("10.", StringComparison.Ordinal) ||
+                                          firstSegment.StartsWith("192.168.", StringComparison.Ordinal) ||
+                                          firstSegment.StartsWith("172.", StringComparison.Ordinal);
+                trimmed = $"{(looksLikeLanAddress ? "http" : "https")}://{trimmed}";
+            }
+
+            if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) &&
+                (string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) &&
+                !string.IsNullOrWhiteSpace(uri.Host))
+            {
+                return uri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
             }
 
             return fallback;
