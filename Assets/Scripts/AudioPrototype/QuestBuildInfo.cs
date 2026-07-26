@@ -40,7 +40,9 @@ namespace TsukiVox.AudioPrototype
         {
             get
             {
-                var shortId = BuildId.Length > 6 ? BuildId.Substring(BuildId.Length - 6) : BuildId;
+                var shortId = DateTimeOffset.TryParse(BuildTimeUtc, out var timestamp)
+                    ? timestamp.ToLocalTime().ToString("HHmmss")
+                    : (BuildId.Length > 6 ? BuildId.Substring(BuildId.Length - 6) : BuildId);
                 return $"V{Version} · 构建于 {BuildTimeDisplay} · #{shortId}";
             }
         }
