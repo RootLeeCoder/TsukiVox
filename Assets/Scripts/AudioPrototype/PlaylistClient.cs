@@ -18,6 +18,14 @@ namespace TsukiVox.AudioPrototype
         public const string ControlNext = "next";
         public const string ControlReplay = "replay";
 
+        /// <summary>Clears the queue but keeps the current song playing.</summary>
+        public const string ControlClear = "clear";
+
+        /// <summary>Clears everything including the current song. Used at startup.</summary>
+        public const string ControlClearAll = "clearAll";
+
+        public const string ControlRemove = "remove";
+
         private const string DefaultPlaylistOrigin = "http://127.0.0.1:5175";
         private const string DefaultDownloadOrigin = "http://127.0.0.1:5174";
         private const string StatePath = "/api/playlist/state";
@@ -25,6 +33,7 @@ namespace TsukiVox.AudioPrototype
         private const string ItemsPath = "/api/playlist/items";
         private const string BilibiliSearchPath = "/api/bilibili/search";
         private const string VoiceSearchPath = "/api/voice-search";
+        private const string VoiceProviderPath = "/api/voice/provider";
         private const string DeviceIdHeader = "X-TsukiVox-Device-Id";
         private const string AudioDurationHeader = "X-TsukiVox-Audio-Ms";
         private const int RequestTimeoutSeconds = 6;
@@ -81,12 +90,16 @@ namespace TsukiVox.AudioPrototype
             }
         }
 
-        public IEnumerator SendControl(string action, Action<PlaylistState> onSuccess, Action<string> onFailure)
+        public IEnumerator SendControl(
+            string action,
+            Action<PlaylistState> onSuccess,
+            Action<string> onFailure,
+            string itemId = null)
         {
             var requestBody = JsonUtility.ToJson(new PlaylistControlRequest
             {
                 action = action,
-                id = string.Empty,
+                id = string.IsNullOrWhiteSpace(itemId) ? string.Empty : itemId.Trim(),
             });
 
             using (var request = new UnityWebRequest(CombineUrl(playlistOrigin, ControlPath), UnityWebRequest.kHttpVerbPOST))
@@ -197,6 +210,64 @@ namespace TsukiVox.AudioPrototype
                 }
 
                 if (TryParseVoiceSearchResponse(request.downloadHandler.text, out var response, out var error))
+                {
+                    onSuccess?.Invoke(response);
+                    yield break;
+                }
+
+                onFailure?.Invoke(PlaylistRequestError.Local("INVALID_RESPONSE", error, false));
+            }
+        }
+
+        /// <summary>Reads which speech provider the service is currently using.</summary>
+        public IEnumerator FetchVoiceProvider(
+            Action<VoiceProviderResponse> onSuccess,
+            Action<PlaylistRequestError> onFailure)
+        {
+            using (var request = UnityWebRequest.Get(CombineUrl(downloadOrigin, VoiceProviderPath)))
+            {
+                ConfigureRequest(request);
+                yield return request.SendWebRequest();
+
+                if (!IsRequestSuccessful(request))
+                {
+                    onFailure?.Invoke(CreateRequestFailure(request, "读取语音供应商"));
+                    yield break;
+                }
+
+                if (TryParseVoiceProvider(request.downloadHandler.text, out var response, out var error))
+                {
+                    onSuccess?.Invoke(response);
+                    yield break;
+                }
+
+                onFailure?.Invoke(PlaylistRequestError.Local("INVALID_RESPONSE", error, false));
+            }
+        }
+
+        /// <summary>
+        /// Switches the service's speech provider. The server refuses providers
+        /// without credentials, so a failure here means that channel cannot work.
+        /// </summary>
+        public IEnumerator SetVoiceProvider(
+            string provider,
+            Action<VoiceProviderResponse> onSuccess,
+            Action<PlaylistRequestError> onFailure)
+        {
+            var requestBody = JsonUtility.ToJson(new VoiceProviderRequest { provider = provider });
+
+            using (var request = CreateJsonPostRequest(CombineUrl(downloadOrigin, VoiceProviderPath), requestBody))
+            {
+                ConfigureRequest(request);
+                yield return request.SendWebRequest();
+
+                if (!IsRequestSuccessful(request))
+                {
+                    onFailure?.Invoke(CreateRequestFailure(request, "切换语音供应商"));
+                    yield break;
+                }
+
+                if (TryParseVoiceProvider(request.downloadHandler.text, out var response, out var error))
                 {
                     onSuccess?.Invoke(response);
                     yield break;
@@ -468,6 +539,32 @@ namespace TsukiVox.AudioPrototype
             }
         }
 
+        private static bool TryParseVoiceProvider(
+            string json,
+            out VoiceProviderResponse response,
+            out string error)
+        {
+            try
+            {
+                response = JsonUtility.FromJson<VoiceProviderResponse>(json);
+                if (response == null)
+                {
+                    error = "语音供应商接口返回了空响应。";
+                    return false;
+                }
+
+                response.Normalize();
+                error = string.Empty;
+                return true;
+            }
+            catch (Exception exception)
+            {
+                response = null;
+                error = $"语音供应商接口返回了无效 JSON：{exception.Message}";
+                return false;
+            }
+        }
+
         private static string NormalizeOrigin(string origin, string fallback)
         {
             var normalized = string.IsNullOrWhiteSpace(origin) ? fallback : origin.Trim();
@@ -526,11 +623,48 @@ namespace TsukiVox.AudioPrototype
         }
 
         [Serializable]
+        private sealed class VoiceProviderRequest
+        {
+            public string provider;
+        }
+
+        [Serializable]
         private sealed class PlaylistErrorResponse
         {
             public string error;
             public string code;
             public bool retryable;
+        }
+    }
+
+    /// <summary>Which speech provider the service uses, and which ones it could use.</summary>
+    [Serializable]
+    public sealed class VoiceProviderResponse
+    {
+        public string provider;
+        public bool available;
+        public string[] configuredProviders = Array.Empty<string>();
+
+        public void Normalize()
+        {
+            provider ??= string.Empty;
+            configuredProviders ??= Array.Empty<string>();
+        }
+
+        public bool Supports(string candidate)
+        {
+            if (configuredProviders == null)
+            {
+                return false;
+            }
+            for (var index = 0; index < configuredProviders.Length; index += 1)
+            {
+                if (string.Equals(configuredProviders[index], candidate, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 

@@ -57,6 +57,9 @@ namespace TsukiVox.AudioPrototype
         [SerializeField, Min(MinimumRetryIntervalSeconds)] private float retryIntervalSeconds = 2f;
         [SerializeField] private bool startPollingOnAwake = true;
 
+        [Tooltip("Clear this device's queue once the service is reached after launch.")]
+        [SerializeField] private bool clearQueueOnStartup = true;
+
         [Header("UI")]
         [SerializeField] private Text connectionText;
         [SerializeField] private Text currentSongText;
@@ -103,6 +106,11 @@ namespace TsukiVox.AudioPrototype
         private bool voiceSearchEnabled = true;
         private int voiceSequence;
         private float duckedVideoVolume = -1f;
+        private bool hasClearedQueueOnStartup;
+        private string voiceProviderSelection = string.Empty;
+        private string[] voiceProviderOptions = Array.Empty<string>();
+        private bool isSwitchingVoiceProvider;
+        private Coroutine voiceProviderRoutine;
 
         public event Action<QuestPlaylistPrototype, PlaylistState> StateChanged;
 
@@ -338,6 +346,64 @@ namespace TsukiVox.AudioPrototype
             SendControl(PlaylistClient.ControlReplay);
         }
 
+        /// <summary>
+        /// Empties the queue but keeps the current song, so clearing never
+        /// interrupts what is playing.
+        /// </summary>
+        public void ClearQueue()
+        {
+            SendControl(PlaylistClient.ControlClear);
+        }
+
+        /// <summary>Removes one queue entry by id.</summary>
+        public void RemoveQueueItem(string itemId)
+        {
+            if (string.IsNullOrWhiteSpace(itemId))
+            {
+                return;
+            }
+            SendControl(PlaylistClient.ControlRemove, itemId);
+        }
+
+        /// <summary>
+        /// Drops locally held search results. This is client-only state, so it needs
+        /// no request; the search field keeps its text so the query can be re-run.
+        /// </summary>
+        public void ClearSearchResults()
+        {
+            CancelSearch();
+            searchResults = null;
+            lastSearchError = string.Empty;
+            lastAddedItem = null;
+            lastAddItemError = string.Empty;
+            pendingAddItem = null;
+            ResetVoiceSearchState();
+            SearchStateChanged?.Invoke(this);
+            AddItemStateChanged?.Invoke(this);
+            VoiceSearchStateChanged?.Invoke(this);
+        }
+
+        /// <summary>True when there is anything to clear from the search page.</summary>
+        public bool HasSearchResults =>
+            (searchResults != null && searchResults.ItemCount > 0) ||
+            !string.IsNullOrEmpty(lastSearchError) ||
+            !string.IsNullOrEmpty(voiceTranscript);
+
+        /// <summary>True when the queue holds at least one item.</summary>
+        public bool HasQueueItems => state != null && state.queue != null && state.queue.Length > 0;
+
+        private void ResetVoiceSearchState()
+        {
+            voiceTranscript = string.Empty;
+            voiceErrorMessage = string.Empty;
+            voiceErrorCode = string.Empty;
+            voiceProvider = string.Empty;
+            if (!IsVoiceBusy)
+            {
+                voiceState = VoiceSearchUiState.Idle;
+            }
+        }
+
         public void SearchBilibili(string query, int page = 1, int pageSize = 4)
         {
             EnsureClient();
@@ -419,6 +485,97 @@ namespace TsukiVox.AudioPrototype
             voiceRecorder?.ClearCapturedAudio();
             DuckVideoForRecording(false);
             voiceState = VoiceSearchUiState.Idle;
+            VoiceSearchStateChanged?.Invoke(this);
+        }
+
+        /// <summary>Speech provider the service is currently using.</summary>
+        public string VoiceProviderSelection => voiceProviderSelection;
+
+        /// <summary>Providers the service has credentials for; only these can be selected.</summary>
+        public string[] VoiceProviderOptions => voiceProviderOptions;
+
+        public bool IsSwitchingVoiceProvider => isSwitchingVoiceProvider;
+
+        /// <summary>Human readable provider name for the settings UI.</summary>
+        public static string DescribeVoiceProvider(string provider)
+        {
+            return provider switch
+            {
+                "tencent" => "腾讯云",
+                "mimo" => "小米 MiMo",
+                _ => string.IsNullOrEmpty(provider) ? "未知" : provider,
+            };
+        }
+
+        /// <summary>
+        /// Reads the current provider from the service. The client does not assume a
+        /// default: which providers exist depends entirely on server credentials.
+        /// </summary>
+        public void RefreshVoiceProvider()
+        {
+            if (voiceProviderRoutine != null)
+            {
+                return;
+            }
+            EnsureClient();
+            voiceProviderRoutine = StartCoroutine(RefreshVoiceProviderRoutine());
+        }
+
+        /// <summary>Switches the service to another speech provider.</summary>
+        public void SelectVoiceProvider(string provider)
+        {
+            if (isSwitchingVoiceProvider ||
+                string.IsNullOrWhiteSpace(provider) ||
+                string.Equals(provider, voiceProviderSelection, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            EnsureClient();
+            if (voiceProviderRoutine != null)
+            {
+                StopCoroutine(voiceProviderRoutine);
+            }
+            voiceProviderRoutine = StartCoroutine(SelectVoiceProviderRoutine(provider));
+        }
+
+        private IEnumerator RefreshVoiceProviderRoutine()
+        {
+            yield return client.FetchVoiceProvider(ApplyVoiceProviderResponse, _ => { });
+            voiceProviderRoutine = null;
+        }
+
+        private IEnumerator SelectVoiceProviderRoutine(string provider)
+        {
+            isSwitchingVoiceProvider = true;
+            VoiceSearchStateChanged?.Invoke(this);
+
+            yield return client.SetVoiceProvider(
+                provider,
+                ApplyVoiceProviderResponse,
+                failure =>
+                {
+                    // 服务端拒绝切换通常意味着那个通道没有配置密钥，明确告知而不是静默失败。
+                    voiceErrorCode = failure?.code ?? "SERVER_ERROR";
+                    voiceErrorMessage = failure != null && failure.Is("SPEECH_PROVIDER_UNCONFIGURED")
+                        ? $"服务端未配置{DescribeVoiceProvider(provider)}的密钥。"
+                        : DescribeVoiceFailure(failure?.code, failure?.message);
+                });
+
+            isSwitchingVoiceProvider = false;
+            voiceProviderRoutine = null;
+            VoiceSearchStateChanged?.Invoke(this);
+        }
+
+        private void ApplyVoiceProviderResponse(VoiceProviderResponse response)
+        {
+            if (response == null)
+            {
+                return;
+            }
+
+            voiceProviderSelection = response.provider ?? string.Empty;
+            voiceProviderOptions = response.configuredProviders ?? Array.Empty<string>();
             VoiceSearchStateChanged?.Invoke(this);
         }
 
@@ -773,6 +930,11 @@ namespace TsukiVox.AudioPrototype
 
         private void SendControl(string action)
         {
+            SendControl(action, null);
+        }
+
+        private void SendControl(string action, string itemId)
+        {
             if (IsRequestInFlight)
             {
                 pendingStatus = "Playlist request already in progress.";
@@ -780,16 +942,16 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
-            StartCoroutine(SendControlRoutine(action));
+            StartCoroutine(SendControlRoutine(action, itemId));
         }
 
-        private IEnumerator SendControlRoutine(string action)
+        private IEnumerator SendControlRoutine(string action, string itemId)
         {
             isRequestInFlight = true;
             pendingStatus = $"Sending {FormatAction(action)}...";
             RefreshUi();
 
-            yield return client.SendControl(action, OnStateReceived, OnRequestFailed);
+            yield return client.SendControl(action, OnStateReceived, OnRequestFailed, itemId);
 
             isRequestInFlight = false;
             RefreshUi();
@@ -816,6 +978,39 @@ namespace TsukiVox.AudioPrototype
             lastError = string.Empty;
             pendingStatus = "Playlist sync connected.";
             StateChanged?.Invoke(this, state);
+
+            // 应用启动后首次连上服务时清空队列，让每次启动都是干净状态。
+            // 必须等连上之后才能发：断线时发送只会失败。
+            if (!hasClearedQueueOnStartup)
+            {
+                hasClearedQueueOnStartup = true;
+                // 连上后读一次服务端的语音供应商，设置页才能显示可选项。
+                RefreshVoiceProvider();
+                if (clearQueueOnStartup)
+                {
+                    // 搜索结果是本地状态，直接清掉；预设 BV 号仍留在输入框里。
+                    ClearSearchResults();
+                    if (state.queue != null && state.queue.Length > 0)
+                    {
+                        // 启动时用 clearAll：连当前歌曲一起清掉，让每次启动都是干净状态。
+                        // 这与「清空队列」按钮不同，后者刻意保留正在播放的那首。
+                        //
+                        // 本方法是在轮询请求内部被回调的，此刻 isRequestInFlight 仍为 true，
+                        // 直接调用会被 SendControl 挡掉，所以延后一帧再发。
+                        StartCoroutine(ClearQueueNextFrame());
+                    }
+                }
+            }
+        }
+
+        private IEnumerator ClearQueueNextFrame()
+        {
+            yield return null;
+            while (IsRequestInFlight)
+            {
+                yield return null;
+            }
+            SendControl(PlaylistClient.ControlClearAll);
         }
 
         private void OnRequestFailed(string error)
@@ -1174,6 +1369,10 @@ namespace TsukiVox.AudioPrototype
             lastSearchError = string.Empty;
             lastAddItemError = string.Empty;
             lastAddedItem = null;
+            // 换了服务就要重新读它自己的供应商配置，并允许再执行一次启动清空。
+            voiceProviderSelection = string.Empty;
+            voiceProviderOptions = Array.Empty<string>();
+            hasClearedQueueOnStartup = false;
 
             if (restartPolling)
             {

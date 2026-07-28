@@ -27,6 +27,7 @@ namespace TsukiVox.AudioPrototype
         private static readonly Color Line = new Color(0.14f, 0.2f, 0.19f, 1f);
         private static readonly Color TextPrimary = new Color(0.94f, 0.97f, 0.96f, 1f);
         private static readonly Color TextSecondary = new Color(0.57f, 0.65f, 0.63f, 1f);
+        private static readonly Color TextFaint = new Color(0.37f, 0.42f, 0.41f, 1f);
         private static readonly Color Accent = new Color(0.24f, 0.9f, 0.74f, 1f);
         private static readonly Color AccentStrong = new Color(0.56f, 1f, 0.89f, 1f);
         private static readonly Color AccentInk = new Color(0.012f, 0.075f, 0.059f, 1f);
@@ -119,7 +120,11 @@ namespace TsukiVox.AudioPrototype
         private readonly QuestUiSurface[] queueIndicators = new QuestUiSurface[QueueRowCount];
         private readonly TMP_Text[] queueTitleTexts = new TMP_Text[QueueRowCount];
         private readonly TMP_Text[] queueMetaTexts = new TMP_Text[QueueRowCount];
+        private readonly Button[] queueRemoveButtons = new Button[QueueRowCount];
+        private readonly QuestUiIcon[] queueRemoveIcons = new QuestUiIcon[QueueRowCount];
         private TMP_Text queueFooterText;
+        private Button clearQueueButton;
+        private readonly string[] queueRowItemIds = new string[QueueRowCount];
 
         private Button songSearchBackButton;
         private TMP_InputField songSearchInput;
@@ -137,6 +142,7 @@ namespace TsukiVox.AudioPrototype
         private readonly Button[] searchResultAddButtons = new Button[SearchResultRowCount];
         private Button searchPreviousPageButton;
         private Button searchNextPageButton;
+        private Button clearSearchButton;
         private TMP_Text songSearchStatusText;
         private int songSearchPageNumber = 1;
 
@@ -156,6 +162,8 @@ namespace TsukiVox.AudioPrototype
         private TMP_Text serviceModeHintText;
         private Toggle voiceSearchEnabledToggle;
         private TMP_Text voiceSearchHintText;
+        private Button tencentProviderButton;
+        private Button mimoProviderButton;
         private Toggle monitorOutputToggle;
         private Toggle safetyToggle;
         private Toggle nativeToggle;
@@ -468,8 +476,9 @@ namespace TsukiVox.AudioPrototype
             }
 
             searchPreviousPageButton = CreateTextButton(songSearchPage, "Previous Search Page", "上一页", new Vector2(-424f, -226f), new Vector2(128f, 46f), Surface, TextPrimary);
-            songSearchStatusText = CreateText(songSearchPage, "Search Status", "连接点歌服务后即可搜索", 16, FontStyle.Normal, Vector2.zero + new Vector2(0f, -226f), new Vector2(650f, 34f), TextAnchor.MiddleCenter, TextSecondary);
+            songSearchStatusText = CreateText(songSearchPage, "Search Status", "输入关键词或按麦克风说出歌名", 16, FontStyle.Normal, new Vector2(0f, -226f), new Vector2(520f, 34f), TextAnchor.MiddleCenter, TextSecondary);
             searchNextPageButton = CreateTextButton(songSearchPage, "Next Search Page", "下一页", new Vector2(424f, -226f), new Vector2(128f, 46f), Surface, TextPrimary);
+            clearSearchButton = CreateTextButton(songSearchPage, "Clear Search", "清空", new Vector2(-286f, -226f), new Vector2(104f, 46f), Surface, TextSecondary);
         }
 
         private void BuildVoicePage()
@@ -514,12 +523,25 @@ namespace TsukiVox.AudioPrototype
                 queueRows[index] = row;
                 queueRowSurfaces[index] = EnsureSurface(row, Surface, 6f, false);
                 queueIndicators[index] = EnsureSurface(EnsureRect(row, "Indicator", new Vector2(-480f, 0f), new Vector2(5f, 42f)), Accent, 2f, false);
-                queueTitleTexts[index] = CreateText(row, "Title", "歌曲", 18, FontStyle.Bold, new Vector2(35f, 12f), new Vector2(840f, 30f), TextAnchor.MiddleLeft, TextPrimary);
-                queueMetaTexts[index] = CreateText(row, "Meta", "等待", 16, FontStyle.Normal, new Vector2(35f, -15f), new Vector2(840f, 24f), TextAnchor.MiddleLeft, TextSecondary);
+                // 标题和信息行给右侧删除按钮留出空间。
+                queueTitleTexts[index] = CreateText(row, "Title", "歌曲", 18, FontStyle.Bold, new Vector2(5f, 12f), new Vector2(780f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+                queueMetaTexts[index] = CreateText(row, "Meta", "等待", 16, FontStyle.Normal, new Vector2(5f, -15f), new Vector2(780f, 24f), TextAnchor.MiddleLeft, TextSecondary);
                 CreateText(row, "Number", (index + 1).ToString("00"), 16, FontStyle.Bold, new Vector2(-442f, 0f), new Vector2(58f, 32f), TextAnchor.MiddleCenter, TextSecondary);
+                queueRemoveButtons[index] = CreateIconButton(
+                    row,
+                    "Remove",
+                    QuestUiIconKind.Close,
+                    new Vector2(462f, 0f),
+                    new Vector2(44f, 44f),
+                    SurfaceRaised,
+                    TextSecondary,
+                    out queueRemoveIcons[index]);
+                ConfigureHover(queueRemoveButtons[index], null, string.Empty);
             }
 
-            queueFooterText = CreateText(queuePage, "Queue Footer", "队列为空", 16, FontStyle.Normal, new Vector2(0f, -225f), new Vector2(700f, 32f), TextAnchor.MiddleCenter, TextSecondary);
+            queueFooterText = CreateText(queuePage, "Queue Footer", "队列为空", 16, FontStyle.Normal, new Vector2(-70f, -225f), new Vector2(560f, 32f), TextAnchor.MiddleCenter, TextSecondary);
+            clearQueueButton = CreateTextButton(queuePage, "Clear Queue", "清空待播", new Vector2(400f, -225f), new Vector2(176f, 48f), Surface, TextPrimary);
+            ConfigureHover(clearQueueButton, null, string.Empty);
         }
 
         private void BuildSettingsPage()
@@ -572,16 +594,21 @@ namespace TsukiVox.AudioPrototype
             CreateText(servicePage, "Privacy Note", "局域网模式只连接你的电脑；在线模式会把搜索与媒体请求发送到所填服务。", 15, FontStyle.Normal, new Vector2(115f, -126f), new Vector2(760f, 52f), TextAnchor.MiddleLeft, TextSecondary);
 
             CreateDivider(servicePage, "Voice Divider", new Vector2(0f, -166f), new Vector2(ContentWidth, 1f));
-            CreateText(servicePage, "Voice Title", "语音找歌", 19, FontStyle.Bold, new Vector2(-356f, -204f), new Vector2(280f, 32f), TextAnchor.MiddleLeft, TextPrimary);
-            voiceSearchEnabledToggle = CreateSwitch(servicePage, "Voice Search Switch", new Vector2(460f, -204f));
+            CreateText(servicePage, "Voice Title", "语音找歌", 19, FontStyle.Bold, new Vector2(-356f, -196f), new Vector2(280f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            voiceSearchEnabledToggle = CreateSwitch(servicePage, "Voice Search Switch", new Vector2(460f, -196f));
+
+            // 识别供应商二选一，与上方服务模式相同的互斥按钮样式。
+            CreateText(servicePage, "Provider Label", "识别供应商", 16, FontStyle.Normal, new Vector2(-380f, -240f), new Vector2(230f, 28f), TextAnchor.MiddleLeft, TextSecondary);
+            tencentProviderButton = CreateTextButton(servicePage, "Tencent Provider", "腾讯云", new Vector2(-60f, -240f), new Vector2(210f, 50f), Surface, TextPrimary);
+            mimoProviderButton = CreateTextButton(servicePage, "MiMo Provider", "小米 MiMo", new Vector2(170f, -240f), new Vector2(210f, 50f), Surface, TextPrimary);
             voiceSearchHintText = CreateText(
                 servicePage,
                 "Voice Hint",
                 "关闭后不再采集或上传语音",
                 15,
                 FontStyle.Normal,
-                new Vector2(-120f, -236f),
-                new Vector2(700f, 26f),
+                new Vector2(0f, -278f),
+                new Vector2(ContentWidth, 26f),
                 TextAnchor.MiddleLeft,
                 TextSecondary);
         }
@@ -696,6 +723,13 @@ namespace TsukiVox.AudioPrototype
             songSearchInput.onSubmit.AddListener(_ => SearchSongs(1));
             WireButton(searchPreviousPageButton, () => SearchSongs(Mathf.Max(1, songSearchPageNumber - 1)));
             WireButton(searchNextPageButton, () => SearchSongs(songSearchPageNumber + 1));
+            WireButton(clearSearchButton, ClearSearchResults);
+            WireButton(clearQueueButton, ClearQueue);
+            for (var index = 0; index < QueueRowCount; index += 1)
+            {
+                var rowIndex = index;
+                WireButton(queueRemoveButtons[index], () => RemoveQueueRow(rowIndex));
+            }
             for (var index = 0; index < searchResultAddButtons.Length; index += 1)
             {
                 var resultIndex = index;
@@ -718,6 +752,8 @@ namespace TsukiVox.AudioPrototype
 
             WireButton(companionModeButton, SelectCompanionService);
             WireButton(onlineModeButton, SelectOnlineService);
+            WireButton(tencentProviderButton, () => SelectVoiceProvider("tencent"));
+            WireButton(mimoProviderButton, () => SelectVoiceProvider("mimo"));
             WireButton(applyHostButton, ApplyServiceAddress);
             WireButton(defaultHostButton, ApplyDefaultServiceAddress);
             monitorOutputToggle.onValueChanged.RemoveAllListeners();
@@ -861,6 +897,12 @@ namespace TsukiVox.AudioPrototype
                                             !string.IsNullOrWhiteSpace(songSearchInput.text);
             searchPreviousPageButton.interactable = !playlistPrototype.IsSearching && songSearchPageNumber > 1;
             searchNextPageButton.interactable = !playlistPrototype.IsSearching && response != null && response.hasMore;
+            if (clearSearchButton != null)
+            {
+                clearSearchButton.interactable = !playlistPrototype.IsSearching &&
+                                                 !playlistPrototype.IsVoiceBusy &&
+                                                 playlistPrototype.HasSearchResults;
+            }
 
             if (!playlistPrototype.IsConnected)
             {
@@ -953,11 +995,18 @@ namespace TsukiVox.AudioPrototype
                 queueRows[rowIndex].gameObject.SetActive(visible);
                 if (!visible)
                 {
+                    queueRowItemIds[rowIndex] = null;
                     continue;
                 }
 
                 var item = state.queue[itemIndex];
                 var isCurrent = itemIndex == state.currentIndex;
+                queueRowItemIds[rowIndex] = item.id;
+                if (queueRemoveButtons[rowIndex] != null)
+                {
+                    queueRemoveButtons[rowIndex].interactable =
+                        playlistPrototype != null && playlistPrototype.CanSendControl;
+                }
                 queueRowSurfaces[rowIndex].color = isCurrent
                     ? new Color(0.035f, 0.16f, 0.13f, 1f)
                     : Surface;
@@ -974,6 +1023,14 @@ namespace TsukiVox.AudioPrototype
             queueFooterText.text = count == 0
                 ? "播放队列为空"
                 : count > QueueRowCount ? $"共 {count} 首 · 当前显示附近歌曲" : $"共 {count} 首";
+
+            if (clearQueueButton != null)
+            {
+                // 清空会保留正在播放的那首，所以只有一首歌时点它没有意义。
+                clearQueueButton.interactable = playlistPrototype != null &&
+                                                playlistPrototype.CanSendControl &&
+                                                count > 1;
+            }
         }
 
         private void RefreshSettings()
@@ -1021,13 +1078,14 @@ namespace TsukiVox.AudioPrototype
             {
                 voiceSearchEnabledToggle.SetIsOnWithoutNotify(playlistPrototype.IsVoiceSearchEnabled);
                 RefreshSwitchVisual(voiceSearchEnabledToggle, Accent);
+                RefreshVoiceProviderButtons();
                 if (voiceSearchHintText != null)
                 {
                     voiceSearchHintText.text = !playlistPrototype.IsVoiceSearchEnabled
                         ? "已关闭：不再采集或上传语音"
                         : audioPrototype != null && audioPrototype.PrefersNativeOboeBackend
                             ? "Native 低延迟后端下无法采集语音，请先关闭它"
-                            : "按一下搜索页的麦克风按钮说出歌名；录音仅上传到所填服务";
+                            : DescribeVoiceProviderHint();
                 }
             }
 
@@ -1176,9 +1234,15 @@ namespace TsukiVox.AudioPrototype
             {
                 parts += " 不可用";
             }
+            // 选中的供应商始终显示；VoiceProvider 是上一次实际识别用的那个。
+            var selection = playlistPrototype.VoiceProviderSelection;
+            if (!string.IsNullOrEmpty(selection))
+            {
+                parts += $" · 选中 {selection}";
+            }
             if (!string.IsNullOrEmpty(playlistPrototype.VoiceProvider))
             {
-                parts += $" · {playlistPrototype.VoiceProvider}";
+                parts += $" · 上次 {playlistPrototype.VoiceProvider}";
             }
             if (!string.IsNullOrEmpty(playlistPrototype.VoiceErrorCode))
             {
@@ -1212,13 +1276,139 @@ namespace TsukiVox.AudioPrototype
 
         private void OpenSongSearchPage()
         {
+            // 不自动搜索：启动后搜索列表保持为空，预设 BV 号只留在输入框里，
+            // 由用户主动点搜索或用语音找歌。
             ShowPage(UiPage.SongSearch);
-            if (playlistPrototype != null &&
-                playlistPrototype.SearchResults == null &&
-                !playlistPrototype.IsSearching)
+        }
+
+        /// <summary>
+        /// Clears the search page: results, status and the voice transcript receipt.
+        /// The input field keeps its text so the same query can be re-run.
+        /// </summary>
+        private void SelectVoiceProvider(string provider)
+        {
+            playlistPrototype?.SelectVoiceProvider(provider);
+            RefreshSettings();
+        }
+
+        /// <summary>
+        /// Highlights the active provider and disables ones the server has no
+        /// credentials for, so an unusable channel cannot be selected.
+        /// </summary>
+        private void RefreshVoiceProviderButtons()
+        {
+            if (playlistPrototype == null)
             {
-                SearchSongs(1);
+                return;
             }
+
+            var selection = playlistPrototype.VoiceProviderSelection;
+            var options = playlistPrototype.VoiceProviderOptions;
+            var busy = playlistPrototype.IsSwitchingVoiceProvider || playlistPrototype.IsVoiceBusy;
+            var enabled = playlistPrototype.IsVoiceSearchEnabled;
+
+            SetVoiceProviderButton(tencentProviderButton, "tencent", selection, options, busy, enabled);
+            SetVoiceProviderButton(mimoProviderButton, "mimo", selection, options, busy, enabled);
+        }
+
+        private static void SetVoiceProviderButton(
+            Button button,
+            string provider,
+            string selection,
+            string[] options,
+            bool busy,
+            bool voiceEnabled)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            var isSelected = string.Equals(selection, provider, StringComparison.OrdinalIgnoreCase);
+            var isConfigured = false;
+            if (options != null)
+            {
+                for (var index = 0; index < options.Length; index += 1)
+                {
+                    if (string.Equals(options[index], provider, StringComparison.OrdinalIgnoreCase))
+                    {
+                        isConfigured = true;
+                        break;
+                    }
+                }
+            }
+
+            SetServiceModeButtonVisual(button, isSelected);
+            button.interactable = voiceEnabled && isConfigured && !isSelected && !busy;
+
+            var label = button.GetComponentInChildren<TMP_Text>(true);
+            if (label != null && !isSelected)
+            {
+                // 未配置密钥的供应商压暗，明确表示不可选而不是点了没反应。
+                label.color = isConfigured ? TextPrimary : TextFaint;
+            }
+        }
+
+        private string DescribeVoiceProviderHint()
+        {
+            if (playlistPrototype == null)
+            {
+                return "按一下搜索页的麦克风按钮说出歌名";
+            }
+            if (playlistPrototype.IsSwitchingVoiceProvider)
+            {
+                return "正在切换识别供应商…";
+            }
+
+            var options = playlistPrototype.VoiceProviderOptions;
+            if (options == null || options.Length == 0)
+            {
+                return "服务端未配置语音识别密钥";
+            }
+
+            var current = QuestPlaylistPrototype.DescribeVoiceProvider(playlistPrototype.VoiceProviderSelection);
+            return options.Length == 1
+                ? $"当前使用 {current}；服务端只配置了这一个供应商"
+                : $"当前使用 {current}；两者互不回退，切换后立即生效";
+        }
+
+        /// <summary>
+        /// Clears the search page: results, status and the voice transcript receipt.
+        /// The input field keeps its text so the same query can be re-run.
+        /// </summary>
+        private void ClearSearchResults()
+        {
+            songSearchPageNumber = 1;
+            playlistPrototype?.ClearSearchResults();
+            RefreshSongSearch();
+        }
+
+        private void ClearQueue()
+        {
+            playlistPrototype?.ClearQueue();
+            RefreshQueue();
+        }
+
+        /// <summary>
+        /// Removes the song shown on one queue row. Row index is resolved to the
+        /// item id captured during the last refresh, because the visible window
+        /// scrolls with the current song.
+        /// </summary>
+        private void RemoveQueueRow(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= QueueRowCount)
+            {
+                return;
+            }
+
+            var itemId = queueRowItemIds[rowIndex];
+            if (string.IsNullOrEmpty(itemId))
+            {
+                return;
+            }
+
+            playlistPrototype?.RemoveQueueItem(itemId);
+            RefreshQueue();
         }
 
         private void ToggleVoiceSearch()
