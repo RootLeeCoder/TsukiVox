@@ -110,6 +110,7 @@ namespace TsukiVox.AudioPrototype
         private string voiceProviderSelection = string.Empty;
         private string[] voiceProviderOptions = Array.Empty<string>();
         private bool isSwitchingVoiceProvider;
+        private bool isVoiceProviderDeviceSelected;
         private Coroutine voiceProviderRoutine;
 
         public event Action<QuestPlaylistPrototype, PlaylistState> StateChanged;
@@ -496,6 +497,13 @@ namespace TsukiVox.AudioPrototype
 
         public bool IsSwitchingVoiceProvider => isSwitchingVoiceProvider;
 
+        /// <summary>
+        /// True when this headset picked the provider itself; false means it is
+        /// following the server default. The preference is stored per device, so
+        /// switching here never affects other headsets on the same service.
+        /// </summary>
+        public bool IsVoiceProviderDeviceSelected => isVoiceProviderDeviceSelected;
+
         /// <summary>Human readable provider name for the settings UI.</summary>
         public static string DescribeVoiceProvider(string provider)
         {
@@ -576,6 +584,7 @@ namespace TsukiVox.AudioPrototype
 
             voiceProviderSelection = response.provider ?? string.Empty;
             voiceProviderOptions = response.configuredProviders ?? Array.Empty<string>();
+            isVoiceProviderDeviceSelected = response.deviceSelected;
             VoiceSearchStateChanged?.Invoke(this);
         }
 

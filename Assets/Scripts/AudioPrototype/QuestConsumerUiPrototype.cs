@@ -1367,9 +1367,15 @@ namespace TsukiVox.AudioPrototype
             }
 
             var current = QuestPlaylistPrototype.DescribeVoiceProvider(playlistPrototype.VoiceProviderSelection);
-            return options.Length == 1
-                ? $"当前使用 {current}；服务端只配置了这一个供应商"
-                : $"当前使用 {current}；两者互不回退，切换后立即生效";
+            if (options.Length == 1)
+            {
+                return $"当前使用 {current}；服务端只配置了这一个供应商";
+            }
+
+            // 明确说明这是本机设置，避免误以为会改到别的头显。
+            return playlistPrototype.IsVoiceProviderDeviceSelected
+                ? $"当前使用 {current}（本机设置）；两者互不回退，切换后立即生效"
+                : $"当前使用 {current}（服务端默认）；切换后仅影响本机";
         }
 
         /// <summary>

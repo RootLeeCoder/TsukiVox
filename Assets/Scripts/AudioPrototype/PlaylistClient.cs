@@ -637,17 +637,25 @@ namespace TsukiVox.AudioPrototype
         }
     }
 
-    /// <summary>Which speech provider the service uses, and which ones it could use.</summary>
+    /// <summary>Which speech provider this device uses, and which ones it could use.</summary>
     [Serializable]
     public sealed class VoiceProviderResponse
     {
         public string provider;
+
+        /// <summary>True when this device chose the provider itself.</summary>
+        public bool deviceSelected;
+
+        /// <summary>Fallback used when this device has made no choice.</summary>
+        public string serverDefault;
+
         public bool available;
         public string[] configuredProviders = Array.Empty<string>();
 
         public void Normalize()
         {
             provider ??= string.Empty;
+            serverDefault ??= string.Empty;
             configuredProviders ??= Array.Empty<string>();
         }
 
