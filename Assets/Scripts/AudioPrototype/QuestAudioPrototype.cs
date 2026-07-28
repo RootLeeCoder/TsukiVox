@@ -118,6 +118,84 @@ namespace TsukiVox.AudioPrototype
 
         public bool PrefersNativeOboeBackend => preferNativeOboeBackend;
 
+        /// <summary>
+        /// True when a read-only dry PCM tap is available for voice search.
+        /// The native Oboe backend exposes levels only, so voice capture requires
+        /// the default Unity microphone backend.
+        /// </summary>
+        public bool IsDryCaptureAvailable =>
+            isMonitoring
+            && activeBackend == NativeAudioBackend.UnityMicrophone
+            && microphoneClip != null
+            && !string.IsNullOrEmpty(activeDevice);
+
+        /// <summary>Sample rate of the dry capture tap.</summary>
+        public int DryCaptureSampleRate => TargetSampleRate;
+
+        /// <summary>
+        /// Current microphone write head, or -1 when no dry tap is available.
+        /// Callers copy from this position to follow the ring buffer.
+        /// </summary>
+        public int DryCapturePosition =>
+            IsDryCaptureAvailable ? Microphone.GetPosition(activeDevice) : -1;
+
+        /// <summary>Total sample count of the looping microphone clip.</summary>
+        public int DryCaptureBufferSamples => microphoneClip != null ? microphoneClip.samples : 0;
+
+        /// <summary>
+        /// Copies dry microphone samples out of the existing looping clip.
+        ///
+        /// This is a read-only tap: it never changes gain, filters, presets or the
+        /// monitoring chain, and it reads the signal before reverb is applied.
+        /// Voice search uses it so it does not need a second microphone session.
+        /// </summary>
+        /// <param name="destination">Buffer to fill.</param>
+        /// <param name="startSample">Ring buffer offset to read from.</param>
+        /// <returns>True when the copy succeeded.</returns>
+        public bool TryReadDrySamples(float[] destination, int startSample)
+        {
+            if (destination == null || destination.Length == 0 || !IsDryCaptureAvailable)
+            {
+                return false;
+            }
+
+            var totalSamples = microphoneClip.samples;
+            if (destination.Length > totalSamples)
+            {
+                return false;
+            }
+
+            var offset = startSample % totalSamples;
+            if (offset < 0)
+            {
+                offset += totalSamples;
+            }
+
+            // AudioClip.GetData wraps on its own, but it fails when the requested
+            // window would run past the end of the clip, so split those reads.
+            if (offset + destination.Length <= totalSamples)
+            {
+                return microphoneClip.GetData(destination, offset);
+            }
+
+            var head = totalSamples - offset;
+            var headBuffer = new float[head];
+            if (!microphoneClip.GetData(headBuffer, offset))
+            {
+                return false;
+            }
+
+            var tailBuffer = new float[destination.Length - head];
+            if (!microphoneClip.GetData(tailBuffer, 0))
+            {
+                return false;
+            }
+
+            Array.Copy(headBuffer, 0, destination, 0, head);
+            Array.Copy(tailBuffer, 0, destination, head, tailBuffer.Length);
+            return true;
+        }
+
         private void Reset()
         {
             monitorSource = GetComponent<AudioSource>();

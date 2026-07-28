@@ -5,7 +5,7 @@
 本文件是上面那份设计文档的进度跟踪版本。设计决策、图示和取舍理由以 HTML 为准；本文件只负责"做到哪一步了"。**两份文档必须同步更新**：任何范围或决策变化都要同时改 HTML 的对应章节和这里的清单。
 
 - 版本：**V0.75 语音搜索**，V0.7 与 V0.8 之间的独立中间版本
-- 状态：**设计完成，尚未开始实现**
+- 状态：**P2/P3/P4 代码已完成并通过离线验证；P1 与 P5 需要真机和真实供应商**
 - 基线版本：V0.7（头显内搜索点歌闭环已完成）
 - 影响仓库：`TsukiVox_Unity` + `TsukiVox_Server`
 - 最后更新：2026-07-27
@@ -68,16 +68,43 @@ V0.75 只做一件事：**把语音变成一条可用的找歌入口**。除此�
 
 - [ ] **Bilibili 中文关键词检索被限流**
   已实测发生：`BV1Kx4y1h7vR` 精确查询成功，中文关键词返回 `BILIBILI_RATE_LIMITED`。识别再准，检索失败仍然找不到歌。必须与语音搜索并行解决。
-- [ ] **Native Oboe 后端无 PCM 出口**
-  `NativeOboeDryMonitor` 只导出电平与统计，无原始缓冲。需要决策：V0.75 限定默认 Unity 麦克风后端，还是给原生插件补一个只读环形缓冲导出。
-- [ ] **服务端没有自身限流**
-  现有 `BILIBILI_RATE_LIMITED` 只是转发上游限流，本服务没有任何配额。语音接口会直接产生按时长计费的云端调用，配额与全局熔断必须和 V0.75 一起落地。
+- [x] **Native Oboe 后端无 PCM 出口**
+  已按"V0.75 限定默认 Unity 麦克风后端"实现：`IsDryCaptureAvailable` 在 Oboe 后端下返回 false，
+  语音按钮置灰，服务页提示"Native 低延迟后端下无法采集语音，请先关闭它"。
+  没有临时切换后端（会有麦克风重启间隙和爆音风险），也没有改原生插件。补 PCM 导出留待后续版本。
+- [x] **服务端没有自身限流**
+  已随 V0.75 落地：`quota.mjs` 提供每设备并发 1、每日 200 次（可配）、每分钟 12 次节流，
+  以及全局日预算 2000 次熔断。计数在进程内存中，当前单进程部署够用；将来横向扩容需换成共享计数器。
 
 ## 待决策
 
-- [ ] Oboe 后端启用时的行为：临时切回 Unity 后端（有一次麦克风重启间隙），还是补原生 PCM 导出
+- [x] Oboe 后端启用时的行为：已定为 V0.75 只支持默认 Unity 后端，Oboe 下语音入口置灰并给出明确提示
 - [ ] MiMo 音频保留与训练条款需向小米书面确认（政策未明确音频保留时长；"不用于训练"明确覆盖的是文本内容）——**阻塞正式发布，不阻塞开发**
-- [ ] 每设备每日次数上限的默认值（设计文档建议 200 次）
+- [x] 每设备每日次数上限的默认值：取 200 次（`TSUKIVOX_VOICE_DAILY_DEVICE`），全局 2000 次
+
+## 服务端环境变量
+
+密钥只放服务端，不写入仓库，也不下发给 Quest。全部可选；未配置腾讯云与 MiMo 时语音接口返回
+`SPEECH_PROVIDER_UNCONFIGURED` 503，健康检查里 `voiceSearch.available` 为 false。
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `TSUKIVOX_TENCENT_SECRET_ID` | 空 | 腾讯云密钥 ID；与 KEY 同时存在才启用主通道 |
+| `TSUKIVOX_TENCENT_SECRET_KEY` | 空 | 腾讯云密钥 |
+| `TSUKIVOX_TENCENT_ENGINE` | `16k_zh-PY` | 引擎类型，中英粤 |
+| `TSUKIVOX_TENCENT_REGION` | 空 | 一句话识别不要求 Region |
+| `TSUKIVOX_MIMO_API_KEY` | 空 | 配置后启用备用通道 |
+| `TSUKIVOX_MIMO_MODEL` | `mimo-v2.5-asr` | 模型 ID 必须可配，MiMo-V2 已下线 |
+| `TSUKIVOX_MIMO_API_ORIGIN` | `https://api.xiaomimimo.com` | |
+| `TSUKIVOX_MIMO_LANGUAGE` | `auto` | 仅 `auto` / `zh` / `en` |
+| `TSUKIVOX_SPEECH_TIMEOUT_MS` | `8000` | 单个供应商的超时 |
+| `TSUKIVOX_VOICE_MAX_SECONDS` | `6` | 音频时长上限 |
+| `TSUKIVOX_VOICE_MAX_BYTES` | `524288` | 请求体上限，512 KB |
+| `TSUKIVOX_VOICE_MIN_MS` | `400` | 低于此值判为空录音，不计费 |
+| `TSUKIVOX_VOICE_CONCURRENCY` | `1` | 每设备并发 |
+| `TSUKIVOX_VOICE_PER_MINUTE` | `12` | 每设备每分钟 |
+| `TSUKIVOX_VOICE_DAILY_DEVICE` | `200` | 每设备每日 |
+| `TSUKIVOX_VOICE_DAILY_GLOBAL` | `2000` | 全局每日熔断 |
 
 ## 实施阶段
 
@@ -101,51 +128,62 @@ V0.75 只做一件事：**把语音变成一条可用的找歌入口**。除此�
 
 ### P2 服务端 `/api/voice-search`
 
-- [ ] 独立的音频读取路径（不能走 `jsonBodyLimitBytes = 128 * 1024`，6 秒 WAV Base64 后约 256 KB 必然触发 `BODY_TOO_LARGE`）
-- [ ] 时长、大小、格式校验
-- [ ] `SpeechRecognizer` 适配层（腾讯云 + MiMo，模型名与地址全部走环境变量）
-- [ ] 动态热词表组装（最近 20 次点播、收藏、全局热门歌手、易错同音歌名）
-- [ ] 查询规整：剥离"帮我找/来一首"等口语，抽取歌手、歌名、版本词
-- [ ] 主备故障切换（仅超时 / 429 / 5xx；内存中保留同一段音频用于转发）
-- [ ] 复用 `bilibili.mjs` 检索并取前 4 条
-- [ ] 设备配额：每设备并发 1、每日次数上限、每分钟节流
-- [ ] 全局日预算熔断，达阈值返回 `VOICE_QUOTA_EXCEEDED`
-- [ ] 音频不落盘：拿到文本即释放 Buffer，transcript 不写入队列历史或设备状态文件
+- [x] 独立的音频读取路径（`readAudioBody`，裸 `audio/wav`，不经过 `jsonBodyLimitBytes = 128 * 1024`）
+- [x] 时长、大小、格式校验（`voice-search.mjs` 的 `parseWav`，只接受 16 kHz 单声道 16-bit）
+- [x] `SpeechRecognizer` 适配层（`speech.mjs`：腾讯云 TC3 签名 + MiMo，模型名与地址全部走环境变量）
+- [x] 动态热词表组装（`playlist.mjs` 的 `collectHotwords`：最近 20 次点播，歌名权重 10、歌手 8）
+- [x] 查询规整：剥离"帮我找/来一首"等口语，抽取歌手、歌名、版本词
+- [x] 主备故障切换（仅超时 / 429 / 5xx；内存中保留同一段音频用于转发）
+- [x] 复用 `bilibili.mjs` 检索并取前 4 条
+- [x] 设备配额：每设备并发 1、每日次数上限、每分钟节流（`quota.mjs`）
+- [x] 全局日预算熔断，达阈值返回 `VOICE_QUOTA_EXCEEDED`
+- [x] 音频不落盘：拿到文本即释放 Buffer，transcript 不写入队列历史或设备状态文件
 
 **退出条件**：无 Quest 也能用 curl + 本地 WAV 端到端返回 4 条结果；配额与熔断可被测试主动触发
+**已达成**（2026-07-27）：`npm test` 15/15 通过；`node scripts/voice-search-smoke.mjs` 四项检查全通过，
+含健康检查、4 条候选、空音频拒绝且不计费、配额触发。冒烟脚本默认使用本地假供应商，不消耗额度。
+待热词来源扩展：收藏与全局热门歌手尚未实现（当前只有设备点播历史），因为 V0.7 还没有收藏功能。
 
 ### P3 Quest 采集与上传
 
 > 边界守卫：本阶段只**旁路读取**音频，不修改音频处理。禁止在 P3 中调整增益、滤波器、混响预设或 `OnAudioFilterRead` 的处理逻辑——那些属于 V0.8。唯一允许的音量改动是录音期间压低**视频播放**音量，它不属于返听链路。
 
-- [ ] 从现有 48 kHz 环形缓冲复制**干声**（混响与回声之前）
-- [ ] 独立 7 秒累积缓冲（现有 2 秒循环 clip 留不住一整句）
-- [ ] 降采样到 16 kHz 单声道
-- [ ] 端点检测：静音 800 ms 提交，硬上限 6 秒，前置静音 > 2.5 秒判定"没听到"
-- [ ] WAV 封装
-- [ ] 录音期间把视频音量压到约 15%（不暂停），结束后线性恢复
-- [ ] 不停止麦克风、不重启 `monitorSource`，避免爆音
-- [ ] `PlaylistClient` 扩展：`POST /api/voice-search`，超时约 25 秒（识别 8 秒 + 检索 12 秒 + 余量）
-- [ ] 错误模型补 `code` / `retryable` 字段（现在只解析自由文本 `error`，读不到 `BILIBILI_RATE_LIMITED` 这类码）
-- [ ] 上传后立即清零音频缓冲，不留副本、不写 `persistentDataPath`、不进日志
+- [x] 从现有 48 kHz 环形缓冲复制**干声**（`QuestAudioPrototype.TryReadDrySamples`，只读旁路）
+- [x] 独立 7 秒累积缓冲（现有 2 秒循环 clip 留不住一整句）
+- [x] 降采样到 16 kHz 单声道（整窗平均，兼作简易抗锯齿）
+- [x] 端点检测：静音 800 ms 提交，硬上限 6 秒，前置静音 > 2.5 秒判定"没听到"
+- [x] WAV 封装（`VoiceSearchRecorder.EncodeWav`）
+- [x] 录音期间把视频音量压到约 15%（不暂停），结束后恢复（`QuestVideoScreenPrototype.SetPlaybackVolume`）
+- [x] 不停止麦克风、不重启 `monitorSource`，避免爆音
+- [x] `PlaylistClient` 扩展：`POST /api/voice-search`，超时 25 秒（识别 8 秒 + 检索 12 秒 + 余量）
+- [x] 错误模型补 `code` / `retryable` 字段（新增 `PlaylistRequestError`，可区分传输失败与 HTTP 错误）
+- [x] 上传后立即清零音频缓冲，不留副本、不写 `persistentDataPath`、不进日志
 
 **退出条件**：Editor 内生成的 WAV 能被服务端正确识别
+**已达成**（2026-07-27）：用真实 `VoiceSearchRecorder.cs` 源码在 Editor 外驱动合成麦克风音频，
+8 项录音器检查全通过（WAV 头、样本钳位、48→16 kHz 重采样率、尾部静音自动提交、前置静音判定、
+6 秒硬上限、无干声时拒绝启动、清零后无残留）；其产出的 WAV 上传到服务端返回 200 与 4 条候选，
+音频字节完全一致。过程中发现并修复一个真实缺陷：`CapturedMilliseconds` 原先报告未裁剪的长度，
+与实际上传的字节数不符（2220 ms vs 1650 ms），会让客户端上报错误时长。
 
 ### P4 UI 与状态机
 
-- [ ] 语音找歌页（录音区取代"输入框 + 搜索按钮"，结果区沿用现有 4 行布局）
-- [ ] 电平条与"正在录音"视觉状态（不允许静默采集）
-- [ ] "听到：xxx" 只读回执（不是可编辑输入框）
-- [ ] 一次点击开始、说完自动停、录音中再点一次取消（不用长按）
-- [ ] 开始与提交各一次轻触觉反馈（复用 V0.7 麦克风触觉通道）
-- [ ] 8 个状态的文案：`Idle` / `Listening` / `Uploading` / `Searching` / `Results` / `NoSpeech` / `Empty` / `Failed`
-- [ ] `Failed` 按原因分类：网络 / 服务 / 上游限流 / 配额
-- [ ] `NoSpeech` 不发起云端调用，也不显示成"识别失败"
-- [ ] 切回文字搜索的入口
-- [ ] 设置页语音搜索总开关（关闭后完全不采集、不上传）
-- [ ] 结果不自动点播第一首，仍由用户点 `+` 确认
+- [x] 语音入口放在搜索页顶部，与文字输入框并列；结果区沿用现有 4 行布局
+- [x] 电平条与"正在听…"视觉状态（18 根电平条，不允许静默采集）
+- [x] "听到：xxx" 只读回执（`TMP_Text`，不是可编辑输入框）
+- [x] 一次点击开始、说完自动停、录音中再点一次取消（不用长按）
+- [x] 开始与提交各一次轻触觉反馈（`QuestHandheldPropsPrototype.PulseVoiceFeedback`）
+- [x] 8 个状态的文案：`Idle` / `Listening` / `Uploading` / `Searching` / `Results` / `NoSpeech` / `Empty` / `Failed`
+- [x] `Failed` 按原因分类：网络 / 服务 / 上游限流 / 配额（`DescribeVoiceFailure`）
+- [x] `NoSpeech` 不发起云端调用，也不显示成"识别失败"（端上判定，直接结束）
+- [x] 文字搜索输入框始终在同一页面，随时可切换
+- [x] `设置 > 点歌服务` 增加语音找歌总开关，关闭后完全不采集、不上传，并持久化到 `PlayerPrefs`
+- [x] 结果不自动点播第一首，仍由用户点 `+` 确认（沿用现有 `AddSearchResult`）
+- [x] 诊断抽屉显示语音状态、供应商与最后错误码，便于真机排查
 
 **退出条件**：8 个状态在头显里都能被主动触发并显示正确文案
+**代码已完成，退出条件待真机验证**：状态机与文案已实现并通过编译，但"在头显里都能被主动触发"
+必须戴上 Quest 逐个走一遍，属于 P5 范围。
 
 ### P5 真机回归
 
@@ -209,10 +247,16 @@ X-TsukiVox-Audio-Ms: 4200
 - `Assets/Scripts/AudioPrototype/NativeOboeDryMonitor.cs` — 只导出电平，需要 PCM 时才改
 - `Assets/Scripts/AudioPrototype/PlaylistClient.cs` — 新增语音接口、错误码结构化
 - `Assets/Scripts/AudioPrototype/QuestConsumerUiPrototype.cs` — 搜索页复用（`SearchResultRowCount = 4`）
-- 新增 `VoiceSearchRecorder`（重采样、端点检测、WAV 封装）
-- `TsukiVox_Server/src/api.mjs` — 新路由、配额、`jsonBodyLimitBytes` 旁路
-- `TsukiVox_Server/src/bilibili.mjs` — 检索复用
-- 新增识别适配层模块（HTML 图 3 中的 `SpeechRecognizer`，文件名待定，与现有 `src/*.mjs` 命名保持一致）
+- 新增 `VoiceSearchRecorder`（重采样、端点检测、WAV 封装）✅
+- `TsukiVox_Server/src/api.mjs` — 新路由、配额、`jsonBodyLimitBytes` 旁路 ✅
+- `TsukiVox_Server/src/bilibili.mjs` — 检索复用（未修改）
+- 新增 `TsukiVox_Server/src/speech.mjs`（腾讯云 + MiMo 适配层与 TC3 签名）✅
+- 新增 `TsukiVox_Server/src/quota.mjs`（设备配额与全局熔断）✅
+- 新增 `TsukiVox_Server/src/voice-search.mjs`（WAV 校验、查询规整、编排）✅
+- 新增 `TsukiVox_Server/test/voice-search.test.mjs`（15 项测试）✅
+- 新增 `TsukiVox_Server/scripts/voice-search-smoke.mjs`（无 Quest 冒烟检查）✅
+- `QuestVideoScreenPrototype` — 新增 `SetPlaybackVolume`，用于录音期间压低视频音量 ✅
+- `QuestHandheldPropsPrototype` — 新增 `PulseVoiceFeedback` 轻触觉 ✅
 
 ## 官方文档出处
 
@@ -232,3 +276,4 @@ X-TsukiVox-Audio-Ms: 4200
 | --- | --- |
 | 2026-07-27 | 创建设计文档与本跟踪文件；选型定为腾讯云主用、MiMo 备用；识别改为云端 API（不在服务器跑模型） |
 | 2026-07-27 | 定为 V0.75 独立中间版本；明确 V0.8「音频引擎打磨和安全」不在本版本范围；增加版本边界、V0.75 验收标准，以及"不改动返听链路"的守卫与回归项 |
+| 2026-07-27 | 实现 P2（服务端接口、双供应商适配、配额熔断）、P3（Quest 干声采集与上传）、P4（UI 与状态机）。服务端 15/15 测试通过，录音器 8/8 检查通过，Editor 产出 WAV 已完成服务端往返验证，Unity 编译 0 错误。P1 与 P5 需要真机和真实供应商 |

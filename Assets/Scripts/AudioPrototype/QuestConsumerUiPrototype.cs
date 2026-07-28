@@ -15,6 +15,7 @@ namespace TsukiVox.AudioPrototype
         private const string DefaultSongSearchInput = "BV1Kx4y1h7vR";
         private const int QueueRowCount = 5;
         private const int SearchResultRowCount = 4;
+        private const int VoiceLevelBarCount = 18;
         private const float RefreshIntervalSeconds = 0.1f;
         private const float ContentWidth = 992f;
         private const float MicClearanceStep = 0.0025f;
@@ -123,6 +124,12 @@ namespace TsukiVox.AudioPrototype
         private Button songSearchBackButton;
         private TMP_InputField songSearchInput;
         private Button songSearchButton;
+        private Button voiceSearchButton;
+        private QuestUiIcon voiceSearchIcon;
+        private TMP_Text voiceSearchStatusText;
+        private TMP_Text voiceHeardText;
+        private readonly QuestUiSurface[] voiceLevelBars = new QuestUiSurface[VoiceLevelBarCount];
+        private VoiceSearchUiState lastVoiceState = VoiceSearchUiState.Idle;
         private readonly RectTransform[] searchResultRows = new RectTransform[SearchResultRowCount];
         private readonly QuestUiSurface[] searchResultSurfaces = new QuestUiSurface[SearchResultRowCount];
         private readonly TMP_Text[] searchResultTitleTexts = new TMP_Text[SearchResultRowCount];
@@ -147,6 +154,8 @@ namespace TsukiVox.AudioPrototype
         private Button onlineModeButton;
         private TMP_Text serviceConnectionText;
         private TMP_Text serviceModeHintText;
+        private Toggle voiceSearchEnabledToggle;
+        private TMP_Text voiceSearchHintText;
         private Toggle monitorOutputToggle;
         private Toggle safetyToggle;
         private Toggle nativeToggle;
@@ -348,11 +357,59 @@ namespace TsukiVox.AudioPrototype
         private void BuildSongSearchPage()
         {
             BuildSubpageHeader(songSearchPage, "搜索点歌", out songSearchBackButton);
+
+            // 语音找歌是与文字搜索并列的入口，放在输入框上方一行。
+            voiceSearchButton = CreateIconButton(
+                songSearchPage,
+                "Voice Search",
+                QuestUiIconKind.Microphone,
+                new Vector2(-446f, 178f),
+                new Vector2(86f, 54f),
+                Accent,
+                AccentInk,
+                out voiceSearchIcon);
+            voiceSearchStatusText = CreateText(
+                songSearchPage,
+                "Voice Status",
+                "按一下说出歌名",
+                17,
+                FontStyle.Bold,
+                new Vector2(60f, 190f),
+                new Vector2(820f, 26f),
+                TextAnchor.MiddleLeft,
+                TextPrimary);
+            voiceHeardText = CreateText(
+                songSearchPage,
+                "Voice Heard",
+                string.Empty,
+                15,
+                FontStyle.Normal,
+                new Vector2(60f, 166f),
+                new Vector2(820f, 24f),
+                TextAnchor.MiddleLeft,
+                TextSecondary);
+
+            // 录音电平条：明确的"正在录音"视觉状态，不允许静默采集。
+            var levelRoot = EnsureRect(
+                songSearchPage,
+                "Voice Level",
+                new Vector2(60f, 146f),
+                new Vector2(VoiceLevelBarCount * 14f, 14f));
+            for (var index = 0; index < VoiceLevelBarCount; index += 1)
+            {
+                var barRect = EnsureRect(
+                    levelRoot,
+                    $"Bar {index}",
+                    new Vector2(-levelRoot.sizeDelta.x * 0.5f + 7f + index * 14f, 0f),
+                    new Vector2(6f, 14f));
+                voiceLevelBars[index] = EnsureSurface(barRect, Accent, 3f, false);
+            }
+
             songSearchInput = CreateInputField(
                 songSearchPage,
                 "Song Search Input",
                 "输入歌名、歌手或 BV 号",
-                new Vector2(-86f, 145f),
+                new Vector2(-86f, 112f),
                 new Vector2(800f, 54f));
             songSearchInput.characterLimit = 80;
             songSearchInput.SetTextWithoutNotify(DefaultSongSearchInput);
@@ -360,20 +417,20 @@ namespace TsukiVox.AudioPrototype
                 songSearchPage,
                 "Search Songs",
                 QuestUiIconKind.Search,
-                new Vector2(446f, 145f),
+                new Vector2(446f, 112f),
                 new Vector2(86f, 54f),
                 Accent,
                 AccentInk,
                 out _);
 
-            const float firstY = 76f;
+            const float firstY = 48f;
             for (var index = 0; index < SearchResultRowCount; index += 1)
             {
                 var row = EnsureRect(
                     songSearchPage,
                     $"Search Result {index}",
-                    new Vector2(0f, firstY - index * 70f),
-                    new Vector2(ContentWidth, 62f));
+                    new Vector2(0f, firstY - index * 66f),
+                    new Vector2(ContentWidth, 60f));
                 searchResultRows[index] = row;
                 searchResultSurfaces[index] = EnsureSurface(row, Surface, 6f, false);
                 searchResultTitleTexts[index] = CreateText(
@@ -382,7 +439,7 @@ namespace TsukiVox.AudioPrototype
                     "歌曲",
                     18,
                     FontStyle.Bold,
-                    new Vector2(-62f, 12f),
+                    new Vector2(-62f, 11f),
                     new Vector2(810f, 28f),
                     TextAnchor.MiddleLeft,
                     TextPrimary);
@@ -395,7 +452,7 @@ namespace TsukiVox.AudioPrototype
                     "Bilibili",
                     15,
                     FontStyle.Normal,
-                    new Vector2(-62f, -16f),
+                    new Vector2(-62f, -15f),
                     new Vector2(810f, 24f),
                     TextAnchor.MiddleLeft,
                     TextSecondary);
@@ -513,6 +570,20 @@ namespace TsukiVox.AudioPrototype
             CreateDivider(servicePage, "Address Divider", new Vector2(0f, -76f), new Vector2(ContentWidth, 1f));
             defaultHostButton = CreateTextButton(servicePage, "Default Service Address", "恢复默认地址", new Vector2(-390f, -126f), new Vector2(220f, 52f), Surface, TextPrimary);
             CreateText(servicePage, "Privacy Note", "局域网模式只连接你的电脑；在线模式会把搜索与媒体请求发送到所填服务。", 15, FontStyle.Normal, new Vector2(115f, -126f), new Vector2(760f, 52f), TextAnchor.MiddleLeft, TextSecondary);
+
+            CreateDivider(servicePage, "Voice Divider", new Vector2(0f, -166f), new Vector2(ContentWidth, 1f));
+            CreateText(servicePage, "Voice Title", "语音找歌", 19, FontStyle.Bold, new Vector2(-356f, -204f), new Vector2(280f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            voiceSearchEnabledToggle = CreateSwitch(servicePage, "Voice Search Switch", new Vector2(460f, -204f));
+            voiceSearchHintText = CreateText(
+                servicePage,
+                "Voice Hint",
+                "关闭后不再采集或上传语音",
+                15,
+                FontStyle.Normal,
+                new Vector2(-120f, -236f),
+                new Vector2(700f, 26f),
+                TextAnchor.MiddleLeft,
+                TextSecondary);
         }
 
         private void BuildMicProtectionPage()
@@ -620,6 +691,7 @@ namespace TsukiVox.AudioPrototype
             WireButton(microphoneButton, () => audioPrototype?.ToggleMonitoring());
 
             WireButton(songSearchButton, () => SearchSongs(1));
+            WireButton(voiceSearchButton, ToggleVoiceSearch);
             songSearchInput.onSubmit.RemoveAllListeners();
             songSearchInput.onSubmit.AddListener(_ => SearchSongs(1));
             WireButton(searchPreviousPageButton, () => SearchSongs(Mathf.Max(1, songSearchPageNumber - 1)));
@@ -657,6 +729,15 @@ namespace TsukiVox.AudioPrototype
 
             micProtectionToggle.onValueChanged.RemoveAllListeners();
             micProtectionToggle.onValueChanged.AddListener(value => handheldPropsPrototype?.SetMicFaceHapticsEnabled(value));
+            if (voiceSearchEnabledToggle != null)
+            {
+                voiceSearchEnabledToggle.onValueChanged.RemoveAllListeners();
+                voiceSearchEnabledToggle.onValueChanged.AddListener(value =>
+                {
+                    playlistPrototype?.SetVoiceSearchEnabled(value);
+                    RefreshSettings();
+                });
+            }
             micWarningDistanceSlider.onValueChanged.RemoveAllListeners();
             micWarningDistanceSlider.onValueChanged.AddListener(value => handheldPropsPrototype?.SetMicFaceWarningClearance(value * MicClearanceStep));
             micCriticalDistanceSlider.onValueChanged.RemoveAllListeners();
@@ -751,6 +832,8 @@ namespace TsukiVox.AudioPrototype
             {
                 return;
             }
+
+            RefreshVoiceSearch();
 
             var response = playlistPrototype.SearchResults;
             var items = response?.items ?? Array.Empty<BilibiliCatalogItem>();
@@ -934,6 +1017,20 @@ namespace TsukiVox.AudioPrototype
             SetServiceModeButtonVisual(companionModeButton, playlistPrototype == null || !playlistPrototype.IsOnlineService);
             SetServiceModeButtonVisual(onlineModeButton, playlistPrototype != null && playlistPrototype.IsOnlineService);
 
+            if (voiceSearchEnabledToggle != null && playlistPrototype != null)
+            {
+                voiceSearchEnabledToggle.SetIsOnWithoutNotify(playlistPrototype.IsVoiceSearchEnabled);
+                RefreshSwitchVisual(voiceSearchEnabledToggle, Accent);
+                if (voiceSearchHintText != null)
+                {
+                    voiceSearchHintText.text = !playlistPrototype.IsVoiceSearchEnabled
+                        ? "已关闭：不再采集或上传语音"
+                        : audioPrototype != null && audioPrototype.PrefersNativeOboeBackend
+                            ? "Native 低延迟后端下无法采集语音，请先关闭它"
+                            : "按一下搜索页的麦克风按钮说出歌名；录音仅上传到所填服务";
+                }
+            }
+
             if (audioPrototype == null)
             {
                 return;
@@ -1054,7 +1151,40 @@ namespace TsukiVox.AudioPrototype
                 $"输入/输出  {(audioPrototype?.InputLevel ?? 0f):P0} / {(audioPrototype?.OutputLevel ?? 0f):P0}\n" +
                 $"防碰撞  {(handheldPropsPrototype == null ? "missing" : $"{handheldPropsPrototype.MicFaceWarningClearance * 100f:0.0}/{handheldPropsPrototype.MicFaceCriticalClearance * 100f:0.0}cm {handheldPropsPrototype.MicFaceHapticStrength:P0}")}\n" +
                 $"播放服务  {playlistPrototype?.PlaylistOrigin ?? "missing"}\n" +
+                $"语音找歌  {DescribeVoiceDiagnostics()}\n" +
                 $"视频状态  {SingleLine(videoScreenPrototype?.StatusSummary)}";
+        }
+
+        /// <summary>
+        /// Voice search line for the diagnostics drawer. Includes the recognition
+        /// provider and last error code so on-device triage can tell apart capture,
+        /// network, upstream throttling and quota problems.
+        /// </summary>
+        private string DescribeVoiceDiagnostics()
+        {
+            if (playlistPrototype == null)
+            {
+                return "missing";
+            }
+            if (!playlistPrototype.IsVoiceSearchEnabled)
+            {
+                return "已关闭";
+            }
+
+            var parts = playlistPrototype.VoiceState.ToString();
+            if (!playlistPrototype.CanStartVoiceSearch && !playlistPrototype.IsVoiceBusy)
+            {
+                parts += " 不可用";
+            }
+            if (!string.IsNullOrEmpty(playlistPrototype.VoiceProvider))
+            {
+                parts += $" · {playlistPrototype.VoiceProvider}";
+            }
+            if (!string.IsNullOrEmpty(playlistPrototype.VoiceErrorCode))
+            {
+                parts += $" · {playlistPrototype.VoiceErrorCode}";
+            }
+            return parts;
         }
 
         private void HandleMicrophoneToggle(bool enabled)
@@ -1088,6 +1218,117 @@ namespace TsukiVox.AudioPrototype
                 !playlistPrototype.IsSearching)
             {
                 SearchSongs(1);
+            }
+        }
+
+        private void ToggleVoiceSearch()
+        {
+            if (playlistPrototype == null)
+            {
+                return;
+            }
+
+            var wasIdle = !playlistPrototype.IsVoiceBusy;
+            playlistPrototype.ToggleVoiceSearch();
+
+            // 开始与提交各给一次轻触觉反馈。
+            if (wasIdle && playlistPrototype.IsVoiceBusy)
+            {
+                handheldPropsPrototype?.PulseVoiceFeedback();
+            }
+            RefreshSongSearch();
+        }
+
+        /// <summary>
+        /// Renders the eight voice search states. Every state has visible copy, and
+        /// failures stay distinguishable so on-device triage is possible.
+        /// </summary>
+        private void RefreshVoiceSearch()
+        {
+            if (voiceSearchButton == null || playlistPrototype == null)
+            {
+                return;
+            }
+
+            var state = playlistPrototype.VoiceState;
+            var listening = state == VoiceSearchUiState.Listening;
+            var busy = playlistPrototype.IsVoiceBusy;
+
+            voiceSearchButton.interactable = busy || playlistPrototype.CanStartVoiceSearch;
+            if (voiceSearchIcon != null)
+            {
+                voiceSearchIcon.color = listening ? Danger : AccentInk;
+            }
+
+            switch (state)
+            {
+                case VoiceSearchUiState.Listening:
+                    voiceSearchStatusText.text = "正在听… 再按一次取消";
+                    voiceSearchStatusText.color = Accent;
+                    break;
+                case VoiceSearchUiState.Uploading:
+                    voiceSearchStatusText.text = "识别中…";
+                    voiceSearchStatusText.color = TextSecondary;
+                    break;
+                case VoiceSearchUiState.Searching:
+                    voiceSearchStatusText.text = "正在找歌…";
+                    voiceSearchStatusText.color = TextSecondary;
+                    break;
+                case VoiceSearchUiState.Results:
+                    voiceSearchStatusText.text = "语音找歌完成";
+                    voiceSearchStatusText.color = Accent;
+                    break;
+                case VoiceSearchUiState.Empty:
+                    voiceSearchStatusText.text = "没找到视频，可改用下方文字搜索";
+                    voiceSearchStatusText.color = Warm;
+                    break;
+                case VoiceSearchUiState.NoSpeech:
+                    voiceSearchStatusText.text = SafeText(playlistPrototype.VoiceErrorMessage, "没听到声音，再试一次");
+                    voiceSearchStatusText.color = Warm;
+                    break;
+                case VoiceSearchUiState.Failed:
+                    voiceSearchStatusText.text = SingleLine(
+                        SafeText(playlistPrototype.VoiceErrorMessage, "语音找歌失败"));
+                    voiceSearchStatusText.color = Danger;
+                    break;
+                default:
+                    voiceSearchStatusText.text = playlistPrototype.CanStartVoiceSearch
+                        ? "按一下说出歌名"
+                        : "语音找歌暂不可用";
+                    voiceSearchStatusText.color = playlistPrototype.CanStartVoiceSearch
+                        ? TextPrimary
+                        : TextSecondary;
+                    break;
+            }
+
+            // "听到：" 只是可读回执，不是可编辑输入框。
+            var transcript = playlistPrototype.VoiceTranscript;
+            voiceHeardText.text = string.IsNullOrWhiteSpace(transcript)
+                ? string.Empty
+                : $"听到：{SingleLine(transcript)}";
+
+            var level = listening ? Mathf.Clamp01(playlistPrototype.VoiceLevel) : 0f;
+            for (var index = 0; index < VoiceLevelBarCount; index += 1)
+            {
+                if (voiceLevelBars[index] == null)
+                {
+                    continue;
+                }
+
+                var bar = (RectTransform)voiceLevelBars[index].transform;
+                if (!listening)
+                {
+                    bar.sizeDelta = new Vector2(6f, 3f);
+                    voiceLevelBars[index].color = new Color(0.18f, 0.26f, 0.25f, 1f);
+                    continue;
+                }
+
+                // 中间的条更高，形成常见的电平包络形状。
+                var distance = Mathf.Abs(index - (VoiceLevelBarCount - 1) * 0.5f) / ((VoiceLevelBarCount - 1) * 0.5f);
+                var scale = Mathf.Lerp(1f, 0.35f, distance);
+                var height = Mathf.Max(3f, level * 14f * scale);
+                bar.sizeDelta = new Vector2(6f, height);
+                voiceLevelBars[index].color = Accent;
             }
         }
 
@@ -1258,6 +1499,7 @@ namespace TsukiVox.AudioPrototype
             subscribedPlaylist.StateChanged += HandlePlaylistStateChanged;
             subscribedPlaylist.SearchStateChanged += HandleSearchStateChanged;
             subscribedPlaylist.AddItemStateChanged += HandleSearchStateChanged;
+            subscribedPlaylist.VoiceSearchStateChanged += HandleVoiceSearchStateChanged;
         }
 
         private void UnsubscribePlaylist()
@@ -1270,6 +1512,7 @@ namespace TsukiVox.AudioPrototype
             subscribedPlaylist.StateChanged -= HandlePlaylistStateChanged;
             subscribedPlaylist.SearchStateChanged -= HandleSearchStateChanged;
             subscribedPlaylist.AddItemStateChanged -= HandleSearchStateChanged;
+            subscribedPlaylist.VoiceSearchStateChanged -= HandleVoiceSearchStateChanged;
             subscribedPlaylist = null;
         }
 
@@ -1280,6 +1523,18 @@ namespace TsukiVox.AudioPrototype
 
         private void HandleSearchStateChanged(QuestPlaylistPrototype sender)
         {
+            RefreshSongSearch();
+        }
+
+        private void HandleVoiceSearchStateChanged(QuestPlaylistPrototype sender)
+        {
+            var state = sender.VoiceState;
+            // 提交时给一次轻震，让用户知道"说完了、已经在处理"。
+            if (state != lastVoiceState && state == VoiceSearchUiState.Uploading)
+            {
+                handheldPropsPrototype?.PulseVoiceFeedback();
+            }
+            lastVoiceState = state;
             RefreshSongSearch();
         }
 

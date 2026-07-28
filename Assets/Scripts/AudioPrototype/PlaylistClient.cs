@@ -24,9 +24,14 @@ namespace TsukiVox.AudioPrototype
         private const string ControlPath = "/api/playlist/control";
         private const string ItemsPath = "/api/playlist/items";
         private const string BilibiliSearchPath = "/api/bilibili/search";
+        private const string VoiceSearchPath = "/api/voice-search";
         private const string DeviceIdHeader = "X-TsukiVox-Device-Id";
+        private const string AudioDurationHeader = "X-TsukiVox-Audio-Ms";
         private const int RequestTimeoutSeconds = 6;
         private const int SearchRequestTimeoutSeconds = 12;
+
+        // Recognition (up to 8s server side) plus catalog search (12s) plus headroom.
+        private const int VoiceSearchTimeoutSeconds = 25;
 
         private string playlistOrigin;
         private string downloadOrigin;
@@ -148,6 +153,56 @@ namespace TsukiVox.AudioPrototype
                 }
 
                 onFailure?.Invoke(error);
+            }
+        }
+
+        /// <summary>
+        /// Uploads a short dry WAV clip and returns the transcript plus catalog results.
+        ///
+        /// The audio only travels to the configured TsukiVox service. Provider keys and
+        /// vendor selection stay on the server; the client never talks to a cloud vendor.
+        /// </summary>
+        public IEnumerator VoiceSearch(
+            byte[] wavPayload,
+            int audioMilliseconds,
+            Action<VoiceSearchResponse> onSuccess,
+            Action<PlaylistRequestError> onFailure)
+        {
+            if (wavPayload == null || wavPayload.Length == 0)
+            {
+                onFailure?.Invoke(PlaylistRequestError.Local("AUDIO_TOO_SHORT", "没有录到声音，再试一次。", true));
+                yield break;
+            }
+
+            using (var request = new UnityWebRequest(
+                CombineUrl(downloadOrigin, VoiceSearchPath),
+                UnityWebRequest.kHttpVerbPOST))
+            {
+                request.uploadHandler = new UploadHandlerRaw(wavPayload);
+                request.downloadHandler = new DownloadHandlerBuffer();
+                request.SetRequestHeader("Content-Type", "audio/wav");
+                request.SetRequestHeader("Accept", "application/json");
+                if (audioMilliseconds > 0)
+                {
+                    request.SetRequestHeader(AudioDurationHeader, audioMilliseconds.ToString());
+                }
+                ConfigureRequest(request, VoiceSearchTimeoutSeconds);
+
+                yield return request.SendWebRequest();
+
+                if (!IsRequestSuccessful(request))
+                {
+                    onFailure?.Invoke(CreateRequestFailure(request, "语音搜索"));
+                    yield break;
+                }
+
+                if (TryParseVoiceSearchResponse(request.downloadHandler.text, out var response, out var error))
+                {
+                    onSuccess?.Invoke(response);
+                    yield break;
+                }
+
+                onFailure?.Invoke(PlaylistRequestError.Local("INVALID_RESPONSE", error, false));
             }
         }
 
@@ -332,21 +387,84 @@ namespace TsukiVox.AudioPrototype
             return $"{operation} {transportError} ({request.responseCode}).";
         }
 
+        /// <summary>
+        /// Builds a structured failure so callers can branch on the server error code
+        /// instead of matching free-text messages.
+        /// </summary>
+        private static PlaylistRequestError CreateRequestFailure(UnityWebRequest request, string operation)
+        {
+            var parsed = TryParseErrorResponse(request.downloadHandler?.text);
+            if (parsed != null && !string.IsNullOrEmpty(parsed.code))
+            {
+                return new PlaylistRequestError
+                {
+                    code = parsed.code,
+                    message = string.IsNullOrEmpty(parsed.error) ? $"{operation}失败。" : parsed.error,
+                    retryable = parsed.retryable,
+                    responseCode = (int)request.responseCode,
+                };
+            }
+
+            // No structured body: distinguish transport failures from HTTP errors so the
+            // UI can say "network unreachable" instead of a generic failure.
+            var isTransport = request.result == UnityWebRequest.Result.ConnectionError ||
+                              request.responseCode == 0;
+            return new PlaylistRequestError
+            {
+                code = isTransport ? "NETWORK_UNREACHABLE" : "SERVER_ERROR",
+                message = !string.IsNullOrEmpty(parsed?.error)
+                    ? parsed.error
+                    : $"{operation} {(string.IsNullOrEmpty(request.error) ? "请求失败" : request.error)} ({request.responseCode})。",
+                retryable = isTransport || request.responseCode >= 500,
+                responseCode = (int)request.responseCode,
+            };
+        }
+
         private static string TryParseErrorMessage(string json)
+        {
+            return TryParseErrorResponse(json)?.error ?? string.Empty;
+        }
+
+        private static PlaylistErrorResponse TryParseErrorResponse(string json)
         {
             if (string.IsNullOrWhiteSpace(json))
             {
-                return string.Empty;
+                return null;
             }
 
             try
             {
-                var response = JsonUtility.FromJson<PlaylistErrorResponse>(json);
-                return response == null ? string.Empty : response.error;
+                return JsonUtility.FromJson<PlaylistErrorResponse>(json);
             }
             catch
             {
-                return string.Empty;
+                return null;
+            }
+        }
+
+        private static bool TryParseVoiceSearchResponse(
+            string json,
+            out VoiceSearchResponse response,
+            out string error)
+        {
+            try
+            {
+                response = JsonUtility.FromJson<VoiceSearchResponse>(json);
+                if (response == null)
+                {
+                    error = "语音搜索返回了空响应。";
+                    return false;
+                }
+
+                response.Normalize();
+                error = string.Empty;
+                return true;
+            }
+            catch (Exception exception)
+            {
+                response = null;
+                error = $"语音搜索返回了无效 JSON：{exception.Message}";
+                return false;
             }
         }
 
@@ -411,6 +529,107 @@ namespace TsukiVox.AudioPrototype
         private sealed class PlaylistErrorResponse
         {
             public string error;
+            public string code;
+            public bool retryable;
+        }
+    }
+
+    /// <summary>
+    /// Structured request failure. The server reports a machine readable
+    /// <c>code</c> alongside the human message, which the voice search UI needs
+    /// to tell network, service, upstream throttling and quota apart.
+    /// </summary>
+    [Serializable]
+    public sealed class PlaylistRequestError
+    {
+        public string code;
+        public string message;
+        public bool retryable;
+        public int responseCode;
+
+        public static PlaylistRequestError Local(string code, string message, bool retryable)
+        {
+            return new PlaylistRequestError
+            {
+                code = code,
+                message = message,
+                retryable = retryable,
+                responseCode = 0,
+            };
+        }
+
+        public bool Is(string candidate)
+        {
+            return string.Equals(code, candidate, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Serializable]
+    public sealed class VoiceSearchIntent
+    {
+        public string artist;
+        public string song;
+        public string[] modifiers = Array.Empty<string>();
+
+        public void Normalize()
+        {
+            artist ??= string.Empty;
+            song ??= string.Empty;
+            modifiers ??= Array.Empty<string>();
+        }
+    }
+
+    /// <summary>
+    /// Voice search result. The <c>items</c> array is intentionally identical to
+    /// <see cref="BilibiliSearchResponse"/> so the existing result rows and
+    /// enqueue path can render it without a second model.
+    /// </summary>
+    [Serializable]
+    public sealed class VoiceSearchResponse
+    {
+        public string transcript;
+        public string normalizedQuery;
+        public VoiceSearchIntent intent;
+        public string provider;
+        public int audioMs;
+        public int page = 1;
+        public int pageSize = 4;
+        public int total;
+        public bool hasMore;
+        public BilibiliCatalogItem[] items = Array.Empty<BilibiliCatalogItem>();
+
+        public int ItemCount => items == null ? 0 : items.Length;
+
+        public void Normalize()
+        {
+            transcript ??= string.Empty;
+            normalizedQuery ??= string.Empty;
+            provider ??= string.Empty;
+            intent ??= new VoiceSearchIntent();
+            intent.Normalize();
+            page = Math.Max(1, page);
+            pageSize = Math.Max(1, pageSize);
+            total = Math.Max(0, total);
+            audioMs = Math.Max(0, audioMs);
+            items ??= Array.Empty<BilibiliCatalogItem>();
+            for (var index = 0; index < items.Length; index += 1)
+            {
+                items[index]?.Normalize();
+            }
+        }
+
+        /// <summary>Converts to the existing search response shape for UI reuse.</summary>
+        public BilibiliSearchResponse ToSearchResponse()
+        {
+            return new BilibiliSearchResponse
+            {
+                query = normalizedQuery,
+                page = page,
+                pageSize = pageSize,
+                total = total,
+                hasMore = hasMore,
+                items = items ?? Array.Empty<BilibiliCatalogItem>(),
+            };
         }
     }
 

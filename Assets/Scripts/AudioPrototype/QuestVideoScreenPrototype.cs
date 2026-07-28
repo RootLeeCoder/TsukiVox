@@ -169,6 +169,26 @@ namespace TsukiVox.AudioPrototype
 
         public bool IsPlaying => videoPlayer != null && videoPlayer.isPlaying;
 
+        /// <summary>
+        /// Volume of the video's own <see cref="AudioSource"/>. This is separate from
+        /// the vocal monitoring chain and does not affect microphone monitoring.
+        /// </summary>
+        public float PlaybackVolume => videoAudioSource != null ? videoAudioSource.volume : 1f;
+
+        /// <summary>
+        /// Lowers or restores the video volume. Voice search ducks the backing track
+        /// while recording so the song is not captured along with the user's voice.
+        /// Playback is never paused, which would change playlist command semantics.
+        /// </summary>
+        public void SetPlaybackVolume(float volume)
+        {
+            if (videoAudioSource == null)
+            {
+                return;
+            }
+            videoAudioSource.volume = Mathf.Clamp01(volume);
+        }
+
         public void SetStatusOverlayVisible(bool visible)
         {
             showStatusOverlay = visible && allowWorldStatusOverlay;
