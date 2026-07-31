@@ -86,12 +86,16 @@ namespace TsukiVox.AudioPrototype
         private string pendingStatus = "Connecting to playlist sync...";
         private Coroutine searchRoutine;
         private Coroutine addItemRoutine;
+        private Coroutine suggestRoutine;
         private BilibiliSearchResponse searchResults;
+        private BilibiliSuggestResponse suggestResults;
         private BilibiliCatalogItem pendingAddItem;
         private BilibiliCatalogItem lastAddedItem;
         private bool isSearching;
         private bool isAddingItem;
+        private bool isFetchingSuggestions;
         private int searchSequence;
+        private int suggestSequence;
         private string lastSearchError = string.Empty;
         private string lastAddItemError = string.Empty;
         private string deviceId = string.Empty;
@@ -119,6 +123,8 @@ namespace TsukiVox.AudioPrototype
 
         public event Action<QuestPlaylistPrototype> AddItemStateChanged;
 
+        public event Action<QuestPlaylistPrototype> SuggestStateChanged;
+
         /// <summary>Raised whenever the voice search state machine advances.</summary>
         public event Action<QuestPlaylistPrototype> VoiceSearchStateChanged;
 
@@ -132,7 +138,11 @@ namespace TsukiVox.AudioPrototype
 
         public BilibiliSearchResponse SearchResults => searchResults;
 
+        public BilibiliSuggestResponse SuggestResults => suggestResults;
+
         public bool IsSearching => isSearching;
+
+        public bool IsFetchingSuggestions => isFetchingSuggestions;
 
         public string LastSearchError => lastSearchError;
 
@@ -429,6 +439,38 @@ namespace TsukiVox.AudioPrototype
                 normalizedPage,
                 normalizedPageSize,
                 sequence));
+        }
+
+        public void FetchBilibiliSuggestions(string term)
+        {
+            EnsureClient();
+            CancelSuggestions();
+
+            var normalizedTerm = string.IsNullOrWhiteSpace(term) ? string.Empty : term.Trim();
+            if (string.IsNullOrEmpty(normalizedTerm))
+            {
+                suggestResults = new BilibiliSuggestResponse
+                {
+                    code = 0,
+                    result = new BilibiliSuggestResult { tag = Array.Empty<BilibiliSuggestItem>() },
+                };
+                isFetchingSuggestions = false;
+                SuggestStateChanged?.Invoke(this);
+                return;
+            }
+
+            isFetchingSuggestions = true;
+            suggestSequence += 1;
+            var sequence = suggestSequence;
+            SuggestStateChanged?.Invoke(this);
+            suggestRoutine = StartCoroutine(FetchBilibiliSuggestionsRoutine(normalizedTerm, sequence));
+        }
+
+        public void ClearSuggestions()
+        {
+            CancelSuggestions();
+            suggestResults = null;
+            SuggestStateChanged?.Invoke(this);
         }
 
         /// <summary>
@@ -892,6 +934,38 @@ namespace TsukiVox.AudioPrototype
             SearchStateChanged?.Invoke(this);
         }
 
+        private IEnumerator FetchBilibiliSuggestionsRoutine(string term, int sequence)
+        {
+            BilibiliSuggestResponse response = null;
+            string error = null;
+            yield return client.FetchBilibiliSuggestions(
+                term,
+                value => response = value,
+                value => error = value);
+
+            if (sequence != suggestSequence)
+            {
+                yield break;
+            }
+
+            suggestRoutine = null;
+            isFetchingSuggestions = false;
+            if (response != null)
+            {
+                suggestResults = response;
+            }
+            else
+            {
+                suggestResults = new BilibiliSuggestResponse
+                {
+                    code = -1,
+                    result = new BilibiliSuggestResult { tag = Array.Empty<BilibiliSuggestItem>() },
+                };
+            }
+
+            SuggestStateChanged?.Invoke(this);
+        }
+
         private IEnumerator AddItemRoutine(BilibiliCatalogItem item, bool playNow)
         {
             PlaylistState nextState = null;
@@ -1297,6 +1371,18 @@ namespace TsukiVox.AudioPrototype
             }
 
             isSearching = false;
+        }
+
+        private void CancelSuggestions()
+        {
+            suggestSequence += 1;
+            if (suggestRoutine != null)
+            {
+                StopCoroutine(suggestRoutine);
+                suggestRoutine = null;
+            }
+
+            isFetchingSuggestions = false;
         }
 
         private void LoadServiceSettings()

@@ -275,7 +275,11 @@ namespace TsukiVox.AudioPrototype
 
             if (EventSystem.current != null && (pressedObject != null || currentTarget != null))
             {
-                EventSystem.current.SetSelectedGameObject(pressedObject != null ? pressedObject : currentTarget);
+                var selectionTarget = pressedObject != null ? pressedObject : currentTarget;
+                if (!QuestAndroidKeyboardInput.IsKeyboardTarget(selectionTarget))
+                {
+                    EventSystem.current.SetSelectedGameObject(selectionTarget, pointerEventData);
+                }
             }
         }
 

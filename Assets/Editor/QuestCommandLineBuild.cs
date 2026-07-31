@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -33,7 +34,7 @@ namespace TsukiVox.AudioPrototype.Editor
         {
             public string outputPath;
             public string buildId;
-            public string buildTimeUtc;
+            public string buildTimeLocal;
             public bool releaseBuild;
             public string resultPath;
             public bool scriptsRefreshed;
@@ -52,7 +53,7 @@ namespace TsukiVox.AudioPrototype.Editor
         {
             public string productVersion;
             public string buildId;
-            public string buildTimeUtc;
+            public string buildTimeLocal;
             public string gitCommit;
             public bool gitDirty;
             public string unityVersion;
@@ -66,7 +67,7 @@ namespace TsukiVox.AudioPrototype.Editor
         [MenuItem("TsukiVox/Build Quest APK")]
         public static void BuildFromMenu()
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = DateTimeOffset.Now;
             BuildAndroid(DefaultOutputPath, now.ToString("yyyyMMdd-HHmmss"), now.ToString("O"), false);
         }
 
@@ -75,7 +76,7 @@ namespace TsukiVox.AudioPrototype.Editor
             BuildAndroid(
                 GetArgument("-tsukivoxOutput"),
                 GetArgument("-tsukivoxBuildId"),
-                GetArgument("-tsukivoxBuildTimeUtc"),
+                GetArgument("-tsukivoxBuildTimeLocal"),
                 HasArgument("-tsukivoxRelease"));
         }
 
@@ -130,7 +131,7 @@ namespace TsukiVox.AudioPrototype.Editor
                 request = pendingRequest;
 
                 result.buildId = request.buildId;
-                BuildAndroid(request.outputPath, request.buildId, request.buildTimeUtc, request.releaseBuild);
+                BuildAndroid(request.outputPath, request.buildId, request.buildTimeLocal, request.releaseBuild);
                 result.succeeded = true;
             }
             catch (Exception exception)
@@ -153,7 +154,7 @@ namespace TsukiVox.AudioPrototype.Editor
             }
         }
 
-        private static void BuildAndroid(string outputPath, string buildId, string buildTimeUtc, bool releaseBuild)
+        private static void BuildAndroid(string outputPath, string buildId, string buildTimeLocal, bool releaseBuild)
         {
             var projectRoot = Directory.GetParent(Application.dataPath)?.FullName
                 ?? throw new InvalidOperationException("Could not resolve the Unity project root.");
@@ -163,12 +164,12 @@ namespace TsukiVox.AudioPrototype.Editor
                 : Path.Combine(projectRoot, outputPath));
             if (string.IsNullOrWhiteSpace(buildId))
             {
-                buildId = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss");
+                buildId = DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss");
             }
 
-            if (string.IsNullOrWhiteSpace(buildTimeUtc))
+            if (string.IsNullOrWhiteSpace(buildTimeLocal))
             {
-                buildTimeUtc = DateTimeOffset.UtcNow.ToString("O");
+                buildTimeLocal = CreateLocalBuildTime(buildId);
             }
 
             var gitCommit = RunGit(projectRoot, "rev-parse --short HEAD", "unavailable");
@@ -177,7 +178,7 @@ namespace TsukiVox.AudioPrototype.Editor
             {
                 productVersion = QuestBuildInfo.ProductVersion,
                 buildId = buildId,
-                buildTimeUtc = buildTimeUtc,
+                buildTimeLocal = buildTimeLocal,
                 gitCommit = gitCommit,
                 gitDirty = gitDirty,
             };
@@ -223,7 +224,7 @@ namespace TsukiVox.AudioPrototype.Editor
                 {
                     productVersion = buildInfo.productVersion,
                     buildId = buildInfo.buildId,
-                    buildTimeUtc = buildInfo.buildTimeUtc,
+                    buildTimeLocal = buildInfo.buildTimeLocal,
                     gitCommit = buildInfo.gitCommit,
                     gitDirty = buildInfo.gitDirty,
                     unityVersion = Application.unityVersion,
@@ -294,6 +295,22 @@ namespace TsukiVox.AudioPrototype.Editor
                 ?? throw new InvalidOperationException("Could not resolve the build info directory."));
             File.WriteAllText(absolutePath, JsonUtility.ToJson(buildInfo, true), new UTF8Encoding(false));
             AssetDatabase.ImportAsset(BuildInfoAssetPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+        }
+
+        private static string CreateLocalBuildTime(string buildId)
+        {
+            if (DateTime.TryParseExact(
+                    buildId,
+                    "yyyyMMdd-HHmmss",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var buildIdTime))
+            {
+                buildIdTime = DateTime.SpecifyKind(buildIdTime, DateTimeKind.Unspecified);
+                return new DateTimeOffset(buildIdTime, TimeZoneInfo.Local.GetUtcOffset(buildIdTime)).ToString("O");
+            }
+
+            return DateTimeOffset.Now.ToString("O");
         }
 
         private static string GetArgument(string name)

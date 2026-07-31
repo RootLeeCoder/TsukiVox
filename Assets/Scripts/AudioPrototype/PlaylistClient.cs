@@ -32,6 +32,7 @@ namespace TsukiVox.AudioPrototype
         private const string ControlPath = "/api/playlist/control";
         private const string ItemsPath = "/api/playlist/items";
         private const string BilibiliSearchPath = "/api/bilibili/search";
+        private const string BilibiliSuggestPath = "/api/bilibili/suggest";
         private const string VoiceSearchPath = "/api/voice-search";
         private const string VoiceProviderPath = "/api/voice/provider";
         private const string DeviceIdHeader = "X-TsukiVox-Device-Id";
@@ -160,6 +161,41 @@ namespace TsukiVox.AudioPrototype
                 }
 
                 if (TryParseBilibiliSearchResponse(request.downloadHandler.text, out var response, out var error))
+                {
+                    onSuccess?.Invoke(response);
+                    yield break;
+                }
+
+                onFailure?.Invoke(error);
+            }
+        }
+
+        public IEnumerator FetchBilibiliSuggestions(
+            string term,
+            Action<BilibiliSuggestResponse> onSuccess,
+            Action<string> onFailure)
+        {
+            var normalizedTerm = string.IsNullOrWhiteSpace(term) ? string.Empty : term.Trim();
+            if (string.IsNullOrEmpty(normalizedTerm))
+            {
+                onSuccess?.Invoke(new BilibiliSuggestResponse { code = 0, result = new BilibiliSuggestResult { tag = Array.Empty<BilibiliSuggestItem>() } });
+                yield break;
+            }
+
+            var queryString = $"?term={UnityWebRequest.EscapeURL(normalizedTerm)}";
+
+            using (var request = UnityWebRequest.Get(CombineUrl(downloadOrigin, $"{BilibiliSuggestPath}{queryString}")))
+            {
+                ConfigureRequest(request, RequestTimeoutSeconds);
+                yield return request.SendWebRequest();
+
+                if (!IsRequestSuccessful(request))
+                {
+                    onFailure?.Invoke(CreateRequestError(request, "Bilibili suggest"));
+                    yield break;
+                }
+
+                if (TryParseBilibiliSuggestResponse(request.downloadHandler.text, out var response, out var error))
                 {
                     onSuccess?.Invoke(response);
                     yield break;
@@ -442,6 +478,32 @@ namespace TsukiVox.AudioPrototype
             {
                 response = null;
                 error = $"Bilibili search returned invalid JSON: {exception.Message}";
+                return false;
+            }
+        }
+
+        private static bool TryParseBilibiliSuggestResponse(
+            string json,
+            out BilibiliSuggestResponse response,
+            out string error)
+        {
+            try
+            {
+                response = JsonUtility.FromJson<BilibiliSuggestResponse>(json);
+                if (response == null)
+                {
+                    error = "Bilibili suggest returned an empty response.";
+                    return false;
+                }
+
+                response.Normalize();
+                error = string.Empty;
+                return true;
+            }
+            catch (Exception exception)
+            {
+                response = null;
+                error = $"Bilibili suggest returned invalid JSON: {exception.Message}";
                 return false;
             }
         }
@@ -798,6 +860,47 @@ namespace TsukiVox.AudioPrototype
             {
                 items[index]?.Normalize();
             }
+        }
+    }
+
+    [Serializable]
+    public sealed class BilibiliSuggestResponse
+    {
+        public int code;
+        public BilibiliSuggestResult result;
+
+        public void Normalize()
+        {
+            result ??= new BilibiliSuggestResult();
+            result.Normalize();
+        }
+    }
+
+    [Serializable]
+    public sealed class BilibiliSuggestResult
+    {
+        public BilibiliSuggestItem[] tag = Array.Empty<BilibiliSuggestItem>();
+
+        public void Normalize()
+        {
+            tag ??= Array.Empty<BilibiliSuggestItem>();
+            for (var index = 0; index < tag.Length; index += 1)
+            {
+                tag[index]?.Normalize();
+            }
+        }
+    }
+
+    [Serializable]
+    public sealed class BilibiliSuggestItem
+    {
+        public string value;
+        public string name;
+
+        public void Normalize()
+        {
+            value = string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+            name = string.IsNullOrWhiteSpace(name) ? string.Empty : name.Trim();
         }
     }
 

@@ -228,8 +228,8 @@ namespace TsukiVox.AudioPrototype
             debugBuilder.AppendLine($"identifier {Application.identifier}");
             debugBuilder.AppendLine($"version {Application.version}");
             debugBuilder.AppendLine($"buildId {QuestBuildInfo.BuildId}");
-            debugBuilder.AppendLine($"buildTimeUtc {QuestBuildInfo.BuildTimeUtc}");
-            debugBuilder.AppendLine($"buildTimeLocal {QuestBuildInfo.BuildTimeDisplay}");
+            debugBuilder.AppendLine($"buildTimeLocal {QuestBuildInfo.BuildTimeLocal}");
+            debugBuilder.AppendLine($"buildTimeDisplay {QuestBuildInfo.BuildTimeDisplay}");
             debugBuilder.AppendLine($"buildGuid {Application.buildGUID}");
             debugBuilder.AppendLine($"gitCommit {QuestBuildInfo.GitCommit}");
             debugBuilder.AppendLine($"gitDirty {QuestBuildInfo.GitDirty}");

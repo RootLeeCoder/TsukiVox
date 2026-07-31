@@ -1,7 +1,12 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Globalization;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Events;
+using UnityEngine.UI;
 
 namespace TsukiVox.AudioPrototype
 {
@@ -9,45 +14,40 @@ namespace TsukiVox.AudioPrototype
     [RequireComponent(typeof(TMP_InputField))]
     public sealed class QuestAndroidKeyboardInput : MonoBehaviour, ISelectHandler, IDeselectHandler, IPointerClickHandler
     {
+        private const float KeyboardWidth = 1060f;
+        private const float KeyboardHeight = 260f;
+        private const float KeyGap = 8f;
+
+        private static readonly Color PanelColor = new Color(0.018f, 0.029f, 0.028f, 0.99f);
+        private static readonly Color KeyColor = new Color(0.09f, 0.13f, 0.125f, 1f);
+        private static readonly Color UtilityKeyColor = new Color(0.13f, 0.17f, 0.165f, 1f);
+        private static readonly Color AccentKeyColor = new Color(0.25f, 0.95f, 0.72f, 1f);
+        private static readonly Color BorderColor = new Color(0.22f, 0.34f, 0.32f, 0.9f);
+        private static readonly Color TextColor = new Color(0.93f, 0.97f, 0.96f, 1f);
+        private static readonly Color AccentTextColor = new Color(0.025f, 0.12f, 0.09f, 1f);
+
         [SerializeField] private TMP_InputField inputField;
 
-        private TouchScreenKeyboard fallbackKeyboard;
+        private static QuestAndroidKeyboardInput activeInput;
+
+        private readonly List<LetterLabel> letterLabels = new List<LetterLabel>(26);
+        private RectTransform keyboardRoot;
+        private RectTransform alphabetLayout;
+        private RectTransform symbolLayout;
         private string originalText = string.Empty;
+        private Coroutine dismissCoroutine;
+        private int dismissRequestId;
+        private bool isUppercase;
         private bool isClosing;
 
-#if UNITY_ANDROID
-        private const int AndroidInputTypeText = 0x00000001;
-        private const int AndroidInputTypeNumber = 0x00000002;
-        private const int AndroidTextFlagAutoCorrect = 0x00008000;
-        private const int AndroidTextVariationPassword = 0x00000080;
-        private const int AndroidImeActionDone = 0x00000006;
-        private const int AndroidImeFlagNoExtractUi = 0x10000000;
-        private const int AndroidShowImplicit = 0x00000001;
+        public bool IsKeyboardOpen => keyboardRoot != null && keyboardRoot.gameObject.activeInHierarchy;
 
-        private readonly object nativeStateLock = new object();
-        private AndroidJavaObject androidActivity;
-        private AndroidJavaObject nativeEditText;
-        private NativeTextWatcher nativeTextWatcher;
-        private NativeEditorActionListener nativeEditorActionListener;
-        private string pendingNativeText;
-        private string pendingNativeError;
-        private bool hasPendingNativeText;
-        private bool pendingNativeSubmit;
-        private bool pendingFallback;
-        private volatile bool nativeInputAttached;
-        private volatile int nativeRequestId;
-#endif
-
-        public bool IsKeyboardOpen
+        public static bool IsKeyboardTarget(GameObject target)
         {
-            get
-            {
-#if UNITY_ANDROID
-                return nativeInputAttached || fallbackKeyboard != null;
-#else
-                return inputField != null && inputField.isFocused;
-#endif
-            }
+            return target != null &&
+                   activeInput != null &&
+                   activeInput.keyboardRoot != null &&
+                   target.transform.IsChildOf(activeInput.keyboardRoot);
         }
 
         public static QuestAndroidKeyboardInput Configure(TMP_InputField field)
@@ -72,14 +72,6 @@ namespace TsukiVox.AudioPrototype
             ConfigureInputField();
         }
 
-        private void Update()
-        {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            DrainNativeState();
-            UpdateFallbackKeyboard();
-#endif
-        }
-
         private void OnDisable()
         {
             ReleaseKeyboard();
@@ -99,7 +91,7 @@ namespace TsukiVox.AudioPrototype
         {
             if (!isClosing)
             {
-                HideKeyboard();
+                RequestDeferredDismiss();
             }
         }
 
@@ -118,44 +110,29 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
-#if UNITY_ANDROID && !UNITY_EDITOR
-            if (nativeInputAttached || fallbackKeyboard != null)
+            CancelPendingDismiss();
+            if (activeInput != null && activeInput != this)
             {
+                activeInput.HideKeyboard();
+            }
+
+            inputField.ActivateInputField();
+            if (keyboardRoot != null)
+            {
+                keyboardRoot.SetAsLastSibling();
                 return;
             }
 
             originalText = inputField.text ?? string.Empty;
-            if (!TryOpenNativeKeyboard(originalText))
-            {
-                OpenFallbackKeyboard();
-            }
-#else
-            inputField.ActivateInputField();
-#endif
+            isUppercase = false;
+            activeInput = this;
+            CreateKeyboard();
+            Debug.Log($"[TsukiVox Keyboard] In-app keyboard opened for '{inputField.name}'.");
         }
 
         public void HideKeyboard(bool submit = false)
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            if (fallbackKeyboard != null)
-            {
-                ApplyKeyboardText(fallbackKeyboard.text);
-            }
-
             FinishEditing(submit, canceled: false);
-#else
-            if (inputField == null)
-            {
-                return;
-            }
-
-            if (submit)
-            {
-                inputField.onSubmit?.Invoke(inputField.text);
-            }
-
-            inputField.DeactivateInputField();
-#endif
         }
 
         private void ConfigureInputField()
@@ -165,33 +142,370 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
+            inputField.onFocusSelectAll = false;
 #if UNITY_ANDROID && !UNITY_EDITOR
             inputField.shouldHideSoftKeyboard = true;
 #endif
         }
 
-        private void ApplyKeyboardText(string value)
+        private void CreateKeyboard()
+        {
+            var parent = inputField.transform.parent;
+            if (parent == null)
+            {
+                Debug.LogWarning("[TsukiVox Keyboard] Cannot create the in-app keyboard without a UI parent.");
+                return;
+            }
+
+            keyboardRoot = CreateRect(parent, "TsukiVox Soft Keyboard", new Vector2(0f, -140f), new Vector2(KeyboardWidth, KeyboardHeight));
+            keyboardRoot.SetAsLastSibling();
+
+            var panel = keyboardRoot.gameObject.AddComponent<QuestUiSurface>();
+            panel.color = PanelColor;
+            panel.SetCornerRadius(8f);
+            panel.raycastTarget = true;
+
+            var outline = keyboardRoot.gameObject.AddComponent<Outline>();
+            outline.effectColor = BorderColor;
+            outline.effectDistance = new Vector2(1.5f, -1.5f);
+            outline.useGraphicAlpha = false;
+
+            var panelButton = keyboardRoot.gameObject.AddComponent<Button>();
+            panelButton.targetGraphic = panel;
+            panelButton.transition = Selectable.Transition.None;
+            panelButton.navigation = new Navigation { mode = Navigation.Mode.None };
+            panelButton.onClick.AddListener(FocusInputField);
+
+            alphabetLayout = CreateRect(keyboardRoot, "Letters", Vector2.zero, new Vector2(KeyboardWidth, KeyboardHeight));
+            symbolLayout = CreateRect(keyboardRoot, "Symbols", Vector2.zero, new Vector2(KeyboardWidth, KeyboardHeight));
+
+            BuildAlphabetLayout();
+            BuildSymbolLayout();
+            symbolLayout.gameObject.SetActive(false);
+        }
+
+        private void BuildAlphabetLayout()
+        {
+            CreateLetterRow(alphabetLayout, "QWERTYUIOP", 91f, 92f);
+            CreateLetterRow(alphabetLayout, "ASDFGHJKL", 33f, 96f);
+            CreateRow(
+                alphabetLayout,
+                -25f,
+                new KeyDefinition("大写", 120f, ToggleCase, true),
+                LetterKey('Z'),
+                LetterKey('X'),
+                LetterKey('C'),
+                LetterKey('V'),
+                LetterKey('B'),
+                LetterKey('N'),
+                LetterKey('M'),
+                new KeyDefinition("退格", 132f, Backspace, true));
+            CreateBottomRow(alphabetLayout, "符号", () => SetSymbolMode(true));
+        }
+
+        private void BuildSymbolLayout()
+        {
+            CreateCharacterRow(symbolLayout, "1234567890", 91f, 92f);
+            CreateCharacterRow(symbolLayout, "@#$%&*()_", 33f, 96f);
+            CreateRow(
+                symbolLayout,
+                -25f,
+                new KeyDefinition("字母", 120f, () => SetSymbolMode(false), true),
+                CharacterKey(':'),
+                CharacterKey(';'),
+                CharacterKey('?'),
+                CharacterKey('!'),
+                CharacterKey(','),
+                CharacterKey('.'),
+                CharacterKey('='),
+                new KeyDefinition("退格", 132f, Backspace, true));
+            CreateBottomRow(symbolLayout, "字母", () => SetSymbolMode(false));
+        }
+
+        private void CreateLetterRow(Transform parent, string characters, float y, float width)
+        {
+            var definitions = new KeyDefinition[characters.Length];
+            for (var index = 0; index < characters.Length; index += 1)
+            {
+                definitions[index] = LetterKey(characters[index], width);
+            }
+
+            CreateRow(parent, y, definitions);
+        }
+
+        private void CreateCharacterRow(Transform parent, string characters, float y, float width)
+        {
+            var definitions = new KeyDefinition[characters.Length];
+            for (var index = 0; index < characters.Length; index += 1)
+            {
+                definitions[index] = CharacterKey(characters[index], width);
+            }
+
+            CreateRow(parent, y, definitions);
+        }
+
+        private void CreateBottomRow(Transform parent, string modeLabel, UnityAction modeAction)
+        {
+            CreateRow(
+                parent,
+                -88f,
+                new KeyDefinition(modeLabel, 100f, modeAction, true),
+                new KeyDefinition("清空", 100f, ClearText, true),
+                new KeyDefinition("空格", 300f, () => InsertText(" ")),
+                new KeyDefinition(".", 64f, () => InsertText(".")),
+                new KeyDefinition("-", 64f, () => InsertText("-")),
+                new KeyDefinition("/", 64f, () => InsertText("/")),
+                new KeyDefinition("取消", 112f, CancelEditing, true),
+                new KeyDefinition("完成", 132f, SubmitEditing, true, true));
+        }
+
+        private void CreateRow(Transform parent, float y, params KeyDefinition[] definitions)
+        {
+            var totalWidth = KeyGap * Mathf.Max(0, definitions.Length - 1);
+            for (var index = 0; index < definitions.Length; index += 1)
+            {
+                totalWidth += definitions[index].Width;
+            }
+
+            var x = -totalWidth * 0.5f;
+            for (var index = 0; index < definitions.Length; index += 1)
+            {
+                var definition = definitions[index];
+                var keyX = x + definition.Width * 0.5f;
+                var label = CreateKey(parent, $"Key {y} {index}", definition, new Vector2(keyX, y));
+                if (definition.Letter != '\0')
+                {
+                    letterLabels.Add(new LetterLabel(definition.Letter, label));
+                }
+
+                x += definition.Width + KeyGap;
+            }
+        }
+
+        private TMP_Text CreateKey(Transform parent, string name, KeyDefinition definition, Vector2 position)
+        {
+            var rect = CreateRect(parent, name, position, new Vector2(definition.Width, 50f));
+            var surface = rect.gameObject.AddComponent<QuestUiSurface>();
+            surface.color = definition.IsAccent ? AccentKeyColor : definition.IsUtility ? UtilityKeyColor : KeyColor;
+            surface.SetCornerRadius(6f);
+            surface.raycastTarget = true;
+
+            var outline = rect.gameObject.AddComponent<Outline>();
+            outline.effectColor = definition.IsAccent ? new Color(0.46f, 1f, 0.82f, 0.9f) : BorderColor;
+            outline.effectDistance = new Vector2(1f, -1f);
+            outline.useGraphicAlpha = false;
+
+            var button = rect.gameObject.AddComponent<Button>();
+            button.targetGraphic = surface;
+            button.transition = Selectable.Transition.ColorTint;
+            button.colors = CreateKeyColors();
+            button.navigation = new Navigation { mode = Navigation.Mode.None };
+            button.onClick.AddListener(definition.Action);
+            rect.gameObject.AddComponent<QuestUiButtonFeedback>();
+
+            var labelRect = CreateRect(rect, "Label", Vector2.zero, new Vector2(definition.Width - 12f, 42f));
+            var label = labelRect.gameObject.AddComponent<TextMeshProUGUI>();
+            label.font = inputField.textComponent != null ? inputField.textComponent.font : null;
+            label.text = definition.Label;
+            label.fontSize = definition.Label.Length > 2 ? 17f : 20f;
+            label.fontStyle = FontStyles.Bold;
+            label.color = definition.IsAccent ? AccentTextColor : TextColor;
+            label.alignment = TextAlignmentOptions.Center;
+            label.textWrappingMode = TextWrappingModes.NoWrap;
+            label.overflowMode = TextOverflowModes.Ellipsis;
+            label.raycastTarget = false;
+            return label;
+        }
+
+        private KeyDefinition LetterKey(char character, float width = 92f)
+        {
+            return new KeyDefinition(
+                character.ToString().ToLowerInvariant(),
+                width,
+                () => InsertText(ResolveLetter(character)),
+                letter: character);
+        }
+
+        private KeyDefinition CharacterKey(char character, float width = 92f)
+        {
+            var value = character.ToString();
+            return new KeyDefinition(value, width, () => InsertText(value));
+        }
+
+        private string ResolveLetter(char character)
+        {
+            return isUppercase
+                ? character.ToString().ToUpperInvariant()
+                : character.ToString().ToLowerInvariant();
+        }
+
+        private void ToggleCase()
+        {
+            isUppercase = !isUppercase;
+            for (var index = 0; index < letterLabels.Count; index += 1)
+            {
+                var letterLabel = letterLabels[index];
+                if (letterLabel.Label != null)
+                {
+                    letterLabel.Label.text = ResolveLetter(letterLabel.Character);
+                }
+            }
+
+            FocusInputField();
+        }
+
+        private void SetSymbolMode(bool symbols)
+        {
+            if (alphabetLayout != null)
+            {
+                alphabetLayout.gameObject.SetActive(!symbols);
+            }
+
+            if (symbolLayout != null)
+            {
+                symbolLayout.gameObject.SetActive(symbols);
+            }
+
+            FocusInputField();
+        }
+
+        private void InsertText(string value)
+        {
+            ReplaceSelection(value ?? string.Empty);
+            Debug.Log($"[TsukiVox Keyboard] Key applied to '{inputField.name}', length={(inputField.text ?? string.Empty).Length}.");
+            FocusInputField();
+        }
+
+        private void Backspace()
         {
             if (inputField == null)
             {
                 return;
             }
 
-            var nextValue = value ?? string.Empty;
-            if (inputField.characterLimit > 0 && nextValue.Length > inputField.characterLimit)
+            var text = inputField.text ?? string.Empty;
+            GetSelection(text.Length, out var start, out var end);
+            if (start != end)
             {
-                nextValue = nextValue[..inputField.characterLimit];
+                ReplaceSelection(string.Empty);
+                FocusInputField();
+                return;
             }
 
-            if (string.Equals(inputField.text, nextValue, StringComparison.Ordinal))
+            if (start <= 0)
+            {
+                FocusInputField();
+                return;
+            }
+
+            var textElements = StringInfo.ParseCombiningCharacters(text);
+            var previous = 0;
+            for (var index = 0; index < textElements.Length; index += 1)
+            {
+                if (textElements[index] >= start)
+                {
+                    break;
+                }
+
+                previous = textElements[index];
+            }
+
+            inputField.selectionStringAnchorPosition = previous;
+            inputField.selectionStringFocusPosition = start;
+            ReplaceSelection(string.Empty);
+            FocusInputField();
+        }
+
+        private void ClearText()
+        {
+            if (inputField == null)
             {
                 return;
             }
 
-            inputField.text = nextValue;
-            inputField.caretPosition = nextValue.Length;
-            inputField.selectionAnchorPosition = nextValue.Length;
-            inputField.selectionFocusPosition = nextValue.Length;
+            inputField.text = string.Empty;
+            SetCaret(0);
+            FocusInputField();
+        }
+
+        private void ReplaceSelection(string value)
+        {
+            if (inputField == null)
+            {
+                return;
+            }
+
+            var current = inputField.text ?? string.Empty;
+            GetSelection(current.Length, out var start, out var end);
+            var insert = value;
+            if (inputField.characterLimit > 0)
+            {
+                var available = Mathf.Max(0, inputField.characterLimit - (current.Length - (end - start)));
+                if (insert.Length > available)
+                {
+                    insert = insert[..available];
+                }
+            }
+
+            var next = current.Remove(start, end - start).Insert(start, insert);
+            inputField.text = next;
+            SetCaret(start + insert.Length);
+        }
+
+        private void GetSelection(int textLength, out int start, out int end)
+        {
+            var anchor = inputField != null ? inputField.selectionStringAnchorPosition : textLength;
+            var focus = inputField != null ? inputField.selectionStringFocusPosition : textLength;
+            start = Mathf.Clamp(Mathf.Min(anchor, focus), 0, textLength);
+            end = Mathf.Clamp(Mathf.Max(anchor, focus), 0, textLength);
+        }
+
+        private void SetCaret(int position)
+        {
+            if (inputField == null)
+            {
+                return;
+            }
+
+            var clamped = Mathf.Clamp(position, 0, (inputField.text ?? string.Empty).Length);
+            inputField.selectionStringAnchorPosition = clamped;
+            inputField.selectionStringFocusPosition = clamped;
+            inputField.stringPosition = clamped;
+        }
+
+        private void FocusInputField()
+        {
+            if (inputField == null || !inputField.IsActive() || !inputField.IsInteractable())
+            {
+                return;
+            }
+
+            CancelPendingDismiss();
+            if (EventSystem.current != null &&
+                !EventSystem.current.alreadySelecting &&
+                EventSystem.current.currentSelectedGameObject != inputField.gameObject)
+            {
+                EventSystem.current.SetSelectedGameObject(inputField.gameObject);
+            }
+
+            if (!inputField.isFocused)
+            {
+                inputField.ActivateInputField();
+            }
+            if (keyboardRoot != null)
+            {
+                keyboardRoot.SetAsLastSibling();
+            }
+        }
+
+        private void SubmitEditing()
+        {
+            FinishEditing(submit: true, canceled: false);
+        }
+
+        private void CancelEditing()
+        {
+            FinishEditing(submit: false, canceled: true);
         }
 
         private void FinishEditing(bool submit, bool canceled)
@@ -202,6 +516,7 @@ namespace TsukiVox.AudioPrototype
             }
 
             isClosing = true;
+            CancelPendingDismiss();
             if (canceled && inputField != null)
             {
                 inputField.text = originalText;
@@ -223,367 +538,147 @@ namespace TsukiVox.AudioPrototype
 
         private void ReleaseKeyboard()
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            nativeRequestId += 1;
-            CloseNativeInput();
-            if (fallbackKeyboard != null)
+            CancelPendingDismiss();
+            if (activeInput == this)
             {
-                fallbackKeyboard.active = false;
-                fallbackKeyboard = null;
+                activeInput = null;
             }
 
-            lock (nativeStateLock)
-            {
-                pendingFallback = false;
-                pendingNativeSubmit = false;
-                hasPendingNativeText = false;
-            }
-#else
-            fallbackKeyboard = null;
-#endif
-        }
-
-        private string ResolvePlaceholder()
-        {
-            if (inputField?.placeholder is TMP_Text placeholderText)
-            {
-                return placeholderText.text ?? string.Empty;
-            }
-
-            return string.Empty;
-        }
-
-#if UNITY_ANDROID
-        private bool TryOpenNativeKeyboard(string initialText)
-        {
-            try
-            {
-                if (androidActivity == null)
-                {
-                    using var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
-                    androidActivity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
-                }
-
-                if (androidActivity == null)
-                {
-                    return false;
-                }
-
-                nativeRequestId += 1;
-                var requestId = nativeRequestId;
-                androidActivity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
-                    CreateNativeInputOnUiThread(requestId, initialText)));
-                return true;
-            }
-            catch (Exception exception)
-            {
-                Debug.LogWarning($"[TsukiVox Keyboard] Native keyboard setup failed: {exception.Message}");
-                return false;
-            }
-        }
-
-        private void CreateNativeInputOnUiThread(int requestId, string initialText)
-        {
-            if (requestId != nativeRequestId || androidActivity == null)
+            letterLabels.Clear();
+            alphabetLayout = null;
+            symbolLayout = null;
+            if (keyboardRoot == null)
             {
                 return;
             }
 
-            try
+            var rootObject = keyboardRoot.gameObject;
+            keyboardRoot = null;
+            rootObject.SetActive(false);
+            if (Application.isPlaying)
             {
-                var editText = new AndroidJavaObject("android.widget.EditText", androidActivity);
-                editText.Call("setSingleLine", true);
-                editText.Call("setMaxLines", 1);
-                editText.Call("setFocusable", true);
-                editText.Call("setFocusableInTouchMode", true);
-                editText.Call("setShowSoftInputOnFocus", true);
-                editText.Call("setInputType", ResolveAndroidInputType());
-                editText.Call("setImeOptions", AndroidImeActionDone | AndroidImeFlagNoExtractUi);
-                editText.Call("setTextColor", 0x00000000);
-                editText.Call("setBackgroundColor", 0x00000000);
-                editText.Call("setCursorVisible", false);
-                editText.Call("setAlpha", 0.01f);
-                editText.Call("setText", initialText ?? string.Empty);
-
-                using var layoutParams = new AndroidJavaObject("android.widget.FrameLayout$LayoutParams", 1, 1);
-                androidActivity.Call("addContentView", editText, layoutParams);
-                nativeEditText = editText;
-                nativeInputAttached = true;
-
-                nativeTextWatcher = new NativeTextWatcher(value =>
-                {
-                    if (requestId == nativeRequestId)
-                    {
-                        QueueNativeText(value);
-                    }
-                });
-                nativeEditorActionListener = new NativeEditorActionListener(() =>
-                {
-                    if (requestId == nativeRequestId)
-                    {
-                        QueueNativeSubmit();
-                    }
-                });
-                editText.Call("addTextChangedListener", nativeTextWatcher);
-                editText.Call("setOnEditorActionListener", nativeEditorActionListener);
-                editText.Call("setSelection", (initialText ?? string.Empty).Length);
-                editText.Call<bool>("requestFocus");
-
-                editText.Call<bool>("postDelayed", new AndroidJavaRunnable(() =>
-                    ShowNativeKeyboardOnUiThread(requestId, allowRetry: true)), 100L);
+                Destroy(rootObject);
             }
-            catch (Exception exception)
+            else
             {
-                QueueNativeFailure(requestId, exception.Message);
+                DestroyImmediate(rootObject);
             }
         }
 
-        private void ShowNativeKeyboardOnUiThread(int requestId, bool allowRetry)
+        private void RequestDeferredDismiss()
         {
-            if (requestId != nativeRequestId || nativeEditText == null || androidActivity == null)
+            if (keyboardRoot == null)
             {
                 return;
             }
 
-            try
+            dismissRequestId += 1;
+            if (dismissCoroutine != null)
             {
-                nativeEditText.Call<bool>("requestFocus");
-                using var inputMethodManager = androidActivity.Call<AndroidJavaObject>("getSystemService", "input_method");
-                var shown = inputMethodManager != null &&
-                            inputMethodManager.Call<bool>("showSoftInput", nativeEditText, AndroidShowImplicit);
-                if (!shown && allowRetry)
-                {
-                    nativeEditText.Call<bool>("postDelayed", new AndroidJavaRunnable(() =>
-                        ShowNativeKeyboardOnUiThread(requestId, allowRetry: false)), 250L);
-                }
-                else if (!shown)
-                {
-                    QueueNativeFailure(requestId, "InputMethodManager rejected the keyboard request.");
-                }
+                StopCoroutine(dismissCoroutine);
             }
-            catch (Exception exception)
-            {
-                QueueNativeFailure(requestId, exception.Message);
-            }
+
+            dismissCoroutine = StartCoroutine(DismissAfterSelectionSettles(dismissRequestId));
+            Debug.Log($"[TsukiVox Keyboard] Deselect deferred for '{inputField.name}'.");
         }
 
-        private void CloseNativeInput()
+        private IEnumerator DismissAfterSelectionSettles(int requestId)
         {
-            nativeInputAttached = false;
-            var editText = nativeEditText;
-            nativeEditText = null;
-            var textWatcher = nativeTextWatcher;
-            nativeTextWatcher = null;
-            nativeEditorActionListener = null;
-            if (editText == null || androidActivity == null)
+            yield return null;
+            dismissCoroutine = null;
+            if (requestId != dismissRequestId || isClosing || keyboardRoot == null)
+            {
+                yield break;
+            }
+
+            var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
+            if (selected == null ||
+                selected == inputField.gameObject ||
+                (selected != null && selected.transform.IsChildOf(keyboardRoot)))
+            {
+                yield break;
+            }
+
+            Debug.Log($"[TsukiVox Keyboard] Closing after focus moved to '{(selected != null ? selected.name : "none")}'.");
+            HideKeyboard();
+        }
+
+        private void CancelPendingDismiss()
+        {
+            dismissRequestId += 1;
+            if (dismissCoroutine == null)
             {
                 return;
             }
 
-            androidActivity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
-            {
-                try
-                {
-                    using var inputMethodManager = androidActivity.Call<AndroidJavaObject>("getSystemService", "input_method");
-                    using var windowToken = editText.Call<AndroidJavaObject>("getWindowToken");
-                    inputMethodManager?.Call<bool>("hideSoftInputFromWindow", windowToken, 0);
-                    if (textWatcher != null)
-                    {
-                        editText.Call("removeTextChangedListener", textWatcher);
-                    }
-
-                    using var parent = editText.Call<AndroidJavaObject>("getParent");
-                    parent?.Call("removeView", editText);
-                }
-                catch (Exception exception)
-                {
-                    Debug.LogWarning($"[TsukiVox Keyboard] Native keyboard cleanup failed: {exception.Message}");
-                }
-                finally
-                {
-                    editText.Dispose();
-                }
-            }));
+            StopCoroutine(dismissCoroutine);
+            dismissCoroutine = null;
         }
 
-        private int ResolveAndroidInputType()
+        private static ColorBlock CreateKeyColors()
         {
-            if (inputField == null)
+            return new ColorBlock
             {
-                return AndroidInputTypeText | AndroidTextFlagAutoCorrect;
-            }
-
-            switch (inputField.contentType)
-            {
-                case TMP_InputField.ContentType.IntegerNumber:
-                case TMP_InputField.ContentType.DecimalNumber:
-                    return AndroidInputTypeNumber;
-                case TMP_InputField.ContentType.Password:
-                case TMP_InputField.ContentType.Pin:
-                    return AndroidInputTypeText | AndroidTextVariationPassword;
-                default:
-                    return AndroidInputTypeText | AndroidTextFlagAutoCorrect;
-            }
+                normalColor = Color.white,
+                highlightedColor = new Color(0.8f, 1f, 0.94f, 1f),
+                pressedColor = new Color(0.72f, 0.92f, 0.82f, 1f),
+                selectedColor = new Color(0.84f, 1f, 0.95f, 1f),
+                disabledColor = new Color(0.45f, 0.48f, 0.47f, 0.45f),
+                colorMultiplier = 1f,
+                fadeDuration = 0.04f,
+            };
         }
 
-        private void QueueNativeText(string value)
+        private static RectTransform CreateRect(Transform parent, string name, Vector2 position, Vector2 size)
         {
-            lock (nativeStateLock)
-            {
-                pendingNativeText = value ?? string.Empty;
-                hasPendingNativeText = true;
-            }
+            var childObject = new GameObject(name, typeof(RectTransform));
+            childObject.transform.SetParent(parent, false);
+            var rect = childObject.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 0.5f);
+            rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = position;
+            rect.sizeDelta = size;
+            rect.localScale = Vector3.one;
+            return rect;
         }
 
-        private void QueueNativeSubmit()
+        private readonly struct KeyDefinition
         {
-            lock (nativeStateLock)
+            public KeyDefinition(
+                string label,
+                float width,
+                UnityAction action,
+                bool isUtility = false,
+                bool isAccent = false,
+                char letter = '\0')
             {
-                pendingNativeSubmit = true;
+                Label = label;
+                Width = width;
+                Action = action;
+                IsUtility = isUtility;
+                IsAccent = isAccent;
+                Letter = letter;
             }
+
+            public string Label { get; }
+            public float Width { get; }
+            public UnityAction Action { get; }
+            public bool IsUtility { get; }
+            public bool IsAccent { get; }
+            public char Letter { get; }
         }
 
-        private void QueueNativeFailure(int requestId, string error)
+        private readonly struct LetterLabel
         {
-            if (requestId != nativeRequestId)
+            public LetterLabel(char character, TMP_Text label)
             {
-                return;
+                Character = character;
+                Label = label;
             }
 
-            lock (nativeStateLock)
-            {
-                pendingNativeError = error;
-                pendingFallback = true;
-            }
+            public char Character { get; }
+            public TMP_Text Label { get; }
         }
-
-        private void DrainNativeState()
-        {
-            string nextText = null;
-            string nativeError = null;
-            var submit = false;
-            var useFallback = false;
-            lock (nativeStateLock)
-            {
-                if (hasPendingNativeText)
-                {
-                    nextText = pendingNativeText;
-                    hasPendingNativeText = false;
-                }
-
-                submit = pendingNativeSubmit;
-                pendingNativeSubmit = false;
-                useFallback = pendingFallback;
-                pendingFallback = false;
-                nativeError = pendingNativeError;
-                pendingNativeError = null;
-            }
-
-            if (nextText != null)
-            {
-                ApplyKeyboardText(nextText);
-            }
-
-            if (submit)
-            {
-                FinishEditing(submit: true, canceled: false);
-                return;
-            }
-
-            if (useFallback)
-            {
-                Debug.LogWarning($"[TsukiVox Keyboard] Native IME unavailable, using Unity fallback: {nativeError}");
-                CloseNativeInput();
-                OpenFallbackKeyboard();
-            }
-        }
-
-        private void OpenFallbackKeyboard()
-        {
-            if (fallbackKeyboard != null || inputField == null)
-            {
-                return;
-            }
-
-            TouchScreenKeyboard.hideInput = false;
-            fallbackKeyboard = TouchScreenKeyboard.Open(
-                inputField.text ?? string.Empty,
-                inputField.keyboardType,
-                inputField.inputType == TMP_InputField.InputType.AutoCorrect,
-                inputField.lineType != TMP_InputField.LineType.SingleLine,
-                inputField.inputType == TMP_InputField.InputType.Password,
-                false,
-                ResolvePlaceholder(),
-                inputField.characterLimit);
-        }
-
-        private void UpdateFallbackKeyboard()
-        {
-            if (fallbackKeyboard == null)
-            {
-                return;
-            }
-
-            ApplyKeyboardText(fallbackKeyboard.text);
-            switch (fallbackKeyboard.status)
-            {
-                case TouchScreenKeyboard.Status.Done:
-                    FinishEditing(submit: true, canceled: false);
-                    break;
-                case TouchScreenKeyboard.Status.Canceled:
-                    FinishEditing(submit: false, canceled: true);
-                    break;
-                case TouchScreenKeyboard.Status.LostFocus:
-                    FinishEditing(submit: false, canceled: false);
-                    break;
-            }
-        }
-
-        private sealed class NativeTextWatcher : AndroidJavaProxy
-        {
-            private readonly Action<string> onTextChangedCallback;
-
-            public NativeTextWatcher(Action<string> onTextChanged)
-                : base("android.text.TextWatcher")
-            {
-                onTextChangedCallback = onTextChanged;
-            }
-
-            public void beforeTextChanged(AndroidJavaObject value, int start, int count, int after)
-            {
-            }
-
-            public void onTextChanged(AndroidJavaObject value, int start, int before, int count)
-            {
-                onTextChangedCallback?.Invoke(value?.Call<string>("toString") ?? string.Empty);
-            }
-
-            public void afterTextChanged(AndroidJavaObject value)
-            {
-            }
-        }
-
-        private sealed class NativeEditorActionListener : AndroidJavaProxy
-        {
-            private readonly Action onSubmitCallback;
-
-            public NativeEditorActionListener(Action onSubmit)
-                : base("android.widget.TextView$OnEditorActionListener")
-            {
-                onSubmitCallback = onSubmit;
-            }
-
-            public bool onEditorAction(AndroidJavaObject view, int actionId, AndroidJavaObject keyEvent)
-            {
-                if (actionId == AndroidImeActionDone || keyEvent != null)
-                {
-                    onSubmitCallback?.Invoke();
-                    return true;
-                }
-
-                return false;
-            }
-        }
-#endif
     }
 }

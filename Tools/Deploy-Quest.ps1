@@ -159,13 +159,13 @@ if (-not $InstallOnly) {
             Remove-Item -LiteralPath $stalePath -Force
         }
     }
-    $buildTime = [DateTimeOffset]::UtcNow
+    $buildTime = [DateTimeOffset]::Now
     $buildId = $buildTime.ToString('yyyyMMdd-HHmmss')
     if (Test-ProjectOpenInUnity) {
         $request = [ordered]@{
             outputPath = $ApkPath
             buildId = $buildId
-            buildTimeUtc = $buildTime.ToString('O')
+            buildTimeLocal = $buildTime.ToString('O')
             releaseBuild = [bool]$Release
             resultPath = $buildResultPath
         }
@@ -202,7 +202,7 @@ if (-not $InstallOnly) {
             '-executeMethod', 'TsukiVox.AudioPrototype.Editor.QuestCommandLineBuild.BuildAndroid',
             '-tsukivoxOutput', $ApkPath,
             '-tsukivoxBuildId', $buildId,
-            '-tsukivoxBuildTimeUtc', $buildTime.ToString('O'),
+            '-tsukivoxBuildTimeLocal', $buildTime.ToString('O'),
             '-logFile', $unityLogPath
         )
         if ($Release) {
@@ -251,6 +251,18 @@ if ([string]::IsNullOrWhiteSpace([string]$buildReceipt.buildId)) {
 }
 if ([string]::IsNullOrWhiteSpace([string]$buildReceipt.androidVersionName)) {
     throw "Build receipt does not contain an Android version name: $buildReceiptPath"
+}
+$buildTimeLocal = if ($null -ne $buildReceipt.PSObject.Properties['buildTimeLocal']) {
+    [string]$buildReceipt.buildTimeLocal
+}
+elseif ($null -ne $buildReceipt.PSObject.Properties['buildTimeUtc']) {
+    [DateTimeOffset]::Parse([string]$buildReceipt.buildTimeUtc).ToLocalTime().ToString('O')
+}
+else {
+    ''
+}
+if ([string]::IsNullOrWhiteSpace($buildTimeLocal)) {
+    throw "Build receipt does not contain a build time: $buildReceiptPath"
 }
 Write-Host "APK ready: $ApkPath"
 Write-Host "Build ID: $($buildReceipt.buildId)"
@@ -326,11 +338,11 @@ else {
 
 $deployReceipt = [ordered]@{
     buildId = [string]$buildReceipt.buildId
-    buildTimeUtc = [string]$buildReceipt.buildTimeUtc
+    buildTimeLocal = $buildTimeLocal
     apkPath = $ApkPath
     apkSha256 = [string]$buildReceipt.apkSha256
     deviceSerial = $serial
-    installedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
+    installedAtLocal = [DateTimeOffset]::Now.ToString('O')
     installedVersionName = $installedVersionName
     installVerified = $installVerified
     launchVerified = $launchVerified

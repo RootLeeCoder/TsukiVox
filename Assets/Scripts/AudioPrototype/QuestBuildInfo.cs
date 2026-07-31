@@ -8,7 +8,7 @@ namespace TsukiVox.AudioPrototype
     {
         public string productVersion;
         public string buildId;
-        public string buildTimeUtc;
+        public string buildTimeLocal;
         public string gitCommit;
         public bool gitDirty;
     }
@@ -22,7 +22,7 @@ namespace TsukiVox.AudioPrototype
 
         public static string Version => ValueOrFallback(Data.productVersion, ProductVersion);
         public static string BuildId => ValueOrFallback(Data.buildId, "editor");
-        public static string BuildTimeUtc => ValueOrFallback(Data.buildTimeUtc, "unavailable");
+        public static string BuildTimeLocal => ValueOrFallback(Data.buildTimeLocal, "unavailable");
         public static string GitCommit => ValueOrFallback(Data.gitCommit, "unavailable");
         public static bool GitDirty => Data.gitDirty;
 
@@ -30,8 +30,8 @@ namespace TsukiVox.AudioPrototype
         {
             get
             {
-                return DateTimeOffset.TryParse(BuildTimeUtc, out var timestamp)
-                    ? timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                return DateTimeOffset.TryParse(BuildTimeLocal, out var timestamp)
+                    ? timestamp.ToString("yyyy-MM-dd HH:mm:ss")
                     : "未生成";
             }
         }
@@ -40,9 +40,7 @@ namespace TsukiVox.AudioPrototype
         {
             get
             {
-                var shortId = DateTimeOffset.TryParse(BuildTimeUtc, out var timestamp)
-                    ? timestamp.ToLocalTime().ToString("HHmmss")
-                    : (BuildId.Length > 6 ? BuildId.Substring(BuildId.Length - 6) : BuildId);
+                var shortId = BuildId.Length > 6 ? BuildId.Substring(BuildId.Length - 6) : BuildId;
                 return $"V{Version} · 构建于 {BuildTimeDisplay} · #{shortId}";
             }
         }
@@ -53,7 +51,7 @@ namespace TsukiVox.AudioPrototype
         private static void LogCurrentBuild()
         {
             Debug.Log(
-                $"[TsukiVox Build] id={BuildId} timeUtc={BuildTimeUtc} " +
+                $"[TsukiVox Build] id={BuildId} timeLocal={BuildTimeLocal} " +
                 $"version={Version} git={GitCommit} dirty={GitDirty} guid={Application.buildGUID}");
         }
 
@@ -66,7 +64,7 @@ namespace TsukiVox.AudioPrototype
                 {
                     productVersion = ProductVersion,
                     buildId = "editor",
-                    buildTimeUtc = string.Empty,
+                    buildTimeLocal = string.Empty,
                     gitCommit = string.Empty,
                     gitDirty = false,
                 };
