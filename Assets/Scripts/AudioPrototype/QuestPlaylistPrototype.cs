@@ -107,7 +107,7 @@ namespace TsukiVox.AudioPrototype
         private string voiceErrorMessage = string.Empty;
         private string voiceErrorCode = string.Empty;
         private string voiceProvider = string.Empty;
-        private bool voiceSearchEnabled = true;
+        private bool voiceSearchEnabled;
         private int voiceSequence;
         private float duckedVideoVolume = -1f;
         private bool hasClearedQueueOnStartup;
@@ -1409,7 +1409,7 @@ namespace TsukiVox.AudioPrototype
                 PlayerPrefs.SetString(DeviceIdPrefsKey, deviceId);
             }
 
-            voiceSearchEnabled = PlayerPrefs.GetInt(VoiceSearchEnabledPrefsKey, 1) != 0;
+            voiceSearchEnabled = PlayerPrefs.GetInt(VoiceSearchEnabledPrefsKey, 0) != 0;
 
             PlayerPrefs.SetString(OnlineServiceOriginPrefsKey, onlineServiceOrigin);
             PlayerPrefs.SetInt(ServiceModePrefsKey, (int)serviceMode);

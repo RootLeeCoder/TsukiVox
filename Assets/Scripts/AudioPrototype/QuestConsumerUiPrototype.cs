@@ -13,6 +13,7 @@ namespace TsukiVox.AudioPrototype
     {
         private const string RootName = "Consumer UI";
         private const string DefaultSongSearchInput = "BV1Kx4y1h7vR";
+        private const string AppendKtvSearchPrefsKey = "TsukiVox.AppendKtvToSearch";
         private const int QueueRowCount = 5;
         private const int SearchResultRowCount = 4;
         private const int SuggestRowCount = 6;
@@ -129,12 +130,15 @@ namespace TsukiVox.AudioPrototype
 
         private Button songSearchBackButton;
         private TMP_InputField songSearchInput;
+        private TMP_Text appendKtvSearchLabel;
+        private Toggle appendKtvSearchToggle;
         private Button suggestSearchButton;
         private Button songSearchButton;
         private Button voiceSearchButton;
         private QuestUiIcon voiceSearchIcon;
         private TMP_Text voiceSearchStatusText;
         private TMP_Text voiceHeardText;
+        private RectTransform voiceLevelRoot;
         private readonly QuestUiSurface[] voiceLevelBars = new QuestUiSurface[VoiceLevelBarCount];
         private VoiceSearchUiState lastVoiceState = VoiceSearchUiState.Idle;
         private RectTransform suggestContainer;
@@ -151,6 +155,7 @@ namespace TsukiVox.AudioPrototype
         private Button clearSearchButton;
         private TMP_Text songSearchStatusText;
         private int songSearchPageNumber = 1;
+        private bool appendKtvToSearch;
 
         private Button settingsBackButton;
         private Button openServiceSettingsButton;
@@ -165,9 +170,9 @@ namespace TsukiVox.AudioPrototype
         private Button companionModeButton;
         private Button onlineModeButton;
         private TMP_Text serviceConnectionText;
-        private TMP_Text serviceModeHintText;
         private Toggle voiceSearchEnabledToggle;
         private TMP_Text voiceSearchHintText;
+        private TMP_Text voiceProviderLabelText;
         private Button tencentProviderButton;
         private Button mimoProviderButton;
         private Toggle monitorOutputToggle;
@@ -223,6 +228,7 @@ namespace TsukiVox.AudioPrototype
             handheldPropsPrototype = FindAnyObjectByType<QuestHandheldPropsPrototype>();
             appShellPrototype = appShell;
             uiFont = ResolveUiFont();
+            appendKtvToSearch = PlayerPrefs.GetInt(AppendKtvSearchPrefsKey, 0) != 0;
             videoScreenPrototype?.SetStatusOverlayVisible(false);
 
             if (panel == null)
@@ -404,7 +410,7 @@ namespace TsukiVox.AudioPrototype
                 TextSecondary);
 
             // 录音电平条：明确的"正在录音"视觉状态，不允许静默采集。
-            var levelRoot = EnsureRect(
+            voiceLevelRoot = EnsureRect(
                 songSearchPage,
                 "Voice Level",
                 new Vector2(60f, 146f),
@@ -412,9 +418,9 @@ namespace TsukiVox.AudioPrototype
             for (var index = 0; index < VoiceLevelBarCount; index += 1)
             {
                 var barRect = EnsureRect(
-                    levelRoot,
+                    voiceLevelRoot,
                     $"Bar {index}",
-                    new Vector2(-levelRoot.sizeDelta.x * 0.5f + 7f + index * 14f, 0f),
+                    new Vector2(-voiceLevelRoot.sizeDelta.x * 0.5f + 7f + index * 14f, 0f),
                     new Vector2(6f, 14f));
                 voiceLevelBars[index] = EnsureSurface(barRect, Accent, 3f, false);
             }
@@ -423,10 +429,21 @@ namespace TsukiVox.AudioPrototype
                 songSearchPage,
                 "Song Search Input",
                 "输入歌名、歌手或 BV 号",
-                new Vector2(-92f, 112f),
-                new Vector2(788f, 54f));
+                new Vector2(-166f, 112f),
+                new Vector2(640f, 54f));
             songSearchInput.characterLimit = 80;
             songSearchInput.SetTextWithoutNotify(DefaultSongSearchInput);
+            appendKtvSearchLabel = CreateText(
+                songSearchPage,
+                "Append KTV Label",
+                "KTV",
+                16,
+                FontStyle.Bold,
+                new Vector2(190f, 112f),
+                new Vector2(56f, 36f),
+                TextAnchor.MiddleCenter,
+                TextSecondary);
+            appendKtvSearchToggle = CreateSwitch(songSearchPage, "Append KTV Switch", new Vector2(260f, 112f));
             suggestSearchButton = CreateIconButton(
                 songSearchPage,
                 "Search Suggestions",
@@ -631,34 +648,34 @@ namespace TsukiVox.AudioPrototype
         private void BuildServicePage()
         {
             BuildSubpageHeader(servicePage, "点歌服务", out serviceBackButton);
-            companionModeButton = CreateTextButton(servicePage, "Companion Mode", "局域网 Companion", new Vector2(-250f, 130f), new Vector2(480f, 64f), Surface, TextPrimary);
-            onlineModeButton = CreateTextButton(servicePage, "Online Mode", "在线服务", new Vector2(250f, 130f), new Vector2(480f, 64f), Surface, TextPrimary);
+            companionModeButton = CreateTextButton(servicePage, "Companion Mode", "局域网 Companion", new Vector2(-250f, 132f), new Vector2(480f, 60f), Surface, TextPrimary);
+            onlineModeButton = CreateTextButton(servicePage, "Online Mode", "在线服务", new Vector2(250f, 132f), new Vector2(480f, 60f), Surface, TextPrimary);
 
-            CreateText(servicePage, "Address Label", "服务地址", 17, FontStyle.Bold, new Vector2(-402f, 62f), new Vector2(180f, 32f), TextAnchor.MiddleLeft, TextSecondary);
-            serviceConnectionText = CreateText(servicePage, "Connection Status", "正在连接", 17, FontStyle.Bold, new Vector2(330f, 62f), new Vector2(320f, 32f), TextAnchor.MiddleRight, Accent);
-            helperHostInput = CreateInputField(servicePage, "Service Address", QuestPlaylistPrototype.DefaultHelperHostAddress, new Vector2(-90f, 12f), new Vector2(780f, 58f));
-            applyHostButton = CreateTextButton(servicePage, "Apply Service Address", "应用", new Vector2(414f, 12f), new Vector2(168f, 58f), Accent, AccentInk);
-            serviceModeHintText = CreateText(servicePage, "Mode Hint", string.Empty, 16, FontStyle.Normal, new Vector2(0f, -42f), new Vector2(ContentWidth, 34f), TextAnchor.MiddleLeft, TextSecondary);
+            CreateText(servicePage, "Address Label", "服务地址", 17, FontStyle.Bold, new Vector2(-402f, 75f), new Vector2(180f, 32f), TextAnchor.MiddleLeft, TextSecondary);
+            serviceConnectionText = CreateText(servicePage, "Connection Status", "正在连接", 17, FontStyle.Bold, new Vector2(330f, 75f), new Vector2(320f, 32f), TextAnchor.MiddleRight, Accent);
+            helperHostInput = CreateInputField(servicePage, "Service Address", QuestPlaylistPrototype.DefaultHelperHostAddress, new Vector2(-170f, 18f), new Vector2(620f, 56f));
+            applyHostButton = CreateTextButton(servicePage, "Apply Service Address", "应用", new Vector2(230f, 18f), new Vector2(150f, 56f), Accent, AccentInk);
+            defaultHostButton = CreateTextButton(servicePage, "Default Service Address", "恢复默认地址", new Vector2(406f, 18f), new Vector2(180f, 56f), Surface, TextPrimary);
 
-            CreateDivider(servicePage, "Address Divider", new Vector2(0f, -76f), new Vector2(ContentWidth, 1f));
-            defaultHostButton = CreateTextButton(servicePage, "Default Service Address", "恢复默认地址", new Vector2(-390f, -126f), new Vector2(220f, 52f), Surface, TextPrimary);
-            CreateText(servicePage, "Privacy Note", "局域网模式只连接你的电脑；在线模式会把搜索与媒体请求发送到所填服务。", 15, FontStyle.Normal, new Vector2(115f, -126f), new Vector2(760f, 52f), TextAnchor.MiddleLeft, TextSecondary);
+            SetChildActive(servicePage, "Mode Hint", false);
+            SetChildActive(servicePage, "Privacy Note", false);
+            SetChildActive(servicePage, "Voice Divider", false);
+            CreateDivider(servicePage, "Address Divider", new Vector2(0f, -32f), new Vector2(ContentWidth, 1f));
 
-            CreateDivider(servicePage, "Voice Divider", new Vector2(0f, -166f), new Vector2(ContentWidth, 1f));
-            CreateText(servicePage, "Voice Title", "语音找歌", 19, FontStyle.Bold, new Vector2(-356f, -196f), new Vector2(280f, 32f), TextAnchor.MiddleLeft, TextPrimary);
-            voiceSearchEnabledToggle = CreateSwitch(servicePage, "Voice Search Switch", new Vector2(460f, -196f));
+            CreateText(servicePage, "Voice Title", "语音找歌", 19, FontStyle.Bold, new Vector2(-356f, -74f), new Vector2(280f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            voiceSearchEnabledToggle = CreateSwitch(servicePage, "Voice Search Switch", new Vector2(460f, -74f));
 
             // 识别供应商二选一，与上方服务模式相同的互斥按钮样式。
-            CreateText(servicePage, "Provider Label", "识别供应商", 16, FontStyle.Normal, new Vector2(-380f, -240f), new Vector2(230f, 28f), TextAnchor.MiddleLeft, TextSecondary);
-            tencentProviderButton = CreateTextButton(servicePage, "Tencent Provider", "腾讯云", new Vector2(-60f, -240f), new Vector2(210f, 50f), Surface, TextPrimary);
-            mimoProviderButton = CreateTextButton(servicePage, "MiMo Provider", "小米 MiMo", new Vector2(170f, -240f), new Vector2(210f, 50f), Surface, TextPrimary);
+            voiceProviderLabelText = CreateText(servicePage, "Provider Label", "识别供应商", 16, FontStyle.Normal, new Vector2(-380f, -132f), new Vector2(230f, 28f), TextAnchor.MiddleLeft, TextSecondary);
+            tencentProviderButton = CreateTextButton(servicePage, "Tencent Provider", "腾讯云", new Vector2(-60f, -132f), new Vector2(210f, 50f), Surface, TextPrimary);
+            mimoProviderButton = CreateTextButton(servicePage, "MiMo Provider", "小米 MiMo", new Vector2(170f, -132f), new Vector2(210f, 50f), Surface, TextPrimary);
             voiceSearchHintText = CreateText(
                 servicePage,
                 "Voice Hint",
                 "关闭后不再采集或上传语音",
                 15,
                 FontStyle.Normal,
-                new Vector2(0f, -278f),
+                new Vector2(0f, -180f),
                 new Vector2(ContentWidth, 26f),
                 TextAnchor.MiddleLeft,
                 TextSecondary);
@@ -771,6 +788,10 @@ namespace TsukiVox.AudioPrototype
             WireButton(songSearchButton, () => SearchSongs(1));
             WireButton(suggestSearchButton, SearchSuggestions);
             WireButton(voiceSearchButton, ToggleVoiceSearch);
+            appendKtvSearchToggle.onValueChanged.RemoveAllListeners();
+            appendKtvSearchToggle.SetIsOnWithoutNotify(appendKtvToSearch);
+            appendKtvSearchToggle.onValueChanged.AddListener(HandleAppendKtvSearchToggle);
+            RefreshAppendKtvSearchToggle();
             songSearchInput.onSubmit.RemoveAllListeners();
             songSearchInput.onSubmit.AddListener(_ => SearchSongs(1));
             songSearchInput.onSelect.RemoveAllListeners();
@@ -1125,13 +1146,6 @@ namespace TsukiVox.AudioPrototype
                     : QuestPlaylistPrototype.DefaultHelperHostAddress;
             }
 
-            if (serviceModeHintText != null)
-            {
-                serviceModeHintText.text = playlistPrototype != null && playlistPrototype.IsOnlineService
-                    ? "在线服务使用一个完整的 HTTP(S) 地址提供搜索、队列和视频。"
-                    : "Companion 使用同一局域网内 Windows 电脑的 IP 地址。";
-            }
-
             SetServiceModeButtonVisual(companionModeButton, playlistPrototype == null || !playlistPrototype.IsOnlineService);
             SetServiceModeButtonVisual(onlineModeButton, playlistPrototype != null && playlistPrototype.IsOnlineService);
 
@@ -1139,11 +1153,12 @@ namespace TsukiVox.AudioPrototype
             {
                 voiceSearchEnabledToggle.SetIsOnWithoutNotify(playlistPrototype.IsVoiceSearchEnabled);
                 RefreshSwitchVisual(voiceSearchEnabledToggle, Accent);
+                SetVoiceFeatureVisible(playlistPrototype.IsVoiceSearchEnabled);
                 RefreshVoiceProviderButtons();
                 if (voiceSearchHintText != null)
                 {
                     voiceSearchHintText.text = !playlistPrototype.IsVoiceSearchEnabled
-                        ? "已关闭：不再采集或上传语音"
+                        ? "已关闭：入口已隐藏，不再采集或上传语音"
                         : audioPrototype != null && audioPrototype.PrefersNativeOboeBackend
                             ? "Native 低延迟后端下无法采集语音，请先关闭它"
                             : DescribeVoiceProviderHint();
@@ -1507,6 +1522,13 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
+            var visible = playlistPrototype.IsVoiceSearchEnabled;
+            SetVoiceFeatureVisible(visible);
+            if (!visible)
+            {
+                return;
+            }
+
             var state = playlistPrototype.VoiceState;
             var listening = state == VoiceSearchUiState.Listening;
             var busy = playlistPrototype.IsVoiceBusy;
@@ -1589,6 +1611,50 @@ namespace TsukiVox.AudioPrototype
             }
         }
 
+        private void SetVoiceFeatureVisible(bool visible)
+        {
+            voiceSearchButton?.gameObject.SetActive(visible);
+            voiceSearchStatusText?.gameObject.SetActive(visible);
+            voiceHeardText?.gameObject.SetActive(visible);
+            voiceLevelRoot?.gameObject.SetActive(visible);
+            SetSongSearchVoiceLayout(visible);
+
+            voiceProviderLabelText?.gameObject.SetActive(visible);
+            tencentProviderButton?.gameObject.SetActive(visible);
+            mimoProviderButton?.gameObject.SetActive(visible);
+        }
+
+        private void SetSongSearchVoiceLayout(bool voiceVisible)
+        {
+            var searchRowY = voiceVisible ? 112f : 150f;
+            SetAnchoredY(songSearchInput?.transform as RectTransform, searchRowY);
+            SetAnchoredY(appendKtvSearchLabel?.rectTransform, searchRowY);
+            SetAnchoredY(appendKtvSearchToggle?.transform as RectTransform, searchRowY);
+            SetAnchoredY(suggestSearchButton?.transform as RectTransform, searchRowY);
+            SetAnchoredY(songSearchButton?.transform as RectTransform, searchRowY);
+            SetAnchoredY(suggestContainer, voiceVisible ? -32f : 0f);
+
+            var firstResultY = voiceVisible ? 48f : 78f;
+            for (var index = 0; index < searchResultRows.Length; index += 1)
+            {
+                SetAnchoredY(searchResultRows[index], firstResultY - index * 66f);
+            }
+
+            var footerY = voiceVisible ? -226f : -200f;
+            SetAnchoredY(searchPreviousPageButton?.transform as RectTransform, footerY);
+            SetAnchoredY(clearSearchButton?.transform as RectTransform, footerY);
+            SetAnchoredY(songSearchStatusText?.rectTransform, footerY);
+            SetAnchoredY(searchNextPageButton?.transform as RectTransform, footerY);
+        }
+
+        private static void SetAnchoredY(RectTransform rect, float y)
+        {
+            if (rect != null)
+            {
+                rect.anchoredPosition = new Vector2(rect.anchoredPosition.x, y);
+            }
+        }
+
         private void SearchSongs(int page)
         {
             if (playlistPrototype == null || songSearchInput == null)
@@ -1605,10 +1671,45 @@ namespace TsukiVox.AudioPrototype
             }
 
             songSearchPageNumber = Mathf.Max(1, page);
-            playlistPrototype.SearchBilibili(query, songSearchPageNumber, SearchResultRowCount);
+            playlistPrototype.SearchBilibili(BuildSongSearchQuery(query), songSearchPageNumber, SearchResultRowCount);
 
             // 搜索时隐藏建议
             HideSuggestions();
+        }
+
+        private string BuildSongSearchQuery(string query)
+        {
+            if (!appendKtvToSearch ||
+                string.Equals(query, "KTV", StringComparison.OrdinalIgnoreCase) ||
+                query.EndsWith(" KTV", StringComparison.OrdinalIgnoreCase))
+            {
+                return query;
+            }
+
+            return $"{query} KTV";
+        }
+
+        private void HandleAppendKtvSearchToggle(bool enabled)
+        {
+            appendKtvToSearch = enabled;
+            PlayerPrefs.SetInt(AppendKtvSearchPrefsKey, enabled ? 1 : 0);
+            PlayerPrefs.Save();
+            RefreshAppendKtvSearchToggle();
+        }
+
+        private void RefreshAppendKtvSearchToggle()
+        {
+            if (appendKtvSearchToggle == null)
+            {
+                return;
+            }
+
+            appendKtvSearchToggle.SetIsOnWithoutNotify(appendKtvToSearch);
+            RefreshSwitchVisual(appendKtvSearchToggle, Accent);
+            if (appendKtvSearchLabel != null)
+            {
+                appendKtvSearchLabel.color = appendKtvToSearch ? TextPrimary : TextSecondary;
+            }
         }
 
         private void SearchSuggestions()
