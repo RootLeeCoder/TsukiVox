@@ -18,19 +18,16 @@ namespace TsukiVox.AudioPrototype
         private const float KeyboardHeight = 260f;
         private const float KeyGap = 8f;
 
-        private static readonly Color PanelColor = new Color(0.018f, 0.029f, 0.028f, 0.99f);
-        private static readonly Color KeyColor = new Color(0.09f, 0.13f, 0.125f, 1f);
-        private static readonly Color UtilityKeyColor = new Color(0.13f, 0.17f, 0.165f, 1f);
-        private static readonly Color AccentKeyColor = new Color(0.25f, 0.95f, 0.72f, 1f);
-        private static readonly Color BorderColor = new Color(0.22f, 0.34f, 0.32f, 0.9f);
-        private static readonly Color TextColor = new Color(0.93f, 0.97f, 0.96f, 1f);
-        private static readonly Color AccentTextColor = new Color(0.025f, 0.12f, 0.09f, 1f);
 
         [SerializeField] private TMP_InputField inputField;
 
         private static QuestAndroidKeyboardInput activeInput;
 
         private readonly List<LetterLabel> letterLabels = new List<LetterLabel>(26);
+        private readonly List<KeyboardKeyVisual> keyVisuals = new List<KeyboardKeyVisual>(64);
+        private QuestKtvRoomPrototype roomPrototype;
+        private QuestKtvRoomPrototype subscribedRoom;
+        private QuestUiThemePalette palette = QuestUiThemePalette.For(RoomTheme.Dark);
         private RectTransform keyboardRoot;
         private RectTransform alphabetLayout;
         private RectTransform symbolLayout;
@@ -50,7 +47,7 @@ namespace TsukiVox.AudioPrototype
                    target.transform.IsChildOf(activeInput.keyboardRoot);
         }
 
-        public static QuestAndroidKeyboardInput Configure(TMP_InputField field)
+        public static QuestAndroidKeyboardInput Configure(TMP_InputField field, QuestKtvRoomPrototype room = null)
         {
             if (field == null)
             {
@@ -62,6 +59,7 @@ namespace TsukiVox.AudioPrototype
                 ? keyboardInput
                 : field.gameObject.AddComponent<QuestAndroidKeyboardInput>();
             keyboardInput.inputField = field;
+            keyboardInput.SetRoom(room);
             keyboardInput.ConfigureInputField();
             return keyboardInput;
         }
@@ -72,13 +70,20 @@ namespace TsukiVox.AudioPrototype
             ConfigureInputField();
         }
 
+        private void OnEnable()
+        {
+            SubscribeRoom();
+        }
+
         private void OnDisable()
         {
+            UnsubscribeRoom();
             ReleaseKeyboard();
         }
 
         private void OnDestroy()
         {
+            UnsubscribeRoom();
             ReleaseKeyboard();
         }
 
@@ -135,6 +140,92 @@ namespace TsukiVox.AudioPrototype
             FinishEditing(submit, canceled: false);
         }
 
+        private void SetRoom(QuestKtvRoomPrototype room)
+        {
+            if (roomPrototype == room)
+            {
+                SubscribeRoom();
+                return;
+            }
+
+            UnsubscribeRoom();
+            roomPrototype = room;
+            palette = QuestUiThemePalette.For(roomPrototype != null ? roomPrototype.CurrentTheme : RoomTheme.Dark);
+            SubscribeRoom();
+            ApplyThemeToKeyboard();
+        }
+
+        private void SubscribeRoom()
+        {
+            if (!isActiveAndEnabled || roomPrototype == null || subscribedRoom == roomPrototype)
+            {
+                return;
+            }
+
+            UnsubscribeRoom();
+            subscribedRoom = roomPrototype;
+            subscribedRoom.ThemeChanged += HandleRoomThemeChanged;
+        }
+
+        private void UnsubscribeRoom()
+        {
+            if (subscribedRoom == null)
+            {
+                return;
+            }
+
+            subscribedRoom.ThemeChanged -= HandleRoomThemeChanged;
+            subscribedRoom = null;
+        }
+
+        private void HandleRoomThemeChanged(RoomTheme theme)
+        {
+            palette = QuestUiThemePalette.For(theme);
+            ApplyThemeToKeyboard();
+        }
+
+        private void ApplyThemeToKeyboard()
+        {
+            if (keyboardRoot == null)
+            {
+                return;
+            }
+
+            var panel = keyboardRoot.GetComponent<QuestUiSurface>();
+            if (panel != null)
+            {
+                panel.color = palette.KeyboardPanel;
+            }
+
+            var panelOutline = keyboardRoot.GetComponent<Outline>();
+            if (panelOutline != null)
+            {
+                panelOutline.effectColor = palette.KeyboardBorder;
+            }
+
+            for (var index = 0; index < keyVisuals.Count; index += 1)
+            {
+                var visual = keyVisuals[index];
+                if (visual.Surface != null)
+                {
+                    visual.Surface.color = visual.IsAccent
+                        ? palette.KeyboardAccentKey
+                        : visual.IsUtility ? palette.KeyboardUtilityKey : palette.KeyboardKey;
+                }
+                if (visual.Outline != null)
+                {
+                    visual.Outline.effectColor = visual.IsAccent ? palette.KeyboardHighlighted : palette.KeyboardBorder;
+                }
+                if (visual.Button != null)
+                {
+                    visual.Button.colors = CreateKeyColors();
+                }
+                if (visual.Label != null)
+                {
+                    visual.Label.color = visual.IsAccent ? palette.KeyboardAccentText : palette.KeyboardText;
+                }
+            }
+        }
         private void ConfigureInputField()
         {
             if (inputField == null)
@@ -157,16 +248,17 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
+            palette = QuestUiThemePalette.For(roomPrototype != null ? roomPrototype.CurrentTheme : RoomTheme.Dark);
             keyboardRoot = CreateRect(parent, "TsukiVox Soft Keyboard", new Vector2(0f, -140f), new Vector2(KeyboardWidth, KeyboardHeight));
             keyboardRoot.SetAsLastSibling();
 
             var panel = keyboardRoot.gameObject.AddComponent<QuestUiSurface>();
-            panel.color = PanelColor;
+            panel.color = palette.KeyboardPanel;
             panel.SetCornerRadius(8f);
             panel.raycastTarget = true;
 
             var outline = keyboardRoot.gameObject.AddComponent<Outline>();
-            outline.effectColor = BorderColor;
+            outline.effectColor = palette.KeyboardBorder;
             outline.effectDistance = new Vector2(1.5f, -1.5f);
             outline.useGraphicAlpha = false;
 
@@ -286,12 +378,12 @@ namespace TsukiVox.AudioPrototype
         {
             var rect = CreateRect(parent, name, position, new Vector2(definition.Width, 50f));
             var surface = rect.gameObject.AddComponent<QuestUiSurface>();
-            surface.color = definition.IsAccent ? AccentKeyColor : definition.IsUtility ? UtilityKeyColor : KeyColor;
+            surface.color = definition.IsAccent ? palette.KeyboardAccentKey : definition.IsUtility ? palette.KeyboardUtilityKey : palette.KeyboardKey;
             surface.SetCornerRadius(6f);
             surface.raycastTarget = true;
 
             var outline = rect.gameObject.AddComponent<Outline>();
-            outline.effectColor = definition.IsAccent ? new Color(0.46f, 1f, 0.82f, 0.9f) : BorderColor;
+            outline.effectColor = definition.IsAccent ? palette.KeyboardHighlighted : palette.KeyboardBorder;
             outline.effectDistance = new Vector2(1f, -1f);
             outline.useGraphicAlpha = false;
 
@@ -309,11 +401,12 @@ namespace TsukiVox.AudioPrototype
             label.text = definition.Label;
             label.fontSize = definition.Label.Length > 2 ? 17f : 20f;
             label.fontStyle = FontStyles.Bold;
-            label.color = definition.IsAccent ? AccentTextColor : TextColor;
+            label.color = definition.IsAccent ? palette.KeyboardAccentText : palette.KeyboardText;
             label.alignment = TextAlignmentOptions.Center;
             label.textWrappingMode = TextWrappingModes.NoWrap;
             label.overflowMode = TextOverflowModes.Ellipsis;
             label.raycastTarget = false;
+            keyVisuals.Add(new KeyboardKeyVisual(surface, outline, button, label, definition.IsUtility, definition.IsAccent));
             return label;
         }
 
@@ -545,6 +638,7 @@ namespace TsukiVox.AudioPrototype
             }
 
             letterLabels.Clear();
+            keyVisuals.Clear();
             alphabetLayout = null;
             symbolLayout = null;
             if (keyboardRoot == null)
@@ -615,15 +709,15 @@ namespace TsukiVox.AudioPrototype
             dismissCoroutine = null;
         }
 
-        private static ColorBlock CreateKeyColors()
+        private ColorBlock CreateKeyColors()
         {
             return new ColorBlock
             {
                 normalColor = Color.white,
-                highlightedColor = new Color(0.8f, 1f, 0.94f, 1f),
-                pressedColor = new Color(0.72f, 0.92f, 0.82f, 1f),
-                selectedColor = new Color(0.84f, 1f, 0.95f, 1f),
-                disabledColor = new Color(0.45f, 0.48f, 0.47f, 0.45f),
+                highlightedColor = palette.KeyboardHighlighted,
+                pressedColor = palette.KeyboardPressed,
+                selectedColor = palette.KeyboardHighlighted,
+                disabledColor = palette.KeyboardDisabled,
                 colorMultiplier = 1f,
                 fadeDuration = 0.04f,
             };
@@ -669,6 +763,31 @@ namespace TsukiVox.AudioPrototype
             public char Letter { get; }
         }
 
+        private readonly struct KeyboardKeyVisual
+        {
+            public KeyboardKeyVisual(
+                QuestUiSurface surface,
+                Outline outline,
+                Button button,
+                TMP_Text label,
+                bool isUtility,
+                bool isAccent)
+            {
+                Surface = surface;
+                Outline = outline;
+                Button = button;
+                Label = label;
+                IsUtility = isUtility;
+                IsAccent = isAccent;
+            }
+
+            public QuestUiSurface Surface { get; }
+            public Outline Outline { get; }
+            public Button Button { get; }
+            public TMP_Text Label { get; }
+            public bool IsUtility { get; }
+            public bool IsAccent { get; }
+        }
         private readonly struct LetterLabel
         {
             public LetterLabel(char character, TMP_Text label)

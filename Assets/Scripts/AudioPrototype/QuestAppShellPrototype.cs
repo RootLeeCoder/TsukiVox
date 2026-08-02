@@ -91,6 +91,7 @@ namespace TsukiVox.AudioPrototype
             playlistPrototype = playlistPrototype != null ? playlistPrototype : QuestPlaylistPrototype.EnsureScenePrototype();
             videoScreenPrototype = videoScreenPrototype != null ? videoScreenPrototype : QuestVideoScreenPrototype.EnsureScenePrototype();
             var ktvRoom = QuestKtvRoomPrototype.EnsureSceneRoom();
+            var palette = QuestUiThemePalette.For(ktvRoom != null ? ktvRoom.CurrentTheme : RoomTheme.Dark);
 
             controlCanvas = controlCanvas != null ? controlCanvas : FindOrCreateControlCanvas();
             if (controlCanvas == null)
@@ -99,14 +100,14 @@ namespace TsukiVox.AudioPrototype
             }
 
             ConfigureControlCanvas(controlCanvas);
-            panel = panel != null ? panel : FindOrCreatePanel(controlCanvas.transform);
+            panel = panel != null ? panel : FindOrCreatePanel(controlCanvas.transform, palette);
             tabletTiltController = tabletTiltController != null
                 ? tabletTiltController
                 : GetComponent<QuestTabletTiltController>();
             tabletTiltController = tabletTiltController != null
                 ? tabletTiltController
                 : gameObject.AddComponent<QuestTabletTiltController>();
-            tabletTiltController.Configure(controlCanvas, panel);
+            tabletTiltController.Configure(controlCanvas, panel, ktvRoom);
             roomThemeController = roomThemeController != null
                 ? roomThemeController
                 : GetComponent<QuestRoomThemeController>();
@@ -120,23 +121,23 @@ namespace TsukiVox.AudioPrototype
             if (organizePanelOnAwake && panel != null)
             {
                 panel.sizeDelta = ControlPanelSize;
-                EnsurePanelImage(panel);
+                EnsurePanelImage(panel, palette);
             }
 
             appStatusText = appStatusText != null
                 ? appStatusText
-                : FindOrCreateText(panel, "App Status", "Quest App shell starting.", 15, FontStyle.Normal, new Vector2(0f, 292f), new Vector2(900f, 38f), TextAnchor.MiddleCenter);
+                : FindOrCreateText(panel, "App Status", "Quest App shell starting.", 15, FontStyle.Normal, new Vector2(0f, 292f), new Vector2(900f, 38f), TextAnchor.MiddleCenter, palette);
             copyAppDebugButton = copyAppDebugButton != null
                 ? copyAppDebugButton
-                : FindOrCreateButton(panel, "Copy App Debug", "Copy App Debug", new Vector2(522f, -300f), new Vector2(176f, 42f), 13);
+                : FindOrCreateButton(panel, "Copy App Debug", "Copy App Debug", new Vector2(522f, -300f), new Vector2(176f, 42f), 13, palette);
             WireCopyButton();
             videoDebugToggle = videoDebugToggle != null
                 ? videoDebugToggle
-                : FindOrCreateToggle(panel, "Video Debug", new Vector2(-240f, -300f), new Vector2(176f, 38f), false);
+                : FindOrCreateToggle(panel, "Video Debug", new Vector2(-240f, -300f), new Vector2(176f, 38f), false, palette);
             WireVideoDebugToggle();
             consumerUi = consumerUi != null ? consumerUi : GetComponent<QuestConsumerUiPrototype>();
             consumerUi = consumerUi != null ? consumerUi : gameObject.AddComponent<QuestConsumerUiPrototype>();
-            consumerUi.Configure(panel, audioPrototype, playlistPrototype, videoScreenPrototype, this);
+            consumerUi.Configure(panel, audioPrototype, playlistPrototype, videoScreenPrototype, this, ktvRoom);
             RefreshAppStatus();
         }
 
@@ -380,13 +381,13 @@ namespace TsukiVox.AudioPrototype
             return canvasObject.AddComponent<Canvas>();
         }
 
-        private static RectTransform FindOrCreatePanel(Transform canvasTransform)
+        private static RectTransform FindOrCreatePanel(Transform canvasTransform, QuestUiThemePalette palette)
         {
             var existing = canvasTransform.Find(PanelName) as RectTransform;
             if (existing != null)
             {
                 existing.sizeDelta = ControlPanelSize;
-                EnsurePanelImage(existing);
+                EnsurePanelImage(existing, palette);
                 return existing;
             }
 
@@ -397,20 +398,22 @@ namespace TsukiVox.AudioPrototype
             rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.anchoredPosition = Vector2.zero;
             rect.sizeDelta = ControlPanelSize;
-            EnsurePanelImage(rect);
+            EnsurePanelImage(rect, palette);
             return rect;
         }
 
-        private static void EnsurePanelImage(RectTransform panelRect)
+        private static void EnsurePanelImage(RectTransform panelRect, QuestUiThemePalette palette)
         {
             var image = panelRect.GetComponent<Image>() ?? panelRect.gameObject.AddComponent<Image>();
-            image.color = new Color(0.024f, 0.04f, 0.039f, 1f);
+            image.color = palette.ScreenBackground;
         }
 
         private static void OrganizeControlPanel(RectTransform panelRect)
         {
+            var room = FindAnyObjectByType<QuestKtvRoomPrototype>();
+            var palette = QuestUiThemePalette.For(room != null ? room.CurrentTheme : RoomTheme.Dark);
             panelRect.sizeDelta = new Vector2(1240f, 690f);
-            EnsurePanelImage(panelRect);
+            EnsurePanelImage(panelRect, palette);
 
             var title = FindText(panelRect, "TsukiVox Quest Audio Prototype") ?? FindText(panelRect, "TsukiVox Quest Prototype");
             if (title != null)
@@ -568,7 +571,7 @@ namespace TsukiVox.AudioPrototype
             }
         }
 
-        private static Text FindOrCreateText(Transform parent, string name, string value, int fontSize, FontStyle style, Vector2 position, Vector2 size, TextAnchor alignment)
+        private static Text FindOrCreateText(Transform parent, string name, string value, int fontSize, FontStyle style, Vector2 position, Vector2 size, TextAnchor alignment, QuestUiThemePalette palette = null)
         {
             var existing = parent.Find(name);
             if (existing != null && existing.TryGetComponent<Text>(out var existingText))
@@ -581,6 +584,7 @@ namespace TsukiVox.AudioPrototype
                 return existingText;
             }
 
+            palette ??= QuestUiThemePalette.For(RoomTheme.Dark);
             var textObject = new GameObject(name);
             textObject.transform.SetParent(parent, false);
             var text = textObject.AddComponent<Text>();
@@ -588,7 +592,7 @@ namespace TsukiVox.AudioPrototype
             text.text = value;
             text.fontSize = fontSize;
             text.fontStyle = style;
-            text.color = style == FontStyle.Bold ? TextPrimary : TextSecondary;
+            text.color = style == FontStyle.Bold ? palette.TextPrimary : palette.TextSecondary;
             text.alignment = alignment;
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.verticalOverflow = VerticalWrapMode.Overflow;
@@ -596,7 +600,7 @@ namespace TsukiVox.AudioPrototype
             return text;
         }
 
-        private static Button FindOrCreateButton(Transform parent, string name, string label, Vector2 position, Vector2 size, int fontSize)
+        private static Button FindOrCreateButton(Transform parent, string name, string label, Vector2 position, Vector2 size, int fontSize, QuestUiThemePalette palette)
         {
             var existing = parent.Find(name);
             if (existing != null && existing.TryGetComponent<Button>(out var existingButton))
@@ -611,17 +615,17 @@ namespace TsukiVox.AudioPrototype
             var rect = buttonObject.AddComponent<RectTransform>();
             SetRect(rect, position, size);
             var image = buttonObject.AddComponent<Image>();
-            image.color = new Color(0.08f, 0.14f, 0.15f, 1f);
+            image.color = palette.ButtonSurface;
             var button = buttonObject.AddComponent<Button>();
             button.targetGraphic = image;
-            button.colors = CreateSelectableColors();
+            button.colors = CreateSelectableColors(palette);
 
-            var labelText = FindOrCreateText(buttonObject.transform, "Label", label, fontSize, FontStyle.Bold, Vector2.zero, size, TextAnchor.MiddleCenter);
-            labelText.color = TextPrimary;
+            var labelText = FindOrCreateText(buttonObject.transform, "Label", label, fontSize, FontStyle.Bold, Vector2.zero, size, TextAnchor.MiddleCenter, palette);
+            labelText.color = palette.TextPrimary;
             return button;
         }
 
-        private static Toggle FindOrCreateToggle(Transform parent, string name, Vector2 position, Vector2 size, bool value)
+        private static Toggle FindOrCreateToggle(Transform parent, string name, Vector2 position, Vector2 size, bool value, QuestUiThemePalette palette)
         {
             var existing = parent.Find(name);
             if (existing != null && existing.TryGetComponent<Toggle>(out var existingToggle))
@@ -640,23 +644,23 @@ namespace TsukiVox.AudioPrototype
             var backgroundRect = background.AddComponent<RectTransform>();
             SetRect(backgroundRect, new Vector2(-size.x * 0.5f + 20f, 0f), new Vector2(28f, 28f));
             var backgroundImage = background.AddComponent<Image>();
-            backgroundImage.color = new Color(0.12f, 0.16f, 0.18f);
+            backgroundImage.color = palette.ButtonSurface;
 
             var checkmark = new GameObject("Checkmark");
             checkmark.transform.SetParent(background.transform, false);
             var checkmarkRect = checkmark.AddComponent<RectTransform>();
             SetRect(checkmarkRect, Vector2.zero, new Vector2(18f, 18f));
             var checkmarkImage = checkmark.AddComponent<Image>();
-            checkmarkImage.color = Accent;
+            checkmarkImage.color = palette.Accent;
 
-            var label = FindOrCreateText(toggleObject.transform, "Label", name, 14, FontStyle.Normal, new Vector2(22f, 0f), new Vector2(size.x - 56f, size.y), TextAnchor.MiddleLeft);
-            label.color = TextSecondary;
+            var label = FindOrCreateText(toggleObject.transform, "Label", name, 14, FontStyle.Normal, new Vector2(22f, 0f), new Vector2(size.x - 56f, size.y), TextAnchor.MiddleLeft, palette);
+            label.color = palette.TextSecondary;
 
             var toggle = toggleObject.AddComponent<Toggle>();
             toggle.targetGraphic = backgroundImage;
             toggle.graphic = checkmarkImage;
             toggle.isOn = value;
-            toggle.colors = CreateSelectableColors();
+            toggle.colors = CreateSelectableColors(palette);
             return toggle;
         }
 
@@ -781,15 +785,16 @@ namespace TsukiVox.AudioPrototype
             rect.sizeDelta = size;
         }
 
-        private static ColorBlock CreateSelectableColors()
+        private static ColorBlock CreateSelectableColors(QuestUiThemePalette palette = null)
         {
+            palette ??= QuestUiThemePalette.For(RoomTheme.Dark);
             return new ColorBlock
             {
-                normalColor = new Color(0.08f, 0.14f, 0.15f, 1f),
-                highlightedColor = new Color(0.15f, 0.3f, 0.31f, 1f),
-                pressedColor = Accent,
-                selectedColor = new Color(0.18f, 0.36f, 0.34f, 1f),
-                disabledColor = new Color(0.08f, 0.1f, 0.105f, 0.48f),
+                normalColor = palette.ButtonSurface,
+                highlightedColor = palette.ButtonHighlighted,
+                pressedColor = palette.ButtonPressed,
+                selectedColor = palette.SurfaceHover,
+                disabledColor = palette.ButtonDisabled,
                 colorMultiplier = 1f,
                 fadeDuration = 0.05f,
             };

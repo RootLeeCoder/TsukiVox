@@ -21,19 +21,13 @@ namespace TsukiVox.AudioPrototype
         private static readonly float[] TiltAngles = { 0f, 30f, 60f, 90f };
         private static readonly string[] TiltLabels = { "0°\n平放", "30°\n低角", "60°\n阅读", "90°\n直立" };
 
-        private static readonly Color DockSurface = new Color(0.025f, 0.045f, 0.047f, 0.98f);
-        private static readonly Color ButtonSurface = new Color(0.07f, 0.095f, 0.1f, 1f);
-        private static readonly Color ActiveSurface = new Color(0.24f, 0.9f, 0.74f, 1f);
-        private static readonly Color TextPrimary = new Color(0.9f, 0.96f, 0.96f, 1f);
-        private static readonly Color TextSecondary = new Color(0.57f, 0.68f, 0.69f, 1f);
-        private static readonly Color Accent = new Color(0.25f, 0.95f, 0.72f, 1f);
-        private static readonly Color AccentInk = new Color(0.012f, 0.075f, 0.059f, 1f);
 
         [Header("Scene References")]
         [SerializeField] private Canvas controlCanvas;
         [SerializeField] private RectTransform controlPanel;
         [SerializeField] private Transform tabletPivot;
         [SerializeField] private Canvas switchCanvas;
+        [SerializeField] private QuestKtvRoomPrototype roomPrototype;
 
         [Header("Motion")]
         [SerializeField, Range(0, 3)] private int currentStepIndex = DefaultStepIndex;
@@ -54,15 +48,25 @@ namespace TsukiVox.AudioPrototype
         private float animationTargetAngle;
         private float nextHierarchyResolveAt;
         private TMP_FontAsset uiFont;
+        private QuestUiSurface dockSurface;
+        private QuestKtvRoomPrototype subscribedRoom;
+        private RoomTheme currentTheme = RoomTheme.Dark;
 
         public float CurrentTiltAngle => currentTiltAngle;
         public int CurrentStepIndex => currentStepIndex;
         public bool IsAnimating => isAnimating;
 
-        public void Configure(Canvas canvas, RectTransform panel)
+        public void Configure(Canvas canvas, RectTransform panel, QuestKtvRoomPrototype room)
         {
             controlCanvas = canvas != null ? canvas : controlCanvas;
             controlPanel = panel != null ? panel : controlPanel;
+            if (roomPrototype != room)
+            {
+                UnsubscribeRoom();
+                roomPrototype = room;
+            }
+
+            currentTheme = roomPrototype != null ? roomPrototype.CurrentTheme : RoomTheme.Dark;
             uiFont = ResolveUiFont();
 
             currentStepIndex = Application.isPlaying
@@ -72,10 +76,26 @@ namespace TsukiVox.AudioPrototype
             animationTargetAngle = currentTiltAngle;
 
             EnsureSwitchCanvas();
+            SubscribeRoom();
             ResolvePanelGroup();
             TryConfigureTabletHierarchy();
             ApplyTiltImmediate(currentTiltAngle);
             RefreshStepVisuals(-1f);
+        }
+
+        private void OnEnable()
+        {
+            SubscribeRoom();
+            if (roomPrototype != null)
+            {
+                currentTheme = roomPrototype.CurrentTheme;
+                RefreshStepVisuals(isAnimating ? 0f : -1f);
+            }
+        }
+
+        private void OnDisable()
+        {
+            UnsubscribeRoom();
         }
 
         public void SetTiltStep(int stepIndex)
@@ -312,6 +332,12 @@ namespace TsukiVox.AudioPrototype
                 return false;
             }
 
+            dockSurface = dock.GetComponent<QuestUiSurface>();
+            if (dockSurface == null)
+            {
+                return false;
+            }
+
             for (var index = 0; index < stepButtons.Length; index += 1)
             {
                 var step = dock.Find($"Angle {index}");
@@ -345,22 +371,24 @@ namespace TsukiVox.AudioPrototype
                 DestroyForCurrentMode(existingDock.gameObject);
             }
 
-            var dock = CreateSurface(parent, "Dock", parent.sizeDelta, Vector2.zero, DockSurface, 10f);
+            var palette = QuestUiThemePalette.For(currentTheme);
+            var dock = CreateSurface(parent, "Dock", parent.sizeDelta, Vector2.zero, palette.DockSurface, 10f);
             dock.raycastTarget = false;
+            dockSurface = dock;
 
             for (var index = 0; index < stepButtons.Length; index += 1)
             {
                 var x = -150f + index * 100f;
-                var surface = CreateSurface(dock.rectTransform, $"Angle {index}", new Vector2(88f, 88f), new Vector2(x, 0f), ButtonSurface, 8f);
+                var surface = CreateSurface(dock.rectTransform, $"Angle {index}", new Vector2(88f, 88f), new Vector2(x, 0f), palette.ButtonSurface, 8f);
                 var button = surface.gameObject.AddComponent<Button>();
                 button.targetGraphic = surface;
                 button.transition = Selectable.Transition.None;
                 button.navigation = new Navigation { mode = Navigation.Mode.None };
-                button.colors = CreateButtonColors();
+                button.colors = CreateButtonColors(palette);
                 surface.raycastTarget = true;
 
-                var label = CreateText(surface.rectTransform, "Label", TiltLabels[index], 19, TextPrimary, Vector2.zero, new Vector2(82f, 72f));
-                var light = CreateSurface(surface.rectTransform, "Selected Light", new Vector2(42f, 4f), new Vector2(0f, -37f), Accent, 2f);
+                var label = CreateText(surface.rectTransform, "Label", TiltLabels[index], 19, palette.DockTextPrimary, Vector2.zero, new Vector2(82f, 72f));
+                var light = CreateSurface(surface.rectTransform, "Selected Light", new Vector2(42f, 4f), new Vector2(0f, -37f), palette.DockAccent, 2f);
                 light.raycastTarget = false;
 
                 var feedback = surface.gameObject.AddComponent<QuestUiButtonFeedback>();
@@ -389,6 +417,12 @@ namespace TsukiVox.AudioPrototype
 
         private void RefreshStepVisuals(float motionProgress)
         {
+            var palette = QuestUiThemePalette.For(currentTheme);
+            if (dockSurface != null)
+            {
+                dockSurface.color = palette.DockSurface;
+            }
+
             for (var index = 0; index < stepButtons.Length; index += 1)
             {
                 if (stepSurfaces[index] == null || stepLabels[index] == null || stepLights[index] == null)
@@ -398,16 +432,49 @@ namespace TsukiVox.AudioPrototype
 
                 var isActive = index == currentStepIndex;
                 stepLabels[index].text = TiltLabels[index];
-                stepSurfaces[index].color = isActive ? ActiveSurface : ButtonSurface;
-                stepLabels[index].color = isActive ? AccentInk : TextPrimary;
+                stepSurfaces[index].color = isActive ? palette.ActiveSurface : palette.ButtonSurface;
+                stepLabels[index].color = isActive ? palette.DockAccentInk : palette.DockTextPrimary;
                 var lightAlpha = isActive ? 1f : 0f;
                 if (isActive && motionProgress >= 0f)
                 {
                     lightAlpha = 0.58f + Mathf.Sin(motionProgress * Mathf.PI) * 0.42f;
                 }
 
-                stepLights[index].color = new Color(Accent.r, Accent.g, Accent.b, lightAlpha);
+                stepLights[index].color = new Color(palette.DockAccent.r, palette.DockAccent.g, palette.DockAccent.b, lightAlpha);
+                if (stepButtons[index] != null)
+                {
+                    stepButtons[index].colors = CreateButtonColors(palette);
+                }
             }
+        }
+
+        private void SubscribeRoom()
+        {
+            if (!isActiveAndEnabled || roomPrototype == null || subscribedRoom == roomPrototype)
+            {
+                return;
+            }
+
+            UnsubscribeRoom();
+            subscribedRoom = roomPrototype;
+            subscribedRoom.ThemeChanged += HandleRoomThemeChanged;
+        }
+
+        private void UnsubscribeRoom()
+        {
+            if (subscribedRoom == null)
+            {
+                return;
+            }
+
+            subscribedRoom.ThemeChanged -= HandleRoomThemeChanged;
+            subscribedRoom = null;
+        }
+
+        private void HandleRoomThemeChanged(RoomTheme theme)
+        {
+            currentTheme = theme;
+            RefreshStepVisuals(isAnimating ? 0f : -1f);
         }
 
         private static QuestUiSurface CreateSurface(
@@ -470,15 +537,15 @@ namespace TsukiVox.AudioPrototype
             return TMP_Settings.defaultFontAsset;
         }
 
-        private static ColorBlock CreateButtonColors()
+        private static ColorBlock CreateButtonColors(QuestUiThemePalette palette)
         {
             return new ColorBlock
             {
                 normalColor = Color.white,
-                highlightedColor = new Color(0.72f, 1f, 0.9f, 1f),
-                pressedColor = new Color(0.42f, 0.92f, 0.72f, 1f),
+                highlightedColor = palette.ButtonHighlighted,
+                pressedColor = palette.ButtonPressed,
                 selectedColor = Color.white,
-                disabledColor = new Color(0.42f, 0.48f, 0.48f, 0.42f),
+                disabledColor = palette.ButtonDisabled,
                 colorMultiplier = 1f,
                 fadeDuration = 0.08f,
             };

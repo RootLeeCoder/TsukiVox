@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -84,6 +85,8 @@ namespace TsukiVox.AudioPrototype
         public bool NeedsDesignRefresh => generatedDesignRevision < CurrentDesignRevision;
 
         public RoomTheme CurrentTheme => currentTheme;
+
+        public event Action<RoomTheme> ThemeChanged;
 
         public static QuestKtvRoomPrototype EnsureSceneRoom()
         {
@@ -201,11 +204,18 @@ namespace TsukiVox.AudioPrototype
         /// </summary>
         public void ApplyTheme(RoomTheme theme)
         {
-            currentTheme = theme;
+            var normalizedTheme = theme == RoomTheme.Bright ? RoomTheme.Bright : RoomTheme.Dark;
+            var changed = normalizedTheme != currentTheme;
+            currentTheme = normalizedTheme;
             EnsureRoots();
-            RetintGeneratedMaterials(theme);
+            RetintGeneratedMaterials(normalizedTheme);
             ConfigureLighting();
             ApplyFeedback(smoothedLevel);
+
+            if (changed)
+            {
+                ThemeChanged?.Invoke(normalizedTheme);
+            }
         }
 
         private static RoomTheme LoadPersistedTheme()

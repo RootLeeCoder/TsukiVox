@@ -22,24 +22,53 @@ namespace TsukiVox.AudioPrototype
         private const float ContentWidth = 992f;
         private const float MicClearanceStep = 0.0025f;
 
-        private static readonly Color ScreenBackground = new Color(0.024f, 0.04f, 0.039f, 1f);
-        private static readonly Color Surface = new Color(0.048f, 0.073f, 0.071f, 1f);
-        private static readonly Color SurfaceRaised = new Color(0.068f, 0.098f, 0.094f, 1f);
-        private static readonly Color SurfaceHover = new Color(0.52f, 1f, 0.88f, 1f);
-        private static readonly Color Line = new Color(0.14f, 0.2f, 0.19f, 1f);
-        private static readonly Color TextPrimary = new Color(0.94f, 0.97f, 0.96f, 1f);
-        private static readonly Color TextSecondary = new Color(0.57f, 0.65f, 0.63f, 1f);
-        private static readonly Color TextFaint = new Color(0.37f, 0.42f, 0.41f, 1f);
-        private static readonly Color Accent = new Color(0.24f, 0.9f, 0.74f, 1f);
-        private static readonly Color AccentStrong = new Color(0.56f, 1f, 0.89f, 1f);
-        private static readonly Color AccentInk = new Color(0.012f, 0.075f, 0.059f, 1f);
-        private static readonly Color Warm = new Color(0.95f, 0.71f, 0.42f, 1f);
-        private static readonly Color WarmSurface = new Color(0.22f, 0.15f, 0.09f, 1f);
-        private static readonly Color Danger = new Color(0.94f, 0.44f, 0.44f, 1f);
-        private static readonly Color BrandBackground = new Color(0.031f, 0.035f, 0.043f, 1f);
-        private static readonly Color BrandAccent = new Color(0.196f, 0.902f, 0.765f, 1f);
-        private static readonly Color BrandWarm = new Color(1f, 0.741f, 0.447f, 1f);
+        private Color ScreenBackground => palette.ScreenBackground;
+        private Color Surface => palette.Surface;
+        private Color SurfaceRaised => palette.SurfaceRaised;
+        private Color SurfaceHover => palette.SurfaceHover;
+        private Color Line => palette.Line;
+        private Color TextPrimary => palette.TextPrimary;
+        private Color TextSecondary => palette.TextSecondary;
+        private Color TextFaint => palette.TextFaint;
+        private Color Accent => palette.Accent;
+        private Color AccentStrong => palette.AccentStrong;
+        private Color AccentInk => palette.AccentInk;
+        private Color Warm => palette.Warm;
+        private Color WarmSurface => palette.WarmSurface;
+        private Color Danger => palette.Danger;
+        private Color BrandBackground => palette.BrandBackground;
+        private Color BrandAccent => palette.BrandAccent;
+        private Color BrandWarm => palette.BrandWarm;
 
+        private enum ThemeColorRole
+        {
+            Clear,
+            ScreenBackground,
+            Surface,
+            SurfaceRaised,
+            Line,
+            TextPrimary,
+            TextSecondary,
+            TextFaint,
+            Accent,
+            AccentStrong,
+            AccentInk,
+            Warm,
+            WarmSurface,
+            Danger,
+            BrandBackground,
+            BrandAccent,
+            BrandWarm,
+            PendingSurface,
+            EnabledSurface,
+            SafetySurface,
+            InactiveMeter,
+            SliderTrack,
+            DebugScrim,
+            DrawerSurface,
+            RawDetailsSurface,
+            DiagnosticsActionSurface,
+        }
         private enum UiPage
         {
             Home,
@@ -79,6 +108,10 @@ namespace TsukiVox.AudioPrototype
         private QuestVideoScreenPrototype videoScreenPrototype;
         private QuestHandheldPropsPrototype handheldPropsPrototype;
         private QuestAppShellPrototype appShellPrototype;
+        private QuestKtvRoomPrototype roomPrototype;
+        private QuestKtvRoomPrototype subscribedRoom;
+        private QuestUiThemePalette palette = QuestUiThemePalette.For(RoomTheme.Dark);
+        private readonly Dictionary<UnityEngine.Object, ThemeColorRole> themeBindings = new Dictionary<UnityEngine.Object, ThemeColorRole>();
         private QuestPlaylistPrototype subscribedPlaylist;
         private static TMP_FontAsset sharedUiFont;
         private TMP_FontAsset uiFont;
@@ -219,14 +252,23 @@ namespace TsukiVox.AudioPrototype
             QuestAudioPrototype audio,
             QuestPlaylistPrototype playlist,
             QuestVideoScreenPrototype video,
-            QuestAppShellPrototype appShell)
+            QuestAppShellPrototype appShell,
+            QuestKtvRoomPrototype room)
         {
+            var requiresBuild = consumerRoot == null || targetPanel != panel || consumerRoot.parent != targetPanel;
+            if (roomPrototype != room)
+            {
+                UnsubscribeRoom();
+                roomPrototype = room;
+            }
+
             panel = targetPanel;
             audioPrototype = audio;
             playlistPrototype = playlist;
             videoScreenPrototype = video;
             handheldPropsPrototype = FindAnyObjectByType<QuestHandheldPropsPrototype>();
             appShellPrototype = appShell;
+            palette = QuestUiThemePalette.For(roomPrototype != null ? roomPrototype.CurrentTheme : RoomTheme.Dark);
             uiFont = ResolveUiFont();
             appendKtvToSearch = PlayerPrefs.GetInt(AppendKtvSearchPrefsKey, 0) != 0;
             videoScreenPrototype?.SetStatusOverlayVisible(false);
@@ -236,11 +278,21 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
-            EnsureUiHierarchy();
+            if (requiresBuild)
+            {
+                themeBindings.Clear();
+                EnsureUiHierarchy();
+                ShowPageImmediate(UiPage.Home);
+                SetDebugDrawerImmediate(false);
+            }
+            else
+            {
+                ApplyThemeToExistingUi();
+            }
+
             WireUi();
             SubscribePlaylist();
-            ShowPageImmediate(UiPage.Home);
-            SetDebugDrawerImmediate(false);
+            SubscribeRoom();
             RefreshAll();
             isConfigured = true;
         }
@@ -248,12 +300,14 @@ namespace TsukiVox.AudioPrototype
         private void OnEnable()
         {
             SubscribePlaylist();
+            SubscribeRoom();
         }
 
         private void OnDisable()
         {
             CancelMicFaceCalibration();
             UnsubscribePlaylist();
+            UnsubscribeRoom();
         }
 
         private void Update()
@@ -577,7 +631,7 @@ namespace TsukiVox.AudioPrototype
             }
 
             var safetyNote = EnsureRect(voicePage, "Safety Note", new Vector2(0f, -225f), new Vector2(ContentWidth, 48f));
-            EnsureSurface(safetyNote, new Color(0.09f, 0.11f, 0.1f, 1f), 6f, false);
+            EnsureSurface(safetyNote, palette.SafetySurface, 6f, false);
             CreateText(safetyNote, "Label", "安全保护会在返听过响时自动降低音量", 16, FontStyle.Normal, Vector2.zero, new Vector2(930f, 32f), TextAnchor.MiddleCenter, TextSecondary);
         }
 
@@ -724,14 +778,14 @@ namespace TsukiVox.AudioPrototype
         private void BuildDebugDrawer()
         {
             debugScrim = EnsureRect(consumerRoot, "Debug Scrim", Vector2.zero, QuestAppShellPrototype.ControlPanelSize);
-            var scrimSurface = EnsureSurface(debugScrim, new Color(0f, 0f, 0f, 0.58f), 0f, true);
+            var scrimSurface = EnsureSurface(debugScrim, palette.DebugScrim, 0f, true);
             debugScrimButton = GetOrAddComponent<Button>(debugScrim.gameObject);
             debugScrimButton.targetGraphic = scrimSurface;
             debugScrimButton.transition = Selectable.Transition.None;
             debugScrimGroup = GetOrAddComponent<CanvasGroup>(debugScrim.gameObject);
 
             debugDrawer = EnsureRect(consumerRoot, "Debug Drawer", new Vector2(250f, 0f), new Vector2(620f, 560f));
-            EnsureSurface(debugDrawer, new Color(0.055f, 0.082f, 0.079f, 1f), 0f, true);
+            EnsureSurface(debugDrawer, palette.DrawerSurface, 0f, true);
             debugDrawerGroup = GetOrAddComponent<CanvasGroup>(debugDrawer.gameObject);
             CreateDivider(debugDrawer, "Header Divider", new Vector2(0f, 216f), new Vector2(572f, 1f));
             CreateText(debugDrawer, "Title", "诊断与支持", 26, FontStyle.Bold, new Vector2(-130f, 248f), new Vector2(310f, 46f), TextAnchor.MiddleLeft, TextPrimary);
@@ -752,12 +806,12 @@ namespace TsukiVox.AudioPrototype
             EnsureIcon(rawDetailsButton.transform, "Chevron", QuestUiIconKind.ChevronRight, new Vector2(250f, 0f), new Vector2(20f, 20f), TextSecondary);
 
             rawDetailsRoot = EnsureRect(debugDrawer, "Raw Details", new Vector2(0f, -126f), new Vector2(548f, 104f));
-            EnsureSurface(rawDetailsRoot, new Color(0.035f, 0.052f, 0.051f, 1f), 6f, false);
+            EnsureSurface(rawDetailsRoot, palette.RawDetailsSurface, 6f, false);
             rawDiagnosticsText = CreateText(rawDetailsRoot, "Text", string.Empty, 13, FontStyle.Normal, Vector2.zero, new Vector2(510f, 86f), TextAnchor.UpperLeft, TextSecondary);
             rawDiagnosticsText.textWrappingMode = TextWrappingModes.Normal;
             rawDiagnosticsText.overflowMode = TextOverflowModes.Truncate;
 
-            copyDiagnosticsButton = CreateTextButton(debugDrawer, "Copy Complete Diagnostics", "复制完整诊断信息", new Vector2(0f, -226f), new Vector2(548f, 52f), new Color(0.035f, 0.11f, 0.09f, 1f), AccentStrong);
+            copyDiagnosticsButton = CreateTextButton(debugDrawer, "Copy Complete Diagnostics", "复制完整诊断信息", new Vector2(0f, -226f), new Vector2(548f, 52f), palette.DiagnosticsActionSurface, AccentStrong);
             EnsureIcon(copyDiagnosticsButton.transform, "Icon", QuestUiIconKind.Copy, new Vector2(-160f, 0f), new Vector2(22f, 22f), AccentStrong);
 
             debugScrim.SetAsLastSibling();
@@ -940,7 +994,7 @@ namespace TsukiVox.AudioPrototype
                 var baseHeight = 12f + ((index * 17) % 5) * 7f;
                 var height = Mathf.Lerp(8f, baseHeight + 36f, Mathf.Clamp01(inputLevel * (0.7f + index * 0.05f)));
                 waveBars[index].rectTransform.sizeDelta = new Vector2(6f, height);
-                waveBars[index].color = micLive ? Accent : new Color(0.18f, 0.26f, 0.25f, 1f);
+                waveBars[index].color = micLive ? Accent : palette.InactiveMeter;
             }
         }
 
@@ -967,7 +1021,7 @@ namespace TsukiVox.AudioPrototype
                 var item = items[index];
                 var isPending = playlistPrototype.IsAddingItem && playlistPrototype.PendingAddItem == item;
                 searchResultSurfaces[index].color = isPending
-                    ? new Color(0.035f, 0.16f, 0.13f, 1f)
+                    ? palette.PendingSurface
                     : Surface;
                 searchResultTitleTexts[index].text = SafeText(item.title, item.bvid);
                 searchResultMetaTexts[index].text = $"{SafeText(item.author, "未知 UP 主")} · {FormatDuration(item)} · {item.bvid}";
@@ -1090,7 +1144,7 @@ namespace TsukiVox.AudioPrototype
                         playlistPrototype != null && playlistPrototype.CanSendControl;
                 }
                 queueRowSurfaces[rowIndex].color = isCurrent
-                    ? new Color(0.035f, 0.16f, 0.13f, 1f)
+                    ? palette.PendingSurface
                     : Surface;
                 queueIndicators[rowIndex].gameObject.SetActive(isCurrent);
                 queueTitleTexts[rowIndex].text = SafeText(item.title, "未命名歌曲");
@@ -1188,7 +1242,7 @@ namespace TsukiVox.AudioPrototype
             var available = handheldPropsPrototype != null;
             openMicProtectionButton.interactable = available;
             openMicProtectionSurface.color = available && handheldPropsPrototype.MicFaceHapticsEnabled
-                ? new Color(0.035f, 0.12f, 0.095f, 1f)
+                ? palette.EnabledSurface
                 : Surface;
             openMicProtectionIcon.color = available && handheldPropsPrototype.MicFaceHapticsEnabled ? Accent : TextSecondary;
 
@@ -1387,7 +1441,7 @@ namespace TsukiVox.AudioPrototype
             SetVoiceProviderButton(mimoProviderButton, "mimo", selection, options, busy, enabled);
         }
 
-        private static void SetVoiceProviderButton(
+        private void SetVoiceProviderButton(
             Button button,
             string provider,
             string selection,
@@ -1598,7 +1652,7 @@ namespace TsukiVox.AudioPrototype
                 if (!listening)
                 {
                     bar.sizeDelta = new Vector2(6f, 3f);
-                    voiceLevelBars[index].color = new Color(0.18f, 0.26f, 0.25f, 1f);
+                    voiceLevelBars[index].color = palette.InactiveMeter;
                     continue;
                 }
 
@@ -1986,6 +2040,164 @@ namespace TsukiVox.AudioPrototype
             rawDetailsButtonText.text = rawDetailsVisible ? "收起原始详情" : "展开原始详情";
         }
 
+        private void SubscribeRoom()
+        {
+            if (!isActiveAndEnabled || roomPrototype == null || subscribedRoom == roomPrototype)
+            {
+                return;
+            }
+
+            UnsubscribeRoom();
+            subscribedRoom = roomPrototype;
+            subscribedRoom.ThemeChanged += HandleRoomThemeChanged;
+        }
+
+        private void UnsubscribeRoom()
+        {
+            if (subscribedRoom == null)
+            {
+                return;
+            }
+
+            subscribedRoom.ThemeChanged -= HandleRoomThemeChanged;
+            subscribedRoom = null;
+        }
+
+        private void HandleRoomThemeChanged(RoomTheme theme)
+        {
+            palette = QuestUiThemePalette.For(theme);
+            ApplyThemeToExistingUi();
+            RefreshAll();
+        }
+
+        private void ApplyThemeToExistingUi()
+        {
+            if (panel == null || consumerRoot == null)
+            {
+                return;
+            }
+
+            var panelSurface = panel.GetComponent<QuestUiSurface>();
+            if (panelSurface != null)
+            {
+                panelSurface.color = ScreenBackground;
+            }
+            else
+            {
+                var panelImage = panel.GetComponent<Image>();
+                if (panelImage != null)
+                {
+                    panelImage.color = ScreenBackground;
+                }
+            }
+
+            foreach (var binding in themeBindings)
+            {
+                if (binding.Key == null)
+                {
+                    continue;
+                }
+
+                var color = GetThemeColor(binding.Value);
+                if (binding.Key is Graphic graphic)
+                {
+                    graphic.color = color;
+                }
+                else if (binding.Key is Outline outline)
+                {
+                    outline.effectColor = color;
+                }
+            }
+
+            var buttons = consumerRoot.GetComponentsInChildren<Button>(true);
+            for (var index = 0; index < buttons.Length; index += 1)
+            {
+                var button = buttons[index];
+                if (button != null && button.transition == Selectable.Transition.ColorTint && button.targetGraphic != null)
+                {
+                    button.colors = CreateButtonColors(button.targetGraphic.color);
+                }
+            }
+
+            var toggles = consumerRoot.GetComponentsInChildren<Toggle>(true);
+            for (var index = 0; index < toggles.Length; index += 1)
+            {
+                var toggle = toggles[index];
+                if (toggle != null && toggle.targetGraphic != null)
+                {
+                    toggle.colors = CreateButtonColors(toggle.targetGraphic.color);
+                }
+            }
+        }
+
+        private void BindTheme(UnityEngine.Object target, ThemeColorRole role)
+        {
+            if (target != null)
+            {
+                themeBindings[target] = role;
+            }
+        }
+
+        private ThemeColorRole ResolveThemeColorRole(Color color)
+        {
+            if (color.a <= 0.001f)
+            {
+                return ThemeColorRole.Clear;
+            }
+
+            var roles = (ThemeColorRole[])Enum.GetValues(typeof(ThemeColorRole));
+            for (var index = 1; index < roles.Length; index += 1)
+            {
+                if (Approximately(color, GetThemeColor(roles[index])))
+                {
+                    return roles[index];
+                }
+            }
+
+            return ThemeColorRole.Clear;
+        }
+
+        private Color GetThemeColor(ThemeColorRole role)
+        {
+            return role switch
+            {
+                ThemeColorRole.ScreenBackground => palette.ScreenBackground,
+                ThemeColorRole.Surface => palette.Surface,
+                ThemeColorRole.SurfaceRaised => palette.SurfaceRaised,
+                ThemeColorRole.Line => palette.Line,
+                ThemeColorRole.TextPrimary => palette.TextPrimary,
+                ThemeColorRole.TextSecondary => palette.TextSecondary,
+                ThemeColorRole.TextFaint => palette.TextFaint,
+                ThemeColorRole.Accent => palette.Accent,
+                ThemeColorRole.AccentStrong => palette.AccentStrong,
+                ThemeColorRole.AccentInk => palette.AccentInk,
+                ThemeColorRole.Warm => palette.Warm,
+                ThemeColorRole.WarmSurface => palette.WarmSurface,
+                ThemeColorRole.Danger => palette.Danger,
+                ThemeColorRole.BrandBackground => palette.BrandBackground,
+                ThemeColorRole.BrandAccent => palette.BrandAccent,
+                ThemeColorRole.BrandWarm => palette.BrandWarm,
+                ThemeColorRole.PendingSurface => palette.PendingSurface,
+                ThemeColorRole.EnabledSurface => palette.EnabledSurface,
+                ThemeColorRole.SafetySurface => palette.SafetySurface,
+                ThemeColorRole.InactiveMeter => palette.InactiveMeter,
+                ThemeColorRole.SliderTrack => palette.SliderTrack,
+                ThemeColorRole.DebugScrim => palette.DebugScrim,
+                ThemeColorRole.DrawerSurface => palette.DrawerSurface,
+                ThemeColorRole.RawDetailsSurface => palette.RawDetailsSurface,
+                ThemeColorRole.DiagnosticsActionSurface => palette.DiagnosticsActionSurface,
+                _ => Color.clear,
+            };
+        }
+
+        private static bool Approximately(Color left, Color right)
+        {
+            const float epsilon = 0.001f;
+            return Mathf.Abs(left.r - right.r) <= epsilon &&
+                   Mathf.Abs(left.g - right.g) <= epsilon &&
+                   Mathf.Abs(left.b - right.b) <= epsilon &&
+                   Mathf.Abs(left.a - right.a) <= epsilon;
+        }
         private void SubscribePlaylist()
         {
             if (playlistPrototype == null || subscribedPlaylist == playlistPrototype)
@@ -2245,7 +2457,7 @@ namespace TsukiVox.AudioPrototype
             CreateDivider(parent, $"{name} Divider", new Vector2(0f, y - 39f), new Vector2(ContentWidth, 1f));
         }
 
-        private static void SetServiceModeButtonVisual(Button button, bool selected)
+        private void SetServiceModeButtonVisual(Button button, bool selected)
         {
             if (button == null)
             {
@@ -2302,6 +2514,7 @@ namespace TsukiVox.AudioPrototype
             outline.effectColor = border;
             outline.effectDistance = border.a > 0f ? new Vector2(1f, -1f) : Vector2.zero;
             outline.useGraphicAlpha = false;
+            BindTheme(outline, ResolveThemeColorRole(border));
             var button = GetOrAddComponent<Button>(rect.gameObject);
             button.targetGraphic = surface;
             button.transition = Selectable.Transition.ColorTint;
@@ -2314,7 +2527,7 @@ namespace TsukiVox.AudioPrototype
         {
             var root = EnsureRect(parent, name, position, size);
             var backgroundRect = EnsureRect(root, "Track", Vector2.zero, new Vector2(size.x, 10f));
-            var background = EnsureSurface(backgroundRect, new Color(0.12f, 0.17f, 0.16f, 1f), 5f, true);
+            var background = EnsureSurface(backgroundRect, palette.SliderTrack, 5f, true);
             var fillArea = EnsureRect(root, "Fill Area", Vector2.zero, new Vector2(size.x, 10f));
             var fillRect = EnsureRect(fillArea, "Fill", Vector2.zero, fillArea.sizeDelta);
             fillRect.anchorMin = new Vector2(0f, 0.5f);
@@ -2393,7 +2606,7 @@ namespace TsukiVox.AudioPrototype
             input.characterLimit = 80;
             input.caretWidth = 3;
             input.navigation = new Navigation { mode = Navigation.Mode.None };
-            QuestAndroidKeyboardInput.Configure(input);
+            QuestAndroidKeyboardInput.Configure(input, roomPrototype);
             return input;
         }
 
@@ -2427,6 +2640,7 @@ namespace TsukiVox.AudioPrototype
             text.overflowMode = TextOverflowModes.Overflow;
             text.extraPadding = true;
             text.raycastTarget = false;
+            BindTheme(text, ResolveThemeColorRole(color));
             return text;
         }
 
@@ -2437,6 +2651,7 @@ namespace TsukiVox.AudioPrototype
             icon.SetIcon(kind);
             icon.color = color;
             icon.raycastTarget = false;
+            BindTheme(icon, ResolveThemeColorRole(color));
             return icon;
         }
 
@@ -2460,12 +2675,13 @@ namespace TsukiVox.AudioPrototype
             return rect;
         }
 
-        private static QuestUiSurface EnsureSurface(RectTransform rect, Color color, float radius, bool raycastTarget)
+        private QuestUiSurface EnsureSurface(RectTransform rect, Color color, float radius, bool raycastTarget)
         {
             var surface = GetOrAddComponent<QuestUiSurface>(rect.gameObject);
             surface.color = color;
             surface.SetCornerRadius(radius);
             surface.raycastTarget = raycastTarget;
+            BindTheme(surface, ResolveThemeColorRole(color));
             return surface;
         }
 
@@ -2586,7 +2802,7 @@ namespace TsukiVox.AudioPrototype
             DestroyImmediate(legacyNode.gameObject);
         }
 
-        private static ColorBlock CreateButtonColors(Color normal)
+        private ColorBlock CreateButtonColors(Color normal)
         {
             return new ColorBlock
             {
@@ -2600,7 +2816,7 @@ namespace TsukiVox.AudioPrototype
             };
         }
 
-        private static void RefreshSwitchVisual(Toggle toggle, Color activeColor)
+        private void RefreshSwitchVisual(Toggle toggle, Color activeColor)
         {
             if (toggle == null)
             {
