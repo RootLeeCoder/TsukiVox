@@ -13,7 +13,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 9;
+        public const int CurrentDesignRevision = 10;
 
         // Player start is the world/tracking origin; recentering returns the user to the sofa.
         public static readonly Vector3 PlayerStartPosition = Vector3.zero;
@@ -335,12 +335,28 @@ namespace TsukiVox.AudioPrototype
             tableRoot.SetParent(geometryRoot, false);
             tableRoot.localPosition = new Vector3(0f, 0f, 1.1f);
 
-            CreateBeveledBox(tableRoot, "smoked glass top", new Vector3(2.08f, 0.09f, 1.0f), new Vector3(0f, 0.52f, 0f), palette.Glass, 0.035f);
-            CreateBeveledBox(tableRoot, "table shelf", new Vector3(1.62f, 0.05f, 0.68f), new Vector3(0f, 0.26f, 0f), palette.Table, 0.02f);
-            CreateBox(tableRoot, "table rim front", new Vector3(2.16f, 0.04f, 0.04f), new Vector3(0f, 0.58f, 0.5f), palette.Trim);
-            CreateBox(tableRoot, "table rim back", new Vector3(2.16f, 0.04f, 0.04f), new Vector3(0f, 0.58f, -0.5f), palette.Trim);
-            CreateBox(tableRoot, "table rim left", new Vector3(0.04f, 0.04f, 1.0f), new Vector3(-1.08f, 0.58f, 0f), palette.Trim);
-            CreateBox(tableRoot, "table rim right", new Vector3(0.04f, 0.04f, 1.0f), new Vector3(1.08f, 0.58f, 0f), palette.Trim);
+            // Closed picture-frame rim: the smoked glass tucks into the rails so the
+            // frame, glass and legs read as one piece instead of floating strips.
+            const float frameOuterX = 2.16f;
+            const float frameOuterZ = 1.08f;
+            const float railWidth = 0.07f;
+            const float railHeight = 0.09f;
+            const float frameCenterY = 0.545f;
+            var railCenterX = frameOuterX * 0.5f - railWidth * 0.5f;
+            var railCenterZ = frameOuterZ * 0.5f - railWidth * 0.5f;
+
+            CreateBeveledBox(tableRoot, "smoked glass top", new Vector3(2.06f, 0.05f, 0.98f), new Vector3(0f, 0.555f, 0f), palette.Glass, 0.02f);
+            CreateBeveledBox(tableRoot, "table rim front", new Vector3(frameOuterX, railHeight, railWidth), new Vector3(0f, frameCenterY, railCenterZ), palette.Trim, 0.012f);
+            CreateBeveledBox(tableRoot, "table rim back", new Vector3(frameOuterX, railHeight, railWidth), new Vector3(0f, frameCenterY, -railCenterZ), palette.Trim, 0.012f);
+            CreateBeveledBox(tableRoot, "table rim left", new Vector3(railWidth, railHeight, frameOuterZ - railWidth * 2f), new Vector3(-railCenterX, frameCenterY, 0f), palette.Trim, 0.012f);
+            CreateBeveledBox(tableRoot, "table rim right", new Vector3(railWidth, railHeight, frameOuterZ - railWidth * 2f), new Vector3(railCenterX, frameCenterY, 0f), palette.Trim, 0.012f);
+
+            // Lower shelf rests on stretcher rails that tie the four legs together.
+            CreateBox(tableRoot, "shelf stretcher front", new Vector3(2.0f, 0.035f, 0.05f), new Vector3(0f, 0.24f, 0.46f), palette.Trim);
+            CreateBox(tableRoot, "shelf stretcher back", new Vector3(2.0f, 0.035f, 0.05f), new Vector3(0f, 0.24f, -0.46f), palette.Trim);
+            CreateBox(tableRoot, "shelf stretcher left", new Vector3(0.05f, 0.035f, 0.87f), new Vector3(-1.0f, 0.24f, 0f), palette.Trim);
+            CreateBox(tableRoot, "shelf stretcher right", new Vector3(0.05f, 0.035f, 0.87f), new Vector3(1.0f, 0.24f, 0f), palette.Trim);
+            CreateBeveledBox(tableRoot, "table shelf", new Vector3(1.98f, 0.04f, 0.9f), new Vector3(0f, 0.2775f, 0f), palette.Table, 0.015f);
 
             var tabletPivot = new GameObject(QuestTabletTiltController.TabletPivotName).transform;
             tabletPivot.SetParent(tableRoot, false);
@@ -370,11 +386,14 @@ namespace TsukiVox.AudioPrototype
                 0.012f);
             tiltSwitchHousing.transform.localRotation = Quaternion.Euler(-12f, 0f, 0f);
 
+            // Legs sit directly under the frame corners and run up into the rails,
+            // so the rim never reads as unsupported from seated viewpoints.
             for (var index = 0; index < 4; index += 1)
             {
-                var x = index % 2 == 0 ? -0.9f : 0.9f;
-                var z = index < 2 ? -0.36f : 0.36f;
-                CreateCylinder(tableRoot, $"table leg {index}", 0.035f, 0.46f, new Vector3(x, 0.23f, z), palette.Trim);
+                var x = index % 2 == 0 ? -1.0f : 1.0f;
+                var z = index < 2 ? -0.46f : 0.46f;
+                CreateCylinder(tableRoot, $"table leg {index}", 0.04f, 0.56f, new Vector3(x, 0.28f, z), palette.Trim);
+                CreateCylinder(tableRoot, $"table leg foot {index}", 0.05f, 0.02f, new Vector3(x, 0.01f, z), palette.Table);
             }
         }
 
