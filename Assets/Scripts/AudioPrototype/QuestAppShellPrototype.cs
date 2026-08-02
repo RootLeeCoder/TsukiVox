@@ -39,6 +39,7 @@ namespace TsukiVox.AudioPrototype
         [SerializeField] private QuestVideoScreenPrototype videoScreenPrototype;
         [SerializeField] private QuestConsumerUiPrototype consumerUi;
         [SerializeField] private QuestTabletTiltController tabletTiltController;
+        [SerializeField] private QuestRoomThemeController roomThemeController;
 
         [Header("Runtime")]
         [SerializeField] private bool organizePanelOnAwake = true;
@@ -89,7 +90,7 @@ namespace TsukiVox.AudioPrototype
             audioPrototype = audioPrototype != null ? audioPrototype : FindAnyObjectByType<QuestAudioPrototype>();
             playlistPrototype = playlistPrototype != null ? playlistPrototype : QuestPlaylistPrototype.EnsureScenePrototype();
             videoScreenPrototype = videoScreenPrototype != null ? videoScreenPrototype : QuestVideoScreenPrototype.EnsureScenePrototype();
-            QuestKtvRoomPrototype.EnsureSceneRoom();
+            var ktvRoom = QuestKtvRoomPrototype.EnsureSceneRoom();
 
             controlCanvas = controlCanvas != null ? controlCanvas : FindOrCreateControlCanvas();
             if (controlCanvas == null)
@@ -106,6 +107,13 @@ namespace TsukiVox.AudioPrototype
                 ? tabletTiltController
                 : gameObject.AddComponent<QuestTabletTiltController>();
             tabletTiltController.Configure(controlCanvas, panel);
+            roomThemeController = roomThemeController != null
+                ? roomThemeController
+                : GetComponent<QuestRoomThemeController>();
+            roomThemeController = roomThemeController != null
+                ? roomThemeController
+                : gameObject.AddComponent<QuestRoomThemeController>();
+            roomThemeController.Configure(ktvRoom);
             EnsureEventSystem();
             QuestUiPointer.EnsureScenePointer();
 

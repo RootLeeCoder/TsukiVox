@@ -5,6 +5,17 @@ using UnityEngine.Rendering;
 namespace TsukiVox.AudioPrototype
 {
     /// <summary>
+    /// Room-wide color theme. Dark keeps the original V0.5 night-lounge palette,
+    /// Bright swaps every palette color and light setting to a daylight lounge look
+    /// without touching geometry sizes or positions.
+    /// </summary>
+    public enum RoomTheme
+    {
+        Dark = 0,
+        Bright = 1,
+    }
+
+    /// <summary>
     /// V0.5 premium VR KTV room. Tracking space equals world space in this project,
     /// so the room is built around the origin: the sofa seat sits at (0, 0, 0) and the
     /// video screen hangs on the front wall along +Z. Geometry, feedback targets and
@@ -13,7 +24,8 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 11;
+        public const int CurrentDesignRevision = 12;
+        public const string ThemePrefsKey = "TsukiVox.RoomTheme";
 
         // Player start is the world/tracking origin; recentering returns the user to the sofa.
         public static readonly Vector3 PlayerStartPosition = Vector3.zero;
@@ -67,8 +79,11 @@ namespace TsukiVox.AudioPrototype
         private Light leftWallGlow;
         private Light rightWallGlow;
         private float smoothedLevel;
+        private RoomTheme currentTheme = RoomTheme.Dark;
 
         public bool NeedsDesignRefresh => generatedDesignRevision < CurrentDesignRevision;
+
+        public RoomTheme CurrentTheme => currentTheme;
 
         public static QuestKtvRoomPrototype EnsureSceneRoom()
         {
@@ -130,6 +145,9 @@ namespace TsukiVox.AudioPrototype
             audioPrototype = audioPrototype != null ? audioPrototype : FindAnyObjectByType<QuestAudioPrototype>();
             videoScreenPrototype = videoScreenPrototype != null ? videoScreenPrototype : FindAnyObjectByType<QuestVideoScreenPrototype>();
 
+            // Generated scenes are always saved with the dark baseline palette;
+            // the bright theme is a runtime-only retint driven by PlayerPrefs.
+            currentTheme = RoomTheme.Dark;
             EnsureRoots();
             DetachControlCanvasFromGeneratedGeometry();
             RemoveLegacySceneProps();
@@ -147,6 +165,7 @@ namespace TsukiVox.AudioPrototype
             audioPrototype = audioPrototype != null ? audioPrototype : FindAnyObjectByType<QuestAudioPrototype>();
             videoScreenPrototype = videoScreenPrototype != null ? videoScreenPrototype : FindAnyObjectByType<QuestVideoScreenPrototype>();
 
+            currentTheme = LoadPersistedTheme();
             EnsureRoots();
             if (geometryRoot.childCount == 0 || NeedsDesignRefresh)
             {
@@ -160,11 +179,75 @@ namespace TsukiVox.AudioPrototype
             else
             {
                 BindGeneratedReferences();
+                if (currentTheme != RoomTheme.Dark)
+                {
+                    // Saved scenes carry the dark baseline colors, so a persisted
+                    // bright preference needs an in-place retint on startup.
+                    RetintGeneratedMaterials(currentTheme);
+                    ConfigureLighting();
+                }
             }
 
             ApplyVideoScreenLayout();
             CreateAnchors();
             ApplyFeedback(smoothedLevel);
+        }
+
+        /// <summary>
+        /// Switches the room between the dark and bright palettes by retinting the
+        /// generated shared materials in place and reapplying themed lighting.
+        /// Geometry is never rebuilt here, so sizes, positions and the control
+        /// canvas parented under the tablet anchor are untouched.
+        /// </summary>
+        public void ApplyTheme(RoomTheme theme)
+        {
+            currentTheme = theme;
+            EnsureRoots();
+            RetintGeneratedMaterials(theme);
+            ConfigureLighting();
+            ApplyFeedback(smoothedLevel);
+        }
+
+        private static RoomTheme LoadPersistedTheme()
+        {
+            if (!Application.isPlaying)
+            {
+                return RoomTheme.Dark;
+            }
+
+            var stored = PlayerPrefs.GetInt(ThemePrefsKey, (int)RoomTheme.Dark);
+            return stored == (int)RoomTheme.Bright ? RoomTheme.Bright : RoomTheme.Dark;
+        }
+
+        private void RetintGeneratedMaterials(RoomTheme theme)
+        {
+            var colors = RoomPalette.GetThemeColors(theme);
+            RetintRendererMaterials(geometryRoot, colors);
+            RetintRendererMaterials(feedbackRoot, colors);
+        }
+
+        private static void RetintRendererMaterials(Transform root, Dictionary<string, RoomPalette.ThemedColor> colors)
+        {
+            if (root == null)
+            {
+                return;
+            }
+
+            var renderers = root.GetComponentsInChildren<MeshRenderer>(true);
+            for (var index = 0; index < renderers.Length; index += 1)
+            {
+                var material = renderers[index].sharedMaterial;
+                if (material == null || !colors.TryGetValue(material.name, out var themedColor))
+                {
+                    continue;
+                }
+
+                material.color = themedColor.Color;
+                if (themedColor.EmissionIntensity > 0f)
+                {
+                    SetEmission(material, themedColor.Color, themedColor.EmissionIntensity);
+                }
+            }
         }
 
         private void BindGeneratedReferences()
@@ -210,7 +293,7 @@ namespace TsukiVox.AudioPrototype
             ClearChildren(feedbackRoot);
             levelBarFills.Clear();
 
-            var palette = RoomPalette.Create();
+            var palette = RoomPalette.Create(currentTheme);
             levelBarFillMaterial = palette.Accent;
             lightStripMaterial = palette.Warm;
 
@@ -386,6 +469,17 @@ namespace TsukiVox.AudioPrototype
                 0.012f);
             tiltSwitchHousing.transform.localRotation = Quaternion.Euler(-12f, 0f, 0f);
 
+            // Mirrors the tilt switch housing on the left-front corner and carries
+            // the two-button room theme switch canvas.
+            var themeSwitchHousing = CreateBeveledBox(
+                tableRoot,
+                "room theme switch housing",
+                new Vector3(0.24f, 0.035f, 0.13f),
+                new Vector3(-0.79f, 0.598f, -0.436f),
+                palette.Table,
+                0.012f);
+            themeSwitchHousing.transform.localRotation = Quaternion.Euler(-12f, 0f, 0f);
+
             // Legs sit directly under the frame corners and run up into the rails,
             // so the rim never reads as unsupported from seated viewpoints.
             for (var index = 0; index < 4; index += 1)
@@ -479,28 +573,30 @@ namespace TsukiVox.AudioPrototype
 
         private void ConfigureLighting()
         {
+            var bright = currentTheme == RoomTheme.Bright;
+
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.22f, 0.29f, 0.29f, 1f);
-            RenderSettings.ambientEquatorColor = new Color(0.09f, 0.075f, 0.065f, 1f);
-            RenderSettings.ambientGroundColor = new Color(0.035f, 0.025f, 0.028f, 1f);
-            RenderSettings.ambientIntensity = 0.88f;
-            RenderSettings.reflectionIntensity = 0.7f;
+            RenderSettings.ambientSkyColor = bright ? new Color(0.68f, 0.72f, 0.74f, 1f) : new Color(0.22f, 0.29f, 0.29f, 1f);
+            RenderSettings.ambientEquatorColor = bright ? new Color(0.56f, 0.53f, 0.48f, 1f) : new Color(0.09f, 0.075f, 0.065f, 1f);
+            RenderSettings.ambientGroundColor = bright ? new Color(0.4f, 0.37f, 0.34f, 1f) : new Color(0.035f, 0.025f, 0.028f, 1f);
+            RenderSettings.ambientIntensity = bright ? 1.02f : 0.88f;
+            RenderSettings.reflectionIntensity = bright ? 0.85f : 0.7f;
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogColor = new Color(0.018f, 0.022f, 0.024f, 1f);
-            RenderSettings.fogDensity = 0.012f;
+            RenderSettings.fogColor = bright ? new Color(0.8f, 0.82f, 0.84f, 1f) : new Color(0.018f, 0.022f, 0.024f, 1f);
+            RenderSettings.fogDensity = bright ? 0.005f : 0.012f;
 
             var keySpot = FindOrCreateLight("V0.5 Key Spot", LightType.Spot);
             keySpot.transform.position = new Vector3(0f, RoomHeight - 0.18f, 1.3f);
             keySpot.transform.rotation = Quaternion.Euler(78f, 0f, 0f);
-            keySpot.color = new Color(1f, 0.83f, 0.64f, 1f);
-            keySpot.intensity = 3.15f;
+            keySpot.color = bright ? new Color(1f, 0.97f, 0.9f, 1f) : new Color(1f, 0.83f, 0.64f, 1f);
+            keySpot.intensity = bright ? 2.4f : 3.15f;
             keySpot.range = 7.5f;
             keySpot.spotAngle = 82f;
             keySpot.innerSpotAngle = 48f;
             keySpot.shadows = LightShadows.Soft;
             keySpot.shadowResolution = LightShadowResolution.Medium;
-            keySpot.shadowStrength = 0.62f;
+            keySpot.shadowStrength = bright ? 0.42f : 0.62f;
             keySpot.shadowBias = 0.035f;
             keySpot.shadowNormalBias = 0.25f;
             keySpot.renderMode = LightRenderMode.ForcePixel;
@@ -510,28 +606,28 @@ namespace TsukiVox.AudioPrototype
 
             screenGlow = FindOrCreateLight("V0.5 Screen Glow", LightType.Point);
             screenGlow.transform.position = new Vector3(0f, ScreenPosition.y, ScreenPosition.z - 0.9f);
-            screenGlow.color = new Color(0.62f, 0.9f, 1f, 1f);
+            screenGlow.color = bright ? new Color(0.8f, 0.93f, 1f, 1f) : new Color(0.62f, 0.9f, 1f, 1f);
             screenGlow.range = 5f;
             screenGlow.shadows = LightShadows.None;
             screenGlow.renderMode = LightRenderMode.ForcePixel;
 
             loungeGlow = FindOrCreateLight("V0.5 Lounge Glow", LightType.Point);
             loungeGlow.transform.position = new Vector3(0f, 1.25f, 0.7f);
-            loungeGlow.color = new Color(1f, 0.72f, 0.45f, 1f);
+            loungeGlow.color = bright ? new Color(1f, 0.93f, 0.82f, 1f) : new Color(1f, 0.72f, 0.45f, 1f);
             loungeGlow.range = 4.5f;
             loungeGlow.shadows = LightShadows.None;
             loungeGlow.renderMode = LightRenderMode.ForceVertex;
 
-            leftWallGlow = ConfigureWallGlow("V0.5 Left Wall Glow", -2.95f);
-            rightWallGlow = ConfigureWallGlow("V0.5 Right Wall Glow", 2.95f);
+            leftWallGlow = ConfigureWallGlow("V0.5 Left Wall Glow", -2.95f, bright);
+            rightWallGlow = ConfigureWallGlow("V0.5 Right Wall Glow", 2.95f, bright);
             DynamicGI.UpdateEnvironment();
         }
 
-        private static Light ConfigureWallGlow(string objectName, float x)
+        private static Light ConfigureWallGlow(string objectName, float x, bool bright)
         {
             var light = FindOrCreateLight(objectName, LightType.Point);
             light.transform.position = new Vector3(x, 1.55f, 1.35f);
-            light.color = new Color(1f, 0.66f, 0.36f, 1f);
+            light.color = bright ? new Color(1f, 0.9f, 0.74f, 1f) : new Color(1f, 0.66f, 0.36f, 1f);
             light.intensity = 0.36f;
             light.range = 3.6f;
             light.shadows = LightShadows.None;
@@ -989,30 +1085,110 @@ namespace TsukiVox.AudioPrototype
             public Material ScreenFrame;
             public Material LevelTrack;
 
-            public static RoomPalette Create()
+            public readonly struct ThemedColor
             {
+                public ThemedColor(Color color, float emissionIntensity = 0f)
+                {
+                    Color = color;
+                    EmissionIntensity = emissionIntensity;
+                }
+
+                public Color Color { get; }
+                public float EmissionIntensity { get; }
+            }
+
+            /// <summary>
+            /// Theme colors keyed by material name. Both room construction and the
+            /// runtime theme retint read from this single source of truth.
+            /// </summary>
+            public static Dictionary<string, ThemedColor> GetThemeColors(RoomTheme theme)
+            {
+                if (theme == RoomTheme.Bright)
+                {
+                    return new Dictionary<string, ThemedColor>
+                    {
+                        ["V0.5 Floor"] = new ThemedColor(new Color(0.62f, 0.5f, 0.37f, 1f)),
+                        ["V0.5 Floor Groove"] = new ThemedColor(new Color(0.48f, 0.38f, 0.28f, 1f)),
+                        ["V0.5 Ceiling"] = new ThemedColor(new Color(0.88f, 0.87f, 0.84f, 1f)),
+                        ["V0.5 Ceiling Inset"] = new ThemedColor(new Color(0.8f, 0.79f, 0.76f, 1f)),
+                        ["V0.5 Wall"] = new ThemedColor(new Color(0.86f, 0.83f, 0.77f, 1f)),
+                        ["V0.5 Padded Wall"] = new ThemedColor(new Color(0.72f, 0.8f, 0.77f, 1f)),
+                        ["V0.5 Wine Panel"] = new ThemedColor(new Color(0.85f, 0.52f, 0.46f, 1f)),
+                        ["V0.5 Brushed Brass"] = new ThemedColor(new Color(0.76f, 0.6f, 0.36f, 1f)),
+                        ["V0.5 Rug"] = new ThemedColor(new Color(0.56f, 0.72f, 0.68f, 1f)),
+                        ["V0.5 Velvet Sofa"] = new ThemedColor(new Color(0.86f, 0.62f, 0.6f, 1f)),
+                        ["V0.5 Sofa Shadow"] = new ThemedColor(new Color(0.62f, 0.44f, 0.43f, 1f)),
+                        ["V0.5 Table"] = new ThemedColor(new Color(0.7f, 0.58f, 0.45f, 1f)),
+                        ["V0.5 Smoked Glass"] = new ThemedColor(new Color(0.74f, 0.85f, 0.86f, 0.45f)),
+                        ["V0.5 Speaker Cloth"] = new ThemedColor(new Color(0.68f, 0.69f, 0.7f, 1f)),
+                        ["V0.5 Speaker Cone"] = new ThemedColor(new Color(0.52f, 0.54f, 0.55f, 1f)),
+                        ["V0.5 Accent"] = new ThemedColor(AccentColor, 0.8f),
+                        ["V0.5 Warm Light"] = new ThemedColor(WarmColor, 1.05f),
+                        ["V0.5 Screen Frame"] = new ThemedColor(new Color(0.18f, 0.19f, 0.21f, 1f)),
+                        ["V0.5 Level Track"] = new ThemedColor(new Color(0.62f, 0.75f, 0.73f, 1f), 0.35f),
+                    };
+                }
+
+                return new Dictionary<string, ThemedColor>
+                {
+                    ["V0.5 Floor"] = new ThemedColor(new Color(0.19f, 0.115f, 0.075f, 1f)),
+                    ["V0.5 Floor Groove"] = new ThemedColor(new Color(0.035f, 0.022f, 0.018f, 1f)),
+                    ["V0.5 Ceiling"] = new ThemedColor(new Color(0.065f, 0.07f, 0.075f, 1f)),
+                    ["V0.5 Ceiling Inset"] = new ThemedColor(new Color(0.026f, 0.03f, 0.034f, 1f)),
+                    ["V0.5 Wall"] = new ThemedColor(new Color(0.065f, 0.09f, 0.092f, 1f)),
+                    ["V0.5 Padded Wall"] = new ThemedColor(new Color(0.095f, 0.17f, 0.165f, 1f)),
+                    ["V0.5 Wine Panel"] = new ThemedColor(new Color(0.25f, 0.085f, 0.12f, 1f)),
+                    ["V0.5 Brushed Brass"] = new ThemedColor(new Color(0.5f, 0.36f, 0.21f, 1f)),
+                    ["V0.5 Rug"] = new ThemedColor(new Color(0.055f, 0.25f, 0.235f, 1f)),
+                    ["V0.5 Velvet Sofa"] = new ThemedColor(new Color(0.27f, 0.07f, 0.115f, 1f)),
+                    ["V0.5 Sofa Shadow"] = new ThemedColor(new Color(0.075f, 0.02f, 0.035f, 1f)),
+                    ["V0.5 Table"] = new ThemedColor(new Color(0.035f, 0.065f, 0.068f, 1f)),
+                    ["V0.5 Smoked Glass"] = new ThemedColor(new Color(0.045f, 0.14f, 0.145f, 0.68f)),
+                    ["V0.5 Speaker Cloth"] = new ThemedColor(new Color(0.018f, 0.024f, 0.026f, 1f)),
+                    ["V0.5 Speaker Cone"] = new ThemedColor(new Color(0.045f, 0.05f, 0.052f, 1f)),
+                    ["V0.5 Accent"] = new ThemedColor(AccentColor, 0.8f),
+                    ["V0.5 Warm Light"] = new ThemedColor(WarmColor, 1.05f),
+                    ["V0.5 Screen Frame"] = new ThemedColor(new Color(0.008f, 0.009f, 0.011f, 1f)),
+                    ["V0.5 Level Track"] = new ThemedColor(new Color(0.025f, 0.075f, 0.072f, 1f), 0.35f),
+                };
+            }
+
+            public static RoomPalette Create(RoomTheme theme)
+            {
+                var colors = GetThemeColors(theme);
                 return new RoomPalette
                 {
-                    Floor = CreateMaterial("V0.5 Floor", new Color(0.19f, 0.115f, 0.075f, 1f), 0.28f, 0.02f),
-                    FloorGroove = CreateMaterial("V0.5 Floor Groove", new Color(0.035f, 0.022f, 0.018f, 1f), 0.08f, 0f),
-                    Ceiling = CreateMaterial("V0.5 Ceiling", new Color(0.065f, 0.07f, 0.075f, 1f), 0.16f, 0f),
-                    CeilingInset = CreateMaterial("V0.5 Ceiling Inset", new Color(0.026f, 0.03f, 0.034f, 1f), 0.22f, 0f),
-                    Wall = CreateMaterial("V0.5 Wall", new Color(0.065f, 0.09f, 0.092f, 1f), 0.12f, 0f),
-                    PaddedWall = CreateMaterial("V0.5 Padded Wall", new Color(0.095f, 0.17f, 0.165f, 1f), 0.08f, 0f),
-                    WinePanel = CreateMaterial("V0.5 Wine Panel", new Color(0.25f, 0.085f, 0.12f, 1f), 0.1f, 0f),
-                    Trim = CreateMaterial("V0.5 Brushed Brass", new Color(0.5f, 0.36f, 0.21f, 1f), 0.64f, 0.62f),
-                    Rug = CreateMaterial("V0.5 Rug", new Color(0.055f, 0.25f, 0.235f, 1f), 0.04f, 0f),
-                    Sofa = CreateMaterial("V0.5 Velvet Sofa", new Color(0.27f, 0.07f, 0.115f, 1f), 0.18f, 0f),
-                    SofaShadow = CreateMaterial("V0.5 Sofa Shadow", new Color(0.075f, 0.02f, 0.035f, 1f), 0.1f, 0f),
-                    Table = CreateMaterial("V0.5 Table", new Color(0.035f, 0.065f, 0.068f, 1f), 0.58f, 0.22f),
-                    Glass = CreateMaterial("V0.5 Smoked Glass", new Color(0.045f, 0.14f, 0.145f, 0.68f), 0.82f, 0.18f, 0f, true),
-                    Speaker = CreateMaterial("V0.5 Speaker Cloth", new Color(0.018f, 0.024f, 0.026f, 1f), 0.06f, 0f),
-                    SpeakerCone = CreateMaterial("V0.5 Speaker Cone", new Color(0.045f, 0.05f, 0.052f, 1f), 0.3f, 0.05f),
-                    Accent = CreateMaterial("V0.5 Accent", AccentColor, 0.72f, 0.1f, 0.8f),
-                    Warm = CreateMaterial("V0.5 Warm Light", WarmColor, 0.62f, 0.04f, 1.05f),
-                    ScreenFrame = CreateMaterial("V0.5 Screen Frame", new Color(0.008f, 0.009f, 0.011f, 1f), 0.7f, 0.22f),
-                    LevelTrack = CreateMaterial("V0.5 Level Track", new Color(0.025f, 0.075f, 0.072f, 1f), 0.16f, 0f, 0.35f),
+                    Floor = CreateMaterial("V0.5 Floor", colors, 0.28f, 0.02f),
+                    FloorGroove = CreateMaterial("V0.5 Floor Groove", colors, 0.08f, 0f),
+                    Ceiling = CreateMaterial("V0.5 Ceiling", colors, 0.16f, 0f),
+                    CeilingInset = CreateMaterial("V0.5 Ceiling Inset", colors, 0.22f, 0f),
+                    Wall = CreateMaterial("V0.5 Wall", colors, 0.12f, 0f),
+                    PaddedWall = CreateMaterial("V0.5 Padded Wall", colors, 0.08f, 0f),
+                    WinePanel = CreateMaterial("V0.5 Wine Panel", colors, 0.1f, 0f),
+                    Trim = CreateMaterial("V0.5 Brushed Brass", colors, 0.64f, 0.62f),
+                    Rug = CreateMaterial("V0.5 Rug", colors, 0.04f, 0f),
+                    Sofa = CreateMaterial("V0.5 Velvet Sofa", colors, 0.18f, 0f),
+                    SofaShadow = CreateMaterial("V0.5 Sofa Shadow", colors, 0.1f, 0f),
+                    Table = CreateMaterial("V0.5 Table", colors, 0.58f, 0.22f),
+                    Glass = CreateMaterial("V0.5 Smoked Glass", colors, 0.82f, 0.18f, true),
+                    Speaker = CreateMaterial("V0.5 Speaker Cloth", colors, 0.06f, 0f),
+                    SpeakerCone = CreateMaterial("V0.5 Speaker Cone", colors, 0.3f, 0.05f),
+                    Accent = CreateMaterial("V0.5 Accent", colors, 0.72f, 0.1f),
+                    Warm = CreateMaterial("V0.5 Warm Light", colors, 0.62f, 0.04f),
+                    ScreenFrame = CreateMaterial("V0.5 Screen Frame", colors, 0.7f, 0.22f),
+                    LevelTrack = CreateMaterial("V0.5 Level Track", colors, 0.16f, 0f),
                 };
+            }
+
+            private static Material CreateMaterial(
+                string materialName,
+                Dictionary<string, ThemedColor> colors,
+                float smoothness,
+                float metallic,
+                bool transparent = false)
+            {
+                var themedColor = colors[materialName];
+                return CreateMaterial(materialName, themedColor.Color, smoothness, metallic, themedColor.EmissionIntensity, transparent);
             }
 
             private static Material CreateMaterial(

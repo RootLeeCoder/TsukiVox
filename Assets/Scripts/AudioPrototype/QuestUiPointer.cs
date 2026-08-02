@@ -926,7 +926,9 @@ namespace TsukiVox.AudioPrototype
             for (var index = 0; index < canvases.Length; index += 1)
             {
                 var canvas = canvases[index];
-                if (canvas.name != "Prototype Canvas" && canvas.name != QuestTabletTiltController.SwitchCanvasName)
+                if (canvas.name != "Prototype Canvas" &&
+                    canvas.name != QuestTabletTiltController.SwitchCanvasName &&
+                    canvas.name != QuestRoomThemeController.SwitchCanvasName)
                 {
                     continue;
                 }
@@ -943,7 +945,8 @@ namespace TsukiVox.AudioPrototype
 
         private bool NeedsCanvasRefresh()
         {
-            if (interactionCanvases.Count < 2)
+            // Expect the control panel, the tilt switch and the room theme switch.
+            if (interactionCanvases.Count < 3)
             {
                 return true;
             }
