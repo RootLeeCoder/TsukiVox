@@ -13,7 +13,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 10;
+        public const int CurrentDesignRevision = 11;
 
         // Player start is the world/tracking origin; recentering returns the user to the sofa.
         public static readonly Vector3 PlayerStartPosition = Vector3.zero;
@@ -240,19 +240,19 @@ namespace TsukiVox.AudioPrototype
                 CreateBox(geometryRoot, $"floor plank groove {index}", new Vector3(0.014f, 0.008f, roomDepth - 0.12f), new Vector3(x, 0.006f, roomCenterZ), palette.FloorGroove);
             }
 
-            CreateBox(geometryRoot, "lounge rug", new Vector3(3.2f, 0.022f, 1.9f), new Vector3(0f, 0.012f, 1.4f), palette.Rug);
-            CreateBox(geometryRoot, "rug front trim", new Vector3(3.26f, 0.03f, 0.04f), new Vector3(0f, 0.02f, 2.35f), palette.Trim);
-            CreateBox(geometryRoot, "rug back trim", new Vector3(3.26f, 0.03f, 0.04f), new Vector3(0f, 0.02f, 0.45f), palette.Trim);
-            CreateBox(geometryRoot, "rug left trim", new Vector3(0.04f, 0.03f, 1.9f), new Vector3(-1.62f, 0.02f, 1.4f), palette.Trim);
-            CreateBox(geometryRoot, "rug right trim", new Vector3(0.04f, 0.03f, 1.9f), new Vector3(1.62f, 0.02f, 1.4f), palette.Trim);
+            CreateBeveledBox(geometryRoot, "lounge rug", new Vector3(3.2f, 0.022f, 1.9f), new Vector3(0f, 0.012f, 1.4f), palette.Rug, 0.01f);
+            CreateBeveledBox(geometryRoot, "rug front trim", new Vector3(3.26f, 0.03f, 0.04f), new Vector3(0f, 0.02f, 2.35f), palette.Trim, 0.012f);
+            CreateBeveledBox(geometryRoot, "rug back trim", new Vector3(3.26f, 0.03f, 0.04f), new Vector3(0f, 0.02f, 0.45f), palette.Trim, 0.012f);
+            CreateBeveledBox(geometryRoot, "rug left trim", new Vector3(0.04f, 0.03f, 1.9f), new Vector3(-1.62f, 0.02f, 1.4f), palette.Trim, 0.012f);
+            CreateBeveledBox(geometryRoot, "rug right trim", new Vector3(0.04f, 0.03f, 1.9f), new Vector3(1.62f, 0.02f, 1.4f), palette.Trim, 0.012f);
 
-            CreateBox(geometryRoot, "ceiling inset", new Vector3(5.7f, 0.08f, roomDepth - 0.72f), new Vector3(0f, RoomHeight - 0.07f, roomCenterZ), palette.CeilingInset);
+            CreateBeveledBox(geometryRoot, "ceiling inset", new Vector3(5.7f, 0.08f, roomDepth - 0.72f), new Vector3(0f, RoomHeight - 0.07f, roomCenterZ), palette.CeilingInset, 0.02f);
             // Keep the front drop attached to the ceiling so it cannot hide the
             // screen's upper matte edge from seated headset viewpoints.
-            CreateBox(geometryRoot, "ceiling front drop", new Vector3(6.3f, 0.18f, 0.18f), new Vector3(0f, RoomHeight - 0.09f, FrontWallZ - 0.44f), palette.Ceiling);
-            CreateBox(geometryRoot, "ceiling back drop", new Vector3(6.3f, 0.18f, 0.18f), new Vector3(0f, RoomHeight - 0.16f, BackWallZ + 0.44f), palette.Ceiling);
-            CreateBox(geometryRoot, "ceiling left drop", new Vector3(0.18f, 0.18f, roomDepth - 0.7f), new Vector3(-3.15f, RoomHeight - 0.16f, roomCenterZ), palette.Ceiling);
-            CreateBox(geometryRoot, "ceiling right drop", new Vector3(0.18f, 0.18f, roomDepth - 0.7f), new Vector3(3.15f, RoomHeight - 0.16f, roomCenterZ), palette.Ceiling);
+            CreateBeveledBox(geometryRoot, "ceiling front drop", new Vector3(6.3f, 0.18f, 0.18f), new Vector3(0f, RoomHeight - 0.09f, FrontWallZ - 0.44f), palette.Ceiling, 0.03f);
+            CreateBeveledBox(geometryRoot, "ceiling back drop", new Vector3(6.3f, 0.18f, 0.18f), new Vector3(0f, RoomHeight - 0.16f, BackWallZ + 0.44f), palette.Ceiling, 0.03f);
+            CreateBeveledBox(geometryRoot, "ceiling left drop", new Vector3(0.18f, 0.18f, roomDepth - 0.7f), new Vector3(-3.15f, RoomHeight - 0.16f, roomCenterZ), palette.Ceiling, 0.03f);
+            CreateBeveledBox(geometryRoot, "ceiling right drop", new Vector3(0.18f, 0.18f, roomDepth - 0.7f), new Vector3(3.15f, RoomHeight - 0.16f, roomCenterZ), palette.Ceiling, 0.03f);
 
             for (var index = 0; index < 4; index += 1)
             {
@@ -268,26 +268,26 @@ namespace TsukiVox.AudioPrototype
             {
                 var z = -0.55f + index * 0.65f;
                 var panelMaterial = index % 3 == 1 ? palette.WinePanel : palette.PaddedWall;
-                CreateBox(geometryRoot, $"left padded panel {index}", new Vector3(0.05f, 1.6f, 0.58f), new Vector3(-RoomWidth * 0.5f + 0.03f, 1.32f, z), panelMaterial);
-                CreateBox(geometryRoot, $"right padded panel {index}", new Vector3(0.05f, 1.6f, 0.58f), new Vector3(RoomWidth * 0.5f - 0.03f, 1.32f, z), panelMaterial);
-                CreateBox(geometryRoot, $"left brass divider {index}", new Vector3(0.055f, 1.74f, 0.025f), new Vector3(-RoomWidth * 0.5f + 0.035f, 1.32f, z + 0.325f), palette.Trim);
-                CreateBox(geometryRoot, $"right brass divider {index}", new Vector3(0.055f, 1.74f, 0.025f), new Vector3(RoomWidth * 0.5f - 0.035f, 1.32f, z + 0.325f), palette.Trim);
+                CreateBeveledBox(geometryRoot, $"left padded panel {index}", new Vector3(0.05f, 1.6f, 0.58f), new Vector3(-RoomWidth * 0.5f + 0.03f, 1.32f, z), panelMaterial, 0.02f);
+                CreateBeveledBox(geometryRoot, $"right padded panel {index}", new Vector3(0.05f, 1.6f, 0.58f), new Vector3(RoomWidth * 0.5f - 0.03f, 1.32f, z), panelMaterial, 0.02f);
+                CreateBeveledBox(geometryRoot, $"left brass divider {index}", new Vector3(0.055f, 1.74f, 0.025f), new Vector3(-RoomWidth * 0.5f + 0.035f, 1.32f, z + 0.325f), palette.Trim, 0.01f);
+                CreateBeveledBox(geometryRoot, $"right brass divider {index}", new Vector3(0.055f, 1.74f, 0.025f), new Vector3(RoomWidth * 0.5f - 0.035f, 1.32f, z + 0.325f), palette.Trim, 0.01f);
             }
 
-            CreateBox(geometryRoot, "left wall rail", new Vector3(0.05f, 0.06f, 4.6f), new Vector3(-RoomWidth * 0.5f + 0.04f, 2.28f, 1.4f), palette.Trim);
-            CreateBox(geometryRoot, "right wall rail", new Vector3(0.05f, 0.06f, 4.6f), new Vector3(RoomWidth * 0.5f - 0.04f, 2.28f, 1.4f), palette.Trim);
-            CreateBox(geometryRoot, "left wall lower rail", new Vector3(0.05f, 0.08f, 4.6f), new Vector3(-RoomWidth * 0.5f + 0.04f, 0.38f, 1.4f), palette.Trim);
-            CreateBox(geometryRoot, "right wall lower rail", new Vector3(0.05f, 0.08f, 4.6f), new Vector3(RoomWidth * 0.5f - 0.04f, 0.38f, 1.4f), palette.Trim);
+            CreateBeveledBox(geometryRoot, "left wall rail", new Vector3(0.05f, 0.06f, 4.6f), new Vector3(-RoomWidth * 0.5f + 0.04f, 2.28f, 1.4f), palette.Trim, 0.018f);
+            CreateBeveledBox(geometryRoot, "right wall rail", new Vector3(0.05f, 0.06f, 4.6f), new Vector3(RoomWidth * 0.5f - 0.04f, 2.28f, 1.4f), palette.Trim, 0.018f);
+            CreateBeveledBox(geometryRoot, "left wall lower rail", new Vector3(0.05f, 0.08f, 4.6f), new Vector3(-RoomWidth * 0.5f + 0.04f, 0.38f, 1.4f), palette.Trim, 0.018f);
+            CreateBeveledBox(geometryRoot, "right wall lower rail", new Vector3(0.05f, 0.08f, 4.6f), new Vector3(RoomWidth * 0.5f - 0.04f, 0.38f, 1.4f), palette.Trim, 0.018f);
 
             for (var index = 0; index < 5; index += 1)
             {
                 var x = -2.4f + index * 1.2f;
                 var panelMaterial = index == 2 ? palette.WinePanel : palette.PaddedWall;
-                CreateBox(geometryRoot, $"back padded panel {index}", new Vector3(0.95f, 1.25f, 0.05f), new Vector3(x, 1.1f, BackWallZ + 0.03f), panelMaterial);
+                CreateBeveledBox(geometryRoot, $"back padded panel {index}", new Vector3(0.95f, 1.25f, 0.05f), new Vector3(x, 1.1f, BackWallZ + 0.03f), panelMaterial, 0.02f);
             }
 
-            CreateBox(geometryRoot, "back wall top rail", new Vector3(5.9f, 0.05f, 0.055f), new Vector3(0f, 1.82f, BackWallZ + 0.035f), palette.Trim);
-            CreateBox(geometryRoot, "back wall low rail", new Vector3(5.9f, 0.07f, 0.055f), new Vector3(0f, 0.43f, BackWallZ + 0.035f), palette.Trim);
+            CreateBeveledBox(geometryRoot, "back wall top rail", new Vector3(5.9f, 0.05f, 0.055f), new Vector3(0f, 1.82f, BackWallZ + 0.035f), palette.Trim, 0.018f);
+            CreateBeveledBox(geometryRoot, "back wall low rail", new Vector3(5.9f, 0.07f, 0.055f), new Vector3(0f, 0.43f, BackWallZ + 0.035f), palette.Trim, 0.018f);
         }
 
         private void BuildFurniture(RoomPalette palette)
@@ -311,8 +311,8 @@ namespace TsukiVox.AudioPrototype
             CreateBeveledBox(sofaRoot, "back", new Vector3(width, 0.95f, 0.22f), new Vector3(0f, 0.62f, -depth * 0.5f + 0.11f), palette.Sofa, 0.055f);
             CreateBeveledBox(sofaRoot, "left arm", new Vector3(0.18f, 0.62f, depth - 0.06f), new Vector3(-width * 0.5f + 0.09f, 0.47f, 0f), palette.Sofa, 0.045f);
             CreateBeveledBox(sofaRoot, "right arm", new Vector3(0.18f, 0.62f, depth - 0.06f), new Vector3(width * 0.5f - 0.09f, 0.47f, 0f), palette.Sofa, 0.045f);
-            CreateBox(sofaRoot, "front trim", new Vector3(width - 0.3f, 0.035f, 0.03f), new Vector3(0f, 0.2f, depth * 0.5f + 0.015f), palette.Trim);
-            CreateBox(sofaRoot, "underglow", new Vector3(width - 0.34f, 0.025f, 0.035f), new Vector3(0f, 0.12f, depth * 0.5f - 0.1f), palette.Warm);
+            CreateBeveledBox(sofaRoot, "front trim", new Vector3(width - 0.3f, 0.035f, 0.03f), new Vector3(0f, 0.2f, depth * 0.5f + 0.015f), palette.Trim, 0.012f);
+            CreateBeveledBox(sofaRoot, "underglow", new Vector3(width - 0.34f, 0.025f, 0.035f), new Vector3(0f, 0.12f, depth * 0.5f - 0.1f), palette.Warm, 0.01f);
 
             var cushionCount = Mathf.Max(2, Mathf.FloorToInt(width / 1.1f));
             var cushionWidth = (width - 0.42f) / cushionCount;
@@ -325,7 +325,7 @@ namespace TsukiVox.AudioPrototype
                     new Vector3(cushionWidth - 0.05f, 0.52f, 0.07f),
                     new Vector3(x, 0.72f, -depth * 0.5f + 0.255f),
                     index % 2 == 0 ? palette.Sofa : palette.WinePanel,
-                    0.025f);
+                    0.032f);
             }
         }
 
@@ -352,10 +352,10 @@ namespace TsukiVox.AudioPrototype
             CreateBeveledBox(tableRoot, "table rim right", new Vector3(railWidth, railHeight, frameOuterZ - railWidth * 2f), new Vector3(railCenterX, frameCenterY, 0f), palette.Trim, 0.012f);
 
             // Lower shelf rests on stretcher rails that tie the four legs together.
-            CreateBox(tableRoot, "shelf stretcher front", new Vector3(2.0f, 0.035f, 0.05f), new Vector3(0f, 0.24f, 0.46f), palette.Trim);
-            CreateBox(tableRoot, "shelf stretcher back", new Vector3(2.0f, 0.035f, 0.05f), new Vector3(0f, 0.24f, -0.46f), palette.Trim);
-            CreateBox(tableRoot, "shelf stretcher left", new Vector3(0.05f, 0.035f, 0.87f), new Vector3(-1.0f, 0.24f, 0f), palette.Trim);
-            CreateBox(tableRoot, "shelf stretcher right", new Vector3(0.05f, 0.035f, 0.87f), new Vector3(1.0f, 0.24f, 0f), palette.Trim);
+            CreateBeveledBox(tableRoot, "shelf stretcher front", new Vector3(2.0f, 0.035f, 0.05f), new Vector3(0f, 0.24f, 0.46f), palette.Trim, 0.012f);
+            CreateBeveledBox(tableRoot, "shelf stretcher back", new Vector3(2.0f, 0.035f, 0.05f), new Vector3(0f, 0.24f, -0.46f), palette.Trim, 0.012f);
+            CreateBeveledBox(tableRoot, "shelf stretcher left", new Vector3(0.05f, 0.035f, 0.87f), new Vector3(-1.0f, 0.24f, 0f), palette.Trim, 0.012f);
+            CreateBeveledBox(tableRoot, "shelf stretcher right", new Vector3(0.05f, 0.035f, 0.87f), new Vector3(1.0f, 0.24f, 0f), palette.Trim, 0.012f);
             CreateBeveledBox(tableRoot, "table shelf", new Vector3(1.98f, 0.04f, 0.9f), new Vector3(0f, 0.2775f, 0f), palette.Table, 0.015f);
 
             var tabletPivot = new GameObject(QuestTabletTiltController.TabletPivotName).transform;
@@ -405,14 +405,14 @@ namespace TsukiVox.AudioPrototype
             const float frameDepth = 0.06f;
             var frameZ = ScreenPosition.z + 0.03f;
 
-            CreateBox(geometryRoot, "screen frame top", new Vector3(frameOuter.x, topBorder, frameDepth), new Vector3(0f, ScreenPosition.y + frameOuter.y * 0.5f - topBorder * 0.5f, frameZ), palette.ScreenFrame);
-            CreateBox(geometryRoot, "screen frame bottom", new Vector3(frameOuter.x, topBorder, frameDepth), new Vector3(0f, ScreenPosition.y - frameOuter.y * 0.5f + topBorder * 0.5f, frameZ), palette.ScreenFrame);
-            CreateBox(geometryRoot, "screen frame left", new Vector3(sideBorder, frameOuter.y - topBorder * 2f, frameDepth), new Vector3(-frameOuter.x * 0.5f + sideBorder * 0.5f, ScreenPosition.y, frameZ), palette.ScreenFrame);
-            CreateBox(geometryRoot, "screen frame right", new Vector3(sideBorder, frameOuter.y - topBorder * 2f, frameDepth), new Vector3(frameOuter.x * 0.5f - sideBorder * 0.5f, ScreenPosition.y, frameZ), palette.ScreenFrame);
+            CreateBeveledBox(geometryRoot, "screen frame top", new Vector3(frameOuter.x, topBorder, frameDepth), new Vector3(0f, ScreenPosition.y + frameOuter.y * 0.5f - topBorder * 0.5f, frameZ), palette.ScreenFrame, 0.02f);
+            CreateBeveledBox(geometryRoot, "screen frame bottom", new Vector3(frameOuter.x, topBorder, frameDepth), new Vector3(0f, ScreenPosition.y - frameOuter.y * 0.5f + topBorder * 0.5f, frameZ), palette.ScreenFrame, 0.02f);
+            CreateBeveledBox(geometryRoot, "screen frame left", new Vector3(sideBorder, frameOuter.y - topBorder * 2f, frameDepth), new Vector3(-frameOuter.x * 0.5f + sideBorder * 0.5f, ScreenPosition.y, frameZ), palette.ScreenFrame, 0.02f);
+            CreateBeveledBox(geometryRoot, "screen frame right", new Vector3(sideBorder, frameOuter.y - topBorder * 2f, frameDepth), new Vector3(frameOuter.x * 0.5f - sideBorder * 0.5f, ScreenPosition.y, frameZ), palette.ScreenFrame, 0.02f);
 
-            CreateBox(geometryRoot, "screen bottom trim", new Vector3(frameOuter.x + 0.4f, 0.05f, 0.06f), new Vector3(0f, ScreenPosition.y - frameOuter.y * 0.5f - 0.09f, frameZ + 0.02f), palette.Trim);
-            CreateBox(geometryRoot, "screen left column", new Vector3(0.24f, 2.6f, 0.08f), new Vector3(-2.85f, 1.35f, FrontWallZ - 0.05f), palette.WinePanel);
-            CreateBox(geometryRoot, "screen right column", new Vector3(0.24f, 2.6f, 0.08f), new Vector3(2.85f, 1.35f, FrontWallZ - 0.05f), palette.WinePanel);
+            CreateBeveledBox(geometryRoot, "screen bottom trim", new Vector3(frameOuter.x + 0.4f, 0.05f, 0.06f), new Vector3(0f, ScreenPosition.y - frameOuter.y * 0.5f - 0.09f, frameZ + 0.02f), palette.Trim, 0.015f);
+            CreateBeveledBox(geometryRoot, "screen left column", new Vector3(0.24f, 2.6f, 0.08f), new Vector3(-2.85f, 1.35f, FrontWallZ - 0.05f), palette.WinePanel, 0.025f);
+            CreateBeveledBox(geometryRoot, "screen right column", new Vector3(0.24f, 2.6f, 0.08f), new Vector3(2.85f, 1.35f, FrontWallZ - 0.05f), palette.WinePanel, 0.025f);
 
             CreateSpeaker(palette, "left speaker", -2.57f);
             CreateSpeaker(palette, "right speaker", 2.57f);
@@ -425,7 +425,7 @@ namespace TsukiVox.AudioPrototype
             speakerRoot.localPosition = new Vector3(x, 1.45f, FrontWallZ - 0.075f);
 
             CreateBeveledBox(speakerRoot, "cabinet", new Vector3(0.34f, 1.55f, 0.12f), Vector3.zero, palette.Speaker, 0.025f);
-            CreateBox(speakerRoot, "brass header", new Vector3(0.28f, 0.035f, 0.025f), new Vector3(0f, 0.61f, -0.072f), palette.Trim);
+            CreateBeveledBox(speakerRoot, "brass header", new Vector3(0.28f, 0.035f, 0.025f), new Vector3(0f, 0.61f, -0.072f), palette.Trim, 0.01f);
             CreateSpeakerDriver(speakerRoot, "upper driver", new Vector3(0f, 0.3f, -0.09f), 0.1f, palette);
             CreateSpeakerDriver(speakerRoot, "lower driver", new Vector3(0f, -0.28f, -0.09f), 0.13f, palette);
         }
@@ -441,16 +441,19 @@ namespace TsukiVox.AudioPrototype
             for (var side = -1; side <= 1; side += 2)
             {
                 var sideName = side < 0 ? "left" : "right";
-                CreateBox(
+                CreateBeveledBox(
                     feedbackRoot,
                     $"{sideName} mic level track",
                     new Vector3(0.12f, LevelBarHeight, 0.03f),
                     new Vector3(LevelBarX * side, LevelBarCenterY, ScreenPosition.z + 0.02f),
                     palette.LevelTrack,
+                    0.012f,
                     false,
                     false,
                     false);
 
+                // The fill stays a plain box: ApplyFeedback rescales it on Y every
+                // frame, which would visibly stretch a beveled mesh's corner radius.
                 var fill = CreateBox(
                     feedbackRoot,
                     $"{sideName} mic level fill",
@@ -469,9 +472,9 @@ namespace TsukiVox.AudioPrototype
 
         private void BuildLightStrips(RoomPalette palette)
         {
-            CreateBox(feedbackRoot, "ceiling light strip", new Vector3(6.2f, 0.05f, 0.06f), new Vector3(0f, RoomHeight - 0.08f, FrontWallZ - 0.3f), palette.Warm, false, false, false);
-            CreateBox(feedbackRoot, "left light strip", new Vector3(0.05f, 0.05f, 4.8f), new Vector3(-RoomWidth * 0.5f + 0.06f, RoomHeight - 0.12f, 1.55f), palette.Warm, false, false, false);
-            CreateBox(feedbackRoot, "right light strip", new Vector3(0.05f, 0.05f, 4.8f), new Vector3(RoomWidth * 0.5f - 0.06f, RoomHeight - 0.12f, 1.55f), palette.Warm, false, false, false);
+            CreateBeveledBox(feedbackRoot, "ceiling light strip", new Vector3(6.2f, 0.05f, 0.06f), new Vector3(0f, RoomHeight - 0.08f, FrontWallZ - 0.3f), palette.Warm, 0.02f, false, false, false);
+            CreateBeveledBox(feedbackRoot, "left light strip", new Vector3(0.05f, 0.05f, 4.8f), new Vector3(-RoomWidth * 0.5f + 0.06f, RoomHeight - 0.12f, 1.55f), palette.Warm, 0.02f, false, false, false);
+            CreateBeveledBox(feedbackRoot, "right light strip", new Vector3(0.05f, 0.05f, 4.8f), new Vector3(RoomWidth * 0.5f - 0.06f, RoomHeight - 0.12f, 1.55f), palette.Warm, 0.02f, false, false, false);
         }
 
         private void ConfigureLighting()
