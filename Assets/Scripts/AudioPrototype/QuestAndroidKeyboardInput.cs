@@ -249,7 +249,7 @@ namespace TsukiVox.AudioPrototype
             }
 
             palette = QuestUiThemePalette.For(roomPrototype != null ? roomPrototype.CurrentTheme : RoomTheme.Dark);
-            keyboardRoot = CreateRect(parent, "TsukiVox Soft Keyboard", new Vector2(0f, -140f), new Vector2(KeyboardWidth, KeyboardHeight));
+            keyboardRoot = CreateRect(parent, "TsukiVox Soft Keyboard", new Vector2(0f, -150f), new Vector2(KeyboardWidth, KeyboardHeight));
             keyboardRoot.SetAsLastSibling();
 
             var panel = keyboardRoot.gameObject.AddComponent<QuestUiSurface>();

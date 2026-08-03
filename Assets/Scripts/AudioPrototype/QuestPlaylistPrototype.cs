@@ -97,6 +97,7 @@ namespace TsukiVox.AudioPrototype
         private int searchSequence;
         private int suggestSequence;
         private string lastSearchError = string.Empty;
+        private string lastSuggestError = string.Empty;
         private string lastAddItemError = string.Empty;
         private string deviceId = string.Empty;
 
@@ -145,6 +146,8 @@ namespace TsukiVox.AudioPrototype
         public bool IsFetchingSuggestions => isFetchingSuggestions;
 
         public string LastSearchError => lastSearchError;
+
+        public string LastSuggestError => lastSuggestError;
 
         public bool IsAddingItem => isAddingItem;
 
@@ -445,6 +448,7 @@ namespace TsukiVox.AudioPrototype
         {
             EnsureClient();
             CancelSuggestions();
+            lastSuggestError = string.Empty;
 
             var normalizedTerm = string.IsNullOrWhiteSpace(term) ? string.Empty : term.Trim();
             if (string.IsNullOrEmpty(normalizedTerm))
@@ -470,6 +474,7 @@ namespace TsukiVox.AudioPrototype
         {
             CancelSuggestions();
             suggestResults = null;
+            lastSuggestError = string.Empty;
             SuggestStateChanged?.Invoke(this);
         }
 
@@ -953,6 +958,8 @@ namespace TsukiVox.AudioPrototype
             if (response != null)
             {
                 suggestResults = response;
+                lastSuggestError = string.Empty;
+                Debug.Log($"[TsukiVox Suggest] Received {response.result?.tag?.Length ?? 0} suggestions.");
             }
             else
             {
@@ -961,6 +968,10 @@ namespace TsukiVox.AudioPrototype
                     code = -1,
                     result = new BilibiliSuggestResult { tag = Array.Empty<BilibiliSuggestItem>() },
                 };
+                lastSuggestError = string.IsNullOrWhiteSpace(error)
+                    ? "获取搜索建议失败，请稍后重试"
+                    : error.Trim();
+                Debug.LogWarning($"[TsukiVox Suggest] Request failed: {lastSuggestError}");
             }
 
             SuggestStateChanged?.Invoke(this);
@@ -1071,7 +1082,7 @@ namespace TsukiVox.AudioPrototype
                 RefreshVoiceProvider();
                 if (clearQueueOnStartup)
                 {
-                    // 搜索结果是本地状态，直接清掉；预设 BV 号仍留在输入框里。
+                    // 搜索结果是本地状态，直接清掉；搜索框启动时保持为空。
                     ClearSearchResults();
                     if (state.queue != null && state.queue.Length > 0)
                     {
@@ -1351,6 +1362,8 @@ namespace TsukiVox.AudioPrototype
         private void CancelCatalogRequests()
         {
             CancelSearch();
+            CancelSuggestions();
+            suggestResults = null;
             if (addItemRoutine != null)
             {
                 StopCoroutine(addItemRoutine);
@@ -1462,6 +1475,7 @@ namespace TsukiVox.AudioPrototype
             pendingStatus = "Connecting to playlist sync...";
             searchResults = null;
             lastSearchError = string.Empty;
+            lastSuggestError = string.Empty;
             lastAddItemError = string.Empty;
             lastAddedItem = null;
             // 换了服务就要重新读它自己的供应商配置，并允许再执行一次启动清空。
@@ -1478,6 +1492,7 @@ namespace TsukiVox.AudioPrototype
             RefreshUi();
             SearchStateChanged?.Invoke(this);
             AddItemStateChanged?.Invoke(this);
+            SuggestStateChanged?.Invoke(this);
         }
 
         private void ApplyOriginsFromService()

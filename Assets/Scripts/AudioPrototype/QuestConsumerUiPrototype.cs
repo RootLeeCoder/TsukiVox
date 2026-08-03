@@ -12,13 +12,17 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestConsumerUiPrototype : MonoBehaviour
     {
         private const string RootName = "Consumer UI";
-        private const string DefaultSongSearchInput = "BV1Kx4y1h7vR";
         private const string AppendKtvSearchPrefsKey = "TsukiVox.AppendKtvToSearch";
         private const int QueueRowCount = 5;
         private const int SearchResultRowCount = 4;
-        private const int SuggestRowCount = 6;
+        private const int SuggestRowCount = 9;
+        private const int SuggestColumnCount = 3;
         private const int VoiceLevelBarCount = 18;
         private const float RefreshIntervalSeconds = 0.1f;
+        private const float SuggestDebounceSeconds = 0.35f;
+        private const float SuggestColumnGap = 8f;
+        private const float SuggestRowGap = 4f;
+        private const float SuggestRowHeight = 30f;
         private const float ContentWidth = 992f;
         private const float MicClearanceStep = 0.0025f;
 
@@ -165,7 +169,6 @@ namespace TsukiVox.AudioPrototype
         private TMP_InputField songSearchInput;
         private TMP_Text appendKtvSearchLabel;
         private Toggle appendKtvSearchToggle;
-        private Button suggestSearchButton;
         private Button songSearchButton;
         private Button voiceSearchButton;
         private QuestUiIcon voiceSearchIcon;
@@ -246,6 +249,7 @@ namespace TsukiVox.AudioPrototype
         private Coroutine pageTransition;
         private Coroutine drawerTransition;
         private Coroutine micCalibrationCoroutine;
+        private Coroutine suggestDebounceRoutine;
 
         public void Configure(
             RectTransform targetPanel,
@@ -306,6 +310,7 @@ namespace TsukiVox.AudioPrototype
         private void OnDisable()
         {
             CancelMicFaceCalibration();
+            CancelSuggestionDebounce();
             UnsubscribePlaylist();
             UnsubscribeRoom();
         }
@@ -482,31 +487,23 @@ namespace TsukiVox.AudioPrototype
             songSearchInput = CreateInputField(
                 songSearchPage,
                 "Song Search Input",
-                "输入歌名、歌手或 BV 号",
-                new Vector2(-166f, 112f),
-                new Vector2(640f, 54f));
+                "请输入歌曲名，推荐使用全拼",
+                new Vector2(-126f, 112f),
+                new Vector2(720f, 54f));
             songSearchInput.characterLimit = 80;
-            songSearchInput.SetTextWithoutNotify(DefaultSongSearchInput);
+            songSearchInput.SetTextWithoutNotify(string.Empty);
             appendKtvSearchLabel = CreateText(
                 songSearchPage,
                 "Append KTV Label",
                 "KTV",
                 16,
                 FontStyle.Bold,
-                new Vector2(190f, 112f),
+                new Vector2(266f, 112f),
                 new Vector2(56f, 36f),
                 TextAnchor.MiddleCenter,
                 TextSecondary);
-            appendKtvSearchToggle = CreateSwitch(songSearchPage, "Append KTV Switch", new Vector2(260f, 112f));
-            suggestSearchButton = CreateIconButton(
-                songSearchPage,
-                "Search Suggestions",
-                QuestUiIconKind.Sparkles,
-                new Vector2(354f, 112f),
-                new Vector2(70f, 54f),
-                SurfaceRaised,
-                AccentStrong,
-                out _);
+            appendKtvSearchToggle = CreateSwitch(songSearchPage, "Append KTV Switch", new Vector2(326f, 112f));
+            SetChildActive(songSearchPage, "Search Suggestions", false);
             songSearchButton = CreateIconButton(
                 songSearchPage,
                 "Search Songs",
@@ -517,39 +514,56 @@ namespace TsukiVox.AudioPrototype
                 AccentInk,
                 out _);
 
-            // 建议列表容器：在输入框下方，搜索结果上方
+            // 输入时用紧凑候选网格临时替代结果区，避免与世界空间键盘重叠。
+            var suggestRowCount = Mathf.CeilToInt(SuggestRowCount / (float)SuggestColumnCount);
+            var suggestContainerHeight = suggestRowCount * SuggestRowHeight +
+                                         Mathf.Max(0, suggestRowCount - 1) * SuggestRowGap;
             suggestContainer = EnsureRect(
                 songSearchPage,
                 "Suggest Container",
-                new Vector2(0f, -32f),
-                new Vector2(ContentWidth, 36f * SuggestRowCount));
+                new Vector2(0f, 31f),
+                new Vector2(ContentWidth, suggestContainerHeight));
             suggestContainer.gameObject.SetActive(false);
 
+            var suggestColumnWidth = (ContentWidth -
+                                      Mathf.Max(0, SuggestColumnCount - 1) * SuggestColumnGap) /
+                                     SuggestColumnCount;
             for (var index = 0; index < SuggestRowCount; index += 1)
             {
+                var rowIndex = index / SuggestColumnCount;
+                var columnIndex = index % SuggestColumnCount;
+                var rowX = -ContentWidth * 0.5f + suggestColumnWidth * 0.5f +
+                           columnIndex * (suggestColumnWidth + SuggestColumnGap);
+                var rowY = (suggestRowCount - 1) * (SuggestRowHeight + SuggestRowGap) * 0.5f -
+                           rowIndex * (SuggestRowHeight + SuggestRowGap);
                 var row = EnsureRect(
                     suggestContainer,
                     $"Suggest Row {index}",
-                    new Vector2(0f, 90f - index * 36f),
-                    new Vector2(ContentWidth, 34f));
+                    new Vector2(rowX, rowY),
+                    new Vector2(suggestColumnWidth, SuggestRowHeight));
                 suggestRows[index] = row;
                 suggestButtons[index] = CreateSurfaceButton(
                     row,
                     "Button",
                     Vector2.zero,
-                    new Vector2(ContentWidth, 34f),
+                    new Vector2(suggestColumnWidth, SuggestRowHeight),
                     Surface,
                     Line);
                 suggestTexts[index] = CreateText(
                     suggestButtons[index].transform,
                     "Text",
                     string.Empty,
-                    16,
+                    15,
                     FontStyle.Normal,
-                    new Vector2(-20f, 0f),
-                    new Vector2(940f, 28f),
+                    Vector2.zero,
+                    new Vector2(suggestColumnWidth - 24f, 26f),
                     TextAnchor.MiddleLeft,
                     TextPrimary);
+                suggestTexts[index].enableAutoSizing = true;
+                suggestTexts[index].fontSizeMin = 12f;
+                suggestTexts[index].fontSizeMax = 15f;
+                suggestTexts[index].textWrappingMode = TextWrappingModes.NoWrap;
+                suggestTexts[index].overflowMode = TextOverflowModes.Ellipsis;
                 ConfigureHover(suggestButtons[index], null, string.Empty);
             }
 
@@ -840,17 +854,16 @@ namespace TsukiVox.AudioPrototype
             WireButton(microphoneButton, () => audioPrototype?.ToggleMonitoring());
 
             WireButton(songSearchButton, () => SearchSongs(1));
-            WireButton(suggestSearchButton, SearchSuggestions);
             WireButton(voiceSearchButton, ToggleVoiceSearch);
             appendKtvSearchToggle.onValueChanged.RemoveAllListeners();
             appendKtvSearchToggle.SetIsOnWithoutNotify(appendKtvToSearch);
             appendKtvSearchToggle.onValueChanged.AddListener(HandleAppendKtvSearchToggle);
             RefreshAppendKtvSearchToggle();
             songSearchInput.onSubmit.RemoveAllListeners();
-            songSearchInput.onSubmit.AddListener(_ => SearchSongs(1));
+            songSearchInput.onSubmit.AddListener(HandleSongSearchSubmitted);
             songSearchInput.onSelect.RemoveAllListeners();
-            songSearchInput.onSelect.AddListener(_ => BeginEditingSearch());
             songSearchInput.onValueChanged.RemoveAllListeners();
+            songSearchInput.onValueChanged.AddListener(HandleSongSearchInputChanged);
             WireButton(searchPreviousPageButton, () => SearchSongs(Mathf.Max(1, songSearchPageNumber - 1)));
             WireButton(searchNextPageButton, () => SearchSongs(songSearchPageNumber + 1));
             WireButton(clearSearchButton, ClearSearchResults);
@@ -1406,8 +1419,7 @@ namespace TsukiVox.AudioPrototype
 
         private void OpenSongSearchPage()
         {
-            // 不自动搜索：启动后搜索列表保持为空，预设 BV 号只留在输入框里，
-            // 由用户主动点搜索或用语音找歌。
+            // 启动时输入和结果都保持为空，由用户输入、选择候选或使用语音找歌。
             ShowPage(UiPage.SongSearch);
         }
 
@@ -1684,9 +1696,8 @@ namespace TsukiVox.AudioPrototype
             SetAnchoredY(songSearchInput?.transform as RectTransform, searchRowY);
             SetAnchoredY(appendKtvSearchLabel?.rectTransform, searchRowY);
             SetAnchoredY(appendKtvSearchToggle?.transform as RectTransform, searchRowY);
-            SetAnchoredY(suggestSearchButton?.transform as RectTransform, searchRowY);
             SetAnchoredY(songSearchButton?.transform as RectTransform, searchRowY);
-            SetAnchoredY(suggestContainer, voiceVisible ? -32f : 0f);
+            SetAnchoredY(suggestContainer, voiceVisible ? 31f : 69f);
 
             var firstResultY = voiceVisible ? 48f : 78f;
             for (var index = 0; index < searchResultRows.Length; index += 1)
@@ -1719,16 +1730,15 @@ namespace TsukiVox.AudioPrototype
             var query = songSearchInput.text?.Trim();
             if (string.IsNullOrWhiteSpace(query))
             {
-                songSearchStatusText.text = "请输入歌名、歌手或 BV 号";
+                HideSuggestions();
+                songSearchStatusText.text = "请输入歌曲名";
                 songSearchStatusText.color = Danger;
                 return;
             }
 
+            HideSuggestions();
             songSearchPageNumber = Mathf.Max(1, page);
             playlistPrototype.SearchBilibili(BuildSongSearchQuery(query), songSearchPageNumber, SearchResultRowCount);
-
-            // 搜索时隐藏建议
-            HideSuggestions();
         }
 
         private string BuildSongSearchQuery(string query)
@@ -1766,44 +1776,56 @@ namespace TsukiVox.AudioPrototype
             }
         }
 
-        private void SearchSuggestions()
+        private void HandleSongSearchInputChanged(string value)
         {
-            if (playlistPrototype == null || songSearchInput == null)
+            HideSuggestions();
+            var query = value?.Trim();
+            if (!string.IsNullOrWhiteSpace(query))
             {
-                return;
+                suggestDebounceRoutine = StartCoroutine(FetchSuggestionsAfterDebounce(query));
             }
+        }
 
-            var keyboard = songSearchInput.GetComponent<QuestAndroidKeyboardInput>();
-            keyboard?.HideKeyboard();
-
-            var query = songSearchInput.text?.Trim();
+        private void HandleSongSearchSubmitted(string value)
+        {
+            HideSuggestions();
+            var query = value?.Trim();
             if (string.IsNullOrWhiteSpace(query))
             {
-                HideSuggestions();
-                songSearchStatusText.text = "请输入内容后再获取搜索建议";
+                songSearchStatusText.text = "请输入歌曲名";
                 songSearchStatusText.color = Danger;
                 return;
             }
 
-            if (suggestContainer != null)
-            {
-                suggestContainer.gameObject.SetActive(false);
-            }
-
-            songSearchStatusText.text = "正在获取搜索建议…";
-            songSearchStatusText.color = TextSecondary;
-            playlistPrototype.FetchBilibiliSuggestions(query);
+            FetchSuggestions(query);
         }
 
-        private void BeginEditingSearch()
+        private IEnumerator FetchSuggestionsAfterDebounce(string query)
         {
-            if (playlistPrototype == null ||
-                (!playlistPrototype.IsFetchingSuggestions && playlistPrototype.SuggestResults == null))
+            yield return new WaitForSecondsRealtime(SuggestDebounceSeconds);
+            suggestDebounceRoutine = null;
+
+            if (!string.Equals(songSearchInput?.text?.Trim(), query, StringComparison.Ordinal))
             {
+                yield break;
+            }
+
+            FetchSuggestions(query);
+        }
+
+        private void FetchSuggestions(string query)
+        {
+            if (currentPage != UiPage.SongSearch ||
+                playlistPrototype == null ||
+                !playlistPrototype.IsConnected ||
+                string.IsNullOrWhiteSpace(query))
+            {
+                RefreshSongSearch();
                 return;
             }
 
-            HideSuggestions();
+            Debug.Log($"[TsukiVox Suggest] Requesting suggestions for input length {query.Length}.");
+            playlistPrototype.FetchBilibiliSuggestions(query);
         }
 
         private void SelectSuggestion(int index)
@@ -1820,23 +1842,39 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
-            // 填入搜索框
             if (songSearchInput != null)
             {
-                songSearchInput.text = selected.value;
+                songSearchInput.SetTextWithoutNotify(selected.value);
+                songSearchInput.GetComponent<QuestAndroidKeyboardInput>()?.HideKeyboard();
             }
 
-            // 隐藏建议
-            HideSuggestions();
+            SearchSongs(1);
         }
 
         private void HideSuggestions()
         {
+            CancelSuggestionDebounce();
             if (suggestContainer != null)
             {
                 suggestContainer.gameObject.SetActive(false);
             }
-            playlistPrototype?.ClearSuggestions();
+
+            if (playlistPrototype != null &&
+                (playlistPrototype.IsFetchingSuggestions || playlistPrototype.SuggestResults != null))
+            {
+                playlistPrototype.ClearSuggestions();
+            }
+        }
+
+        private void CancelSuggestionDebounce()
+        {
+            if (suggestDebounceRoutine == null)
+            {
+                return;
+            }
+
+            StopCoroutine(suggestDebounceRoutine);
+            suggestDebounceRoutine = null;
         }
 
         private void RefreshSuggestions()
@@ -1846,38 +1884,39 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
-            if (suggestSearchButton != null)
-            {
-                suggestSearchButton.interactable = playlistPrototype.IsConnected &&
-                                                   !playlistPrototype.IsFetchingSuggestions &&
-                                                   !string.IsNullOrWhiteSpace(songSearchInput?.text);
-            }
-
             var keyboard = songSearchInput != null
                 ? songSearchInput.GetComponent<QuestAndroidKeyboardInput>()
                 : null;
-            if (keyboard != null && keyboard.IsKeyboardOpen)
-            {
-                suggestContainer.gameObject.SetActive(false);
-                return;
-            }
+            var keyboardOpen = keyboard != null && keyboard.IsKeyboardOpen;
 
             if (playlistPrototype.IsFetchingSuggestions)
             {
                 suggestContainer.gameObject.SetActive(false);
-                songSearchStatusText.text = "正在获取搜索建议…";
-                songSearchStatusText.color = TextSecondary;
+                SuppressSearchResults(true);
+                if (!playlistPrototype.IsSearching && !playlistPrototype.IsAddingItem)
+                {
+                    songSearchStatusText.text = "正在获取搜索建议…";
+                    songSearchStatusText.color = TextSecondary;
+                }
                 return;
             }
 
             var suggestions = playlistPrototype.SuggestResults?.result?.tag;
-            var hasSuggestions = suggestions != null && suggestions.Length > 0;
+            var hasSuggestions = playlistPrototype.IsConnected && suggestions != null && suggestions.Length > 0;
 
             suggestContainer.gameObject.SetActive(hasSuggestions);
+            SuppressSearchResults(keyboardOpen || hasSuggestions);
 
             if (!hasSuggestions)
             {
-                if (playlistPrototype.SuggestResults != null)
+                if (!string.IsNullOrWhiteSpace(playlistPrototype.LastSuggestError) &&
+                    !playlistPrototype.IsSearching && !playlistPrototype.IsAddingItem)
+                {
+                    songSearchStatusText.text = SingleLine(playlistPrototype.LastSuggestError);
+                    songSearchStatusText.color = Danger;
+                }
+                else if (playlistPrototype.IsConnected && playlistPrototype.SuggestResults != null &&
+                    !playlistPrototype.IsSearching && !playlistPrototype.IsAddingItem)
                 {
                     songSearchStatusText.text = "没有找到搜索建议";
                     songSearchStatusText.color = TextSecondary;
@@ -1886,8 +1925,11 @@ namespace TsukiVox.AudioPrototype
             }
 
             suggestContainer.SetAsLastSibling();
-            songSearchStatusText.text = $"找到 {Mathf.Min(SuggestRowCount, suggestions.Length)} 条搜索建议";
-            songSearchStatusText.color = Accent;
+            if (!playlistPrototype.IsSearching && !playlistPrototype.IsAddingItem)
+            {
+                songSearchStatusText.text = $"找到 {Mathf.Min(SuggestRowCount, suggestions.Length)} 条搜索建议";
+                songSearchStatusText.color = Accent;
+            }
 
             for (var index = 0; index < SuggestRowCount; index += 1)
             {
@@ -2130,6 +2172,19 @@ namespace TsukiVox.AudioPrototype
             }
         }
 
+        private void SuppressSearchResults(bool suppressed)
+        {
+            if (!suppressed)
+            {
+                return;
+            }
+
+            for (var index = 0; index < searchResultRows.Length; index += 1)
+            {
+                searchResultRows[index]?.gameObject.SetActive(false);
+            }
+        }
+
         private void BindTheme(UnityEngine.Object target, ThemeColorRole role)
         {
             if (target != null)
@@ -2261,6 +2316,11 @@ namespace TsukiVox.AudioPrototype
             if (currentPage == UiPage.MicProtection && page != UiPage.MicProtection)
             {
                 CancelMicFaceCalibration();
+            }
+            if (currentPage == UiPage.SongSearch && page != UiPage.SongSearch)
+            {
+                songSearchInput?.GetComponent<QuestAndroidKeyboardInput>()?.HideKeyboard();
+                HideSuggestions();
             }
 
             if (pageTransition != null)
