@@ -10,9 +10,10 @@ using InputSystemDevice = UnityEngine.InputSystem.InputDevice;
 namespace TsukiVox.AudioPrototype
 {
     /// <summary>
-    /// V0.6 handheld props. The right controller shows a virtual microphone and the
-    /// left controller shows a multi-colour glowstick, both rebuilt as native Unity
-    /// meshes. Layout, palette and feedback curves are ported from the WebXR prototype
+    /// V0.6 handheld props. The right controller shows a virtual microphone restyled
+    /// as a realistic handheld dynamic mic (SM58-style) and the left controller shows
+    /// a multi-colour glowstick, both rebuilt as native Unity meshes. Glowstick layout,
+    /// palette and both props' feedback curves are ported from the WebXR prototype
     /// (src/scene/microphone.ts, src/scene/glowstick.ts, src/xr/controllers.ts,
     /// src/feedback.ts); the implementation is native. Tracking space equals world
     /// space in this project, so props follow the controller grip pose read directly
@@ -663,12 +664,19 @@ namespace TsukiVox.AudioPrototype
         }
 
         /// <summary>
-        /// Virtual microphone: matte handle, metallic grille and an accent ring that
-        /// pulses with the mic level. Geometry ported from src/scene/microphone.ts,
-        /// feedback from src/feedback.ts (mic ring scale + emissive, mic glow light).
+        /// Virtual microphone restyled as a realistic handheld dynamic mic (SM58-style):
+        /// charcoal body with a steel base cap, grip rings, an on/off switch, a flared
+        /// shoulder, a dark steel collar and a wire-mesh grille ball. The slim status
+        /// ring under the grille keeps the V0.6 level feedback from src/feedback.ts
+        /// (ring scale + emissive, mic glow light). The grille centre and radius keep
+        /// the V0.6 reference values so face-proximity haptics stay calibrated.
         /// </summary>
         private sealed class MicProp
         {
+            // Grille ball centre on the mic axis; haptics measure the mouth distance
+            // against this point minus MicrophoneGrilleRadius, so do not move it.
+            private const float GrilleCenterZ = 0.145f;
+
             private static readonly Color RingColor = new Color(0.2f, 0.9f, 0.76f, 1f);
 
             private readonly Transform anchor;
@@ -701,26 +709,58 @@ namespace TsukiVox.AudioPrototype
                 anchor.localPosition = localPosition;
                 anchor.localRotation = localRotation;
 
-                var handleMaterial = PropMaterials.Standard("V0.6 Mic Handle", new Color(0.1f, 0.12f, 0.13f, 1f), 0.42f, 0.38f);
-                var grilleMaterial = PropMaterials.Standard("V0.6 Mic Grille", new Color(0.85f, 0.9f, 0.89f, 1f), 0.28f, 0.55f);
+                // Painted-metal charcoal body, dark steel hardware, a two-tone steel
+                // grille and the emissive status ring. Few shared materials keep the
+                // prop cheap on Quest.
+                var bodyMaterial = PropMaterials.Standard("V0.6 Mic Body", new Color(0.075f, 0.08f, 0.085f, 1f), 0.55f, 0.55f);
+                var steelMaterial = PropMaterials.Standard("V0.6 Mic Dark Steel", new Color(0.26f, 0.28f, 0.3f, 1f), 0.38f, 0.85f);
+                var grilleMaterial = PropMaterials.Standard("V0.6 Mic Grille", new Color(0.3f, 0.32f, 0.34f, 1f), 0.45f, 0.9f);
+                var grilleWireMaterial = PropMaterials.Standard("V0.6 Mic Grille Wire", new Color(0.52f, 0.55f, 0.58f, 1f), 0.3f, 0.95f);
                 var ringMaterial = PropMaterials.Emissive("V0.6 Mic Ring", RingColor, 0.8f, 0.1f);
 
-                // Handle: tapered cylinder, 0.017 -> 0.021 radius, length 0.17, along +Z.
-                var handle = MeshFactory.CreateTaperedCylinder(anchor, "mic handle", 0.017f, 0.021f, 0.17f, 20, handleMaterial);
-                handle.transform.localPosition = new Vector3(0f, 0f, 0.04f);
+                // Base cap at the pinky end, slightly wider than the grip.
+                var baseCap = MeshFactory.CreateTaperedCylinder(anchor, "mic base cap", 0.0185f, 0.018f, 0.016f, 24, steelMaterial);
+                baseCap.transform.localPosition = new Vector3(0f, 0f, -0.04f);
 
-                // Grille ball at the tip, squashed perpendicular to the mic axis
-                // (VRSing scale.set(1, 0.82, 1)); the axis itself stays full-diameter.
+                // Grip: gently tapered charcoal tube.
+                var handle = MeshFactory.CreateTaperedCylinder(anchor, "mic handle", 0.0165f, 0.0195f, 0.104f, 24, bodyMaterial);
+                handle.transform.localPosition = new Vector3(0f, 0f, 0.02f);
+
+                // Thin grip rings pressed into the handle (each hugs the local taper).
+                BuildDetailRing(anchor, "mic grip ring", 0.005f, 0.0179f, 0.0011f, 10, steelMaterial);
+                BuildDetailRing(anchor, "mic grip ring", 0.022f, 0.0184f, 0.0011f, 10, steelMaterial);
+                BuildDetailRing(anchor, "mic grip ring", 0.039f, 0.0188f, 0.0011f, 10, steelMaterial);
+
+                // On/off switch plate and slider on the thumb side (+Y).
+                var switchPlate = MeshFactory.CreateBox(anchor, "mic switch plate", new Vector3(0.01f, 0.003f, 0.02f), bodyMaterial);
+                switchPlate.transform.localPosition = new Vector3(0f, 0.018f, 0.048f);
+                var switchSlider = MeshFactory.CreateBox(anchor, "mic switch slider", new Vector3(0.0055f, 0.003f, 0.0085f), steelMaterial);
+                switchSlider.transform.localPosition = new Vector3(0f, 0.0195f, 0.05f);
+
+                // Shoulder flares out toward the grille like a real mic body.
+                var shoulder = MeshFactory.CreateTaperedCylinder(anchor, "mic shoulder", 0.0195f, 0.0245f, 0.036f, 24, bodyMaterial);
+                shoulder.transform.localPosition = new Vector3(0f, 0f, 0.09f);
+
+                // Slim status ring between body and grille (real wireless mics have an
+                // LED band here); still pulses with the mic level via ApplyFeedback.
+                var ring = MeshFactory.CreateTorus(anchor, "mic ring", 0.0248f, 0.0026f, 12, 36, ringMaterial);
+                ring.transform.localPosition = new Vector3(0f, 0f, 0.11f);
+
+                // Dark steel collar the grille screws onto; the ball nests into it.
+                var collar = MeshFactory.CreateTaperedCylinder(anchor, "mic grille collar", 0.0245f, 0.021f, 0.014f, 24, steelMaterial);
+                collar.transform.localPosition = new Vector3(0f, 0f, 0.115f);
+
+                // Wire-mesh grille ball. A full sphere now (no cartoon squash); radius
+                // stays MicrophoneGrilleRadius so the haptic surface reference is exact
+                // on every axis. Latitude rings stand ~0.5 mm proud to suggest the
+                // woven mesh, plus a slightly thicker seam where the two halves meet.
                 var grille = MeshFactory.CreateSphere(anchor, "mic grille", MicrophoneGrilleRadius, grilleMaterial);
-                grille.transform.localPosition = new Vector3(0f, 0f, 0.145f);
-                grille.transform.localScale = new Vector3(MicrophoneGrilleRadius * 2f, MicrophoneGrilleRadius * 2f * 0.82f, MicrophoneGrilleRadius * 2f);
-
-                // Accent ring around the neck. VRSing (microphone.ts) rotates the torus
-                // rotation.x = PI/2 so its symmetry axis is the prop's local Y, not the
-                // handle axis; the Unity torus defaults to a Z-axis band, so match here.
-                var ring = MeshFactory.CreateTorus(anchor, "mic ring", 0.04f, 0.00375f, 12, 32, ringMaterial);
-                ring.transform.localPosition = new Vector3(0f, 0f, 0.1125f);
-                ring.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                grille.transform.localPosition = new Vector3(0f, 0f, GrilleCenterZ);
+                BuildDetailRing(anchor, "mic grille wire", GrilleCenterZ - 0.024f, 0.0289f, 0.0005f, 8, grilleWireMaterial);
+                BuildDetailRing(anchor, "mic grille wire", GrilleCenterZ - 0.012f, 0.0356f, 0.0005f, 8, grilleWireMaterial);
+                BuildDetailRing(anchor, "mic grille seam", GrilleCenterZ, MicrophoneGrilleRadius + 0.0001f, 0.0007f, 8, grilleWireMaterial);
+                BuildDetailRing(anchor, "mic grille wire", GrilleCenterZ + 0.012f, 0.0356f, 0.0005f, 8, grilleWireMaterial);
+                BuildDetailRing(anchor, "mic grille wire", GrilleCenterZ + 0.024f, 0.0289f, 0.0005f, 8, grilleWireMaterial);
 
                 var glowObject = new GameObject("mic glow");
                 glowObject.transform.SetParent(anchor, false);
@@ -733,6 +773,14 @@ namespace TsukiVox.AudioPrototype
                 glow.shadows = LightShadows.None;
 
                 return new MicProp(anchor, grille.transform, ring.transform, ringMaterial, glow, anchor.gameObject, localPosition, localRotation);
+            }
+
+            // Thin torus band encircling the mic axis at the given local Z. Used for
+            // grip grooves and grille wires; the torus mesh already encircles local Z.
+            private static void BuildDetailRing(Transform anchor, string objectName, float localZ, float ringRadius, float tubeRadius, int tubeSegments, Material material)
+            {
+                var detailRing = MeshFactory.CreateTorus(anchor, objectName, ringRadius, tubeRadius, tubeSegments, 36, material);
+                detailRing.transform.localPosition = new Vector3(0f, 0f, localZ);
             }
 
             public Vector3 GrilleWorldPosition => grille != null ? grille.position : anchor.position;
@@ -1005,8 +1053,8 @@ namespace TsukiVox.AudioPrototype
 
         /// <summary>
         /// Builds the small prop meshes. Cubes/spheres reuse Unity primitives; the
-        /// tapered cylinder and torus are generated so the glowstick and mic match the
-        /// WebXR silhouette. All meshes drop colliders and shadows for Quest perf.
+        /// tapered cylinder and torus are generated so the props keep their intended
+        /// silhouette. All meshes drop colliders and shadows for Quest perf.
         /// </summary>
         private static class MeshFactory
         {
@@ -1015,6 +1063,13 @@ namespace TsukiVox.AudioPrototype
                 var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 sphere.transform.localScale = Vector3.one * (radius * 2f);
                 return Configure(sphere, parent, objectName, material);
+            }
+
+            public static GameObject CreateBox(Transform parent, string objectName, Vector3 size, Material material)
+            {
+                var box = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                box.transform.localScale = size;
+                return Configure(box, parent, objectName, material);
             }
 
             public static GameObject CreateTaperedCylinder(
