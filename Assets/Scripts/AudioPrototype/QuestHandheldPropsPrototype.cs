@@ -718,8 +718,9 @@ namespace TsukiVox.AudioPrototype
                 var grilleWireMaterial = PropMaterials.Standard("V0.6 Mic Grille Wire", new Color(0.52f, 0.55f, 0.58f, 1f), 0.3f, 0.95f);
                 var ringMaterial = PropMaterials.Emissive("V0.6 Mic Ring", RingColor, 0.8f, 0.1f);
 
-                // Base cap at the pinky end, slightly wider than the grip.
-                var baseCap = MeshFactory.CreateTaperedCylinder(anchor, "mic base cap", 0.0185f, 0.018f, 0.016f, 24, steelMaterial);
+                // Base cap at the pinky end, slightly wider than the grip and narrowing
+                // toward the tail like the battery cap of a real handheld mic.
+                var baseCap = MeshFactory.CreateTaperedCylinder(anchor, "mic base cap", 0.017f, 0.0185f, 0.016f, 24, steelMaterial);
                 baseCap.transform.localPosition = new Vector3(0f, 0f, -0.04f);
 
                 // Grip: gently tapered charcoal tube.
@@ -1137,6 +1138,9 @@ namespace TsukiVox.AudioPrototype
             // Cylinder along local Z, centred on the origin so it spans [-length/2, +length/2]
             // exactly like Three.js CylinderGeometry (bottomRadius at -Z, topRadius at +Z).
             // The ported prop positions are centre positions, so the mesh must be centred too.
+            // End caps use their own rim vertices: sharing the side wall's rim vertices would
+            // make RecalculateNormals average the axial cap normal with the radial side
+            // normal, shading the flat caps like a flared bell (visible at the mic tail).
             private static Mesh BuildTaperedCylinderMesh(float bottomRadius, float topRadius, float length, int segments)
             {
                 var vertices = new List<Vector3>();
@@ -1168,22 +1172,31 @@ namespace TsukiVox.AudioPrototype
 
                 var bottomCenter = vertices.Count;
                 vertices.Add(new Vector3(0f, 0f, -halfLength));
+                var bottomRimStart = vertices.Count;
+                for (var i = 0; i <= segments; i += 1)
+                {
+                    var angle = (float)i / segments * Mathf.PI * 2f;
+                    vertices.Add(new Vector3(Mathf.Cos(angle) * bottomRadius, Mathf.Sin(angle) * bottomRadius, -halfLength));
+                }
+
                 var topCenter = vertices.Count;
                 vertices.Add(new Vector3(0f, 0f, halfLength));
+                var topRimStart = vertices.Count;
+                for (var i = 0; i <= segments; i += 1)
+                {
+                    var angle = (float)i / segments * Mathf.PI * 2f;
+                    vertices.Add(new Vector3(Mathf.Cos(angle) * topRadius, Mathf.Sin(angle) * topRadius, halfLength));
+                }
 
                 for (var i = 0; i < segments; i += 1)
                 {
-                    var b0 = i * 2;
-                    var b1 = (i + 1) * 2;
                     triangles.Add(bottomCenter);
-                    triangles.Add(b0);
-                    triangles.Add(b1);
+                    triangles.Add(bottomRimStart + i + 1);
+                    triangles.Add(bottomRimStart + i);
 
-                    var t0 = i * 2 + 1;
-                    var t1 = (i + 1) * 2 + 1;
                     triangles.Add(topCenter);
-                    triangles.Add(t1);
-                    triangles.Add(t0);
+                    triangles.Add(topRimStart + i);
+                    triangles.Add(topRimStart + i + 1);
                 }
 
                 var mesh = new Mesh { name = "TsukiVox Tapered Cylinder" };
