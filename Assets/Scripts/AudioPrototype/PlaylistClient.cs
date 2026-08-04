@@ -38,10 +38,10 @@ namespace TsukiVox.AudioPrototype
         private const string DeviceIdHeader = "X-TsukiVox-Device-Id";
         private const string AudioDurationHeader = "X-TsukiVox-Audio-Ms";
         private const int RequestTimeoutSeconds = 6;
-        private const int SearchRequestTimeoutSeconds = 12;
+        private const int SearchRequestTimeoutSeconds = 25;
 
-        // Recognition (up to 8s server side) plus catalog search (12s) plus headroom.
-        private const int VoiceSearchTimeoutSeconds = 25;
+        // Recognition (up to 8s) plus catalog rate-limit retries and request headroom.
+        private const int VoiceSearchTimeoutSeconds = 40;
 
         private string playlistOrigin;
         private string downloadOrigin;

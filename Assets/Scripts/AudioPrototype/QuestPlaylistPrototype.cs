@@ -931,9 +931,9 @@ namespace TsukiVox.AudioPrototype
             }
             else
             {
-                lastSearchError = string.IsNullOrWhiteSpace(error)
-                    ? "Bilibili 搜索失败，请稍后重试。"
-                    : error.Trim();
+                var diagnosticError = string.IsNullOrWhiteSpace(error) ? "Unknown search failure." : error.Trim();
+                Debug.LogWarning($"[TsukiVox Search] Request failed after server retries: {diagnosticError}");
+                lastSearchError = "服务器端暂时繁忙，请稍后再试";
             }
 
             SearchStateChanged?.Invoke(this);

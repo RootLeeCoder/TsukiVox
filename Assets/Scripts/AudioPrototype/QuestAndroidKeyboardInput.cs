@@ -34,6 +34,7 @@ namespace TsukiVox.AudioPrototype
         private string originalText = string.Empty;
         private Coroutine dismissCoroutine;
         private int dismissRequestId;
+        private float keyboardAnchoredY = -150f;
         private bool isUppercase;
         private bool isClosing;
 
@@ -105,6 +106,15 @@ namespace TsukiVox.AudioPrototype
             if (eventData.button == PointerEventData.InputButton.Left)
             {
                 ShowKeyboard();
+            }
+        }
+
+        public void SetKeyboardAnchoredY(float anchoredY)
+        {
+            keyboardAnchoredY = anchoredY;
+            if (keyboardRoot != null)
+            {
+                keyboardRoot.anchoredPosition = new Vector2(keyboardRoot.anchoredPosition.x, keyboardAnchoredY);
             }
         }
 
@@ -249,7 +259,7 @@ namespace TsukiVox.AudioPrototype
             }
 
             palette = QuestUiThemePalette.For(roomPrototype != null ? roomPrototype.CurrentTheme : RoomTheme.Dark);
-            keyboardRoot = CreateRect(parent, "TsukiVox Soft Keyboard", new Vector2(0f, -150f), new Vector2(KeyboardWidth, KeyboardHeight));
+            keyboardRoot = CreateRect(parent, "TsukiVox Soft Keyboard", new Vector2(0f, keyboardAnchoredY), new Vector2(KeyboardWidth, KeyboardHeight));
             keyboardRoot.SetAsLastSibling();
 
             var panel = keyboardRoot.gameObject.AddComponent<QuestUiSurface>();

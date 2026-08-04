@@ -20,9 +20,11 @@ namespace TsukiVox.AudioPrototype
         private const int VoiceLevelBarCount = 18;
         private const float RefreshIntervalSeconds = 0.1f;
         private const float SuggestDebounceSeconds = 0.35f;
-        private const float SuggestColumnGap = 8f;
-        private const float SuggestRowGap = 4f;
-        private const float SuggestRowHeight = 30f;
+        private const float SuggestColumnGap = 12f;
+        private const float SuggestRowGap = 6f;
+        private const float SuggestRowHeight = 34f;
+        private const float SongSearchKeyboardY = -150f;
+        private const float SongSearchKeyboardYWithVoice = -168f;
         private const float ContentWidth = 992f;
         private const float MicClearanceStep = 0.0025f;
 
@@ -553,15 +555,15 @@ namespace TsukiVox.AudioPrototype
                     suggestButtons[index].transform,
                     "Text",
                     string.Empty,
-                    15,
+                    17,
                     FontStyle.Normal,
                     Vector2.zero,
-                    new Vector2(suggestColumnWidth - 24f, 26f),
+                    new Vector2(suggestColumnWidth - 28f, 30f),
                     TextAnchor.MiddleLeft,
                     TextPrimary);
                 suggestTexts[index].enableAutoSizing = true;
-                suggestTexts[index].fontSizeMin = 12f;
-                suggestTexts[index].fontSizeMax = 15f;
+                suggestTexts[index].fontSizeMin = 14f;
+                suggestTexts[index].fontSizeMax = 17f;
                 suggestTexts[index].textWrappingMode = TextWrappingModes.NoWrap;
                 suggestTexts[index].overflowMode = TextOverflowModes.Ellipsis;
                 ConfigureHover(suggestButtons[index], null, string.Empty);
@@ -1060,7 +1062,7 @@ namespace TsukiVox.AudioPrototype
             }
             else if (playlistPrototype.IsSearching)
             {
-                songSearchStatusText.text = "正在搜索 Bilibili";
+                songSearchStatusText.text = "正在检索中...";
                 songSearchStatusText.color = TextSecondary;
             }
             else if (!string.IsNullOrWhiteSpace(playlistPrototype.LastSearchError))
@@ -1697,7 +1699,11 @@ namespace TsukiVox.AudioPrototype
             SetAnchoredY(appendKtvSearchLabel?.rectTransform, searchRowY);
             SetAnchoredY(appendKtvSearchToggle?.transform as RectTransform, searchRowY);
             SetAnchoredY(songSearchButton?.transform as RectTransform, searchRowY);
-            SetAnchoredY(suggestContainer, voiceVisible ? 31f : 69f);
+            var inputHalfHeight = (songSearchInput?.transform as RectTransform)?.sizeDelta.y * 0.5f ?? 27f;
+            var suggestHalfHeight = suggestContainer != null ? suggestContainer.sizeDelta.y * 0.5f : 0f;
+            SetAnchoredY(suggestContainer, searchRowY - inputHalfHeight - 5f - suggestHalfHeight);
+            songSearchInput?.GetComponent<QuestAndroidKeyboardInput>()?.SetKeyboardAnchoredY(
+                voiceVisible ? SongSearchKeyboardYWithVoice : SongSearchKeyboardY);
 
             var firstResultY = voiceVisible ? 48f : 78f;
             for (var index = 0; index < searchResultRows.Length; index += 1)
