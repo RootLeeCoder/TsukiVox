@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.TextCore.LowLevel;
 using UnityEngine.UI;
 
@@ -26,6 +27,12 @@ namespace TsukiVox.AudioPrototype
         private const float SongSearchKeyboardY = -150f;
         private const float SongSearchKeyboardYWithVoice = -168f;
         private const float ContentWidth = 992f;
+        private const int SearchResultColumnCount = 2;
+        private const float SearchResultColumnGap = 12f;
+        private const float SearchResultRowGap = 12f;
+        private const float SearchResultCardHeight = 128f;
+        private const float SearchResultCoverWidth = 192f;
+        private const float SearchResultCoverRetrySeconds = 30f;
         private const float MicClearanceStep = 0.0025f;
 
         private Color ScreenBackground => palette.ScreenBackground;
@@ -185,9 +192,15 @@ namespace TsukiVox.AudioPrototype
         private readonly TMP_Text[] suggestTexts = new TMP_Text[SuggestRowCount];
         private readonly RectTransform[] searchResultRows = new RectTransform[SearchResultRowCount];
         private readonly QuestUiSurface[] searchResultSurfaces = new QuestUiSurface[SearchResultRowCount];
+        private readonly RawImage[] searchResultCoverImages = new RawImage[SearchResultRowCount];
         private readonly TMP_Text[] searchResultTitleTexts = new TMP_Text[SearchResultRowCount];
-        private readonly TMP_Text[] searchResultMetaTexts = new TMP_Text[SearchResultRowCount];
+        private readonly TMP_Text[] searchResultAuthorTexts = new TMP_Text[SearchResultRowCount];
+        private readonly TMP_Text[] searchResultDurationTexts = new TMP_Text[SearchResultRowCount];
         private readonly Button[] searchResultAddButtons = new Button[SearchResultRowCount];
+        private readonly string[] searchResultCoverUrls = new string[SearchResultRowCount];
+        private readonly Texture2D[] searchResultCoverTextures = new Texture2D[SearchResultRowCount];
+        private readonly Coroutine[] searchResultCoverRequests = new Coroutine[SearchResultRowCount];
+        private readonly float[] searchResultCoverRetryAfter = new float[SearchResultRowCount];
         private Button searchPreviousPageButton;
         private Button searchNextPageButton;
         private Button clearSearchButton;
@@ -286,6 +299,7 @@ namespace TsukiVox.AudioPrototype
 
             if (requiresBuild)
             {
+                ReleaseSearchResultCovers();
                 themeBindings.Clear();
                 EnsureUiHierarchy();
                 ShowPageImmediate(UiPage.Home);
@@ -313,8 +327,14 @@ namespace TsukiVox.AudioPrototype
         {
             CancelMicFaceCalibration();
             CancelSuggestionDebounce();
+            CancelSearchResultCoverRequests();
             UnsubscribePlaylist();
             UnsubscribeRoom();
+        }
+
+        private void OnDestroy()
+        {
+            ReleaseSearchResultCovers();
         }
 
         private void Update()
@@ -569,48 +589,125 @@ namespace TsukiVox.AudioPrototype
                 ConfigureHover(suggestButtons[index], null, string.Empty);
             }
 
-            const float firstY = 48f;
+            var cardWidth = (ContentWidth - SearchResultColumnGap) / SearchResultColumnCount;
+            const float firstRowY = 14f;
             for (var index = 0; index < SearchResultRowCount; index += 1)
             {
+                var columnIndex = index % SearchResultColumnCount;
+                var rowIndex = index / SearchResultColumnCount;
+                var cardX = -ContentWidth * 0.5f + cardWidth * 0.5f +
+                            columnIndex * (cardWidth + SearchResultColumnGap);
+                var cardY = firstRowY - rowIndex * (SearchResultCardHeight + SearchResultRowGap);
                 var row = EnsureRect(
                     songSearchPage,
                     $"Search Result {index}",
-                    new Vector2(0f, firstY - index * 66f),
-                    new Vector2(ContentWidth, 60f));
+                    new Vector2(cardX, cardY),
+                    new Vector2(cardWidth, SearchResultCardHeight));
                 searchResultRows[index] = row;
                 searchResultSurfaces[index] = EnsureSurface(row, Surface, 6f, false);
+                var rowMask = GetOrAddComponent<Mask>(row.gameObject);
+                rowMask.showMaskGraphic = true;
+
+                var coverX = -cardWidth * 0.5f + SearchResultCoverWidth * 0.5f;
+                var cover = EnsureRect(
+                    row,
+                    "Cover",
+                    new Vector2(coverX, 0f),
+                    new Vector2(SearchResultCoverWidth, SearchResultCardHeight));
+                EnsureSurface(cover, SurfaceRaised, 0f, false);
+                var coverImageRect = EnsureRect(
+                    cover,
+                    "Image",
+                    Vector2.zero,
+                    new Vector2(SearchResultCoverWidth, SearchResultCardHeight));
+                var coverImage = GetOrAddComponent<RawImage>(coverImageRect.gameObject);
+                coverImage.texture = null;
+                coverImage.color = Color.white;
+                coverImage.raycastTarget = false;
+                coverImage.enabled = false;
+                searchResultCoverImages[index] = coverImage;
+
+                var durationRoot = EnsureRect(
+                    cover,
+                    "Duration",
+                    new Vector2(64f, -48f),
+                    new Vector2(52f, 22f));
+                var durationSurface = GetOrAddComponent<QuestUiSurface>(durationRoot.gameObject);
+                durationSurface.color = new Color(0f, 0f, 0f, 0.82f);
+                durationSurface.SetCornerRadius(4f);
+                durationSurface.raycastTarget = false;
+                searchResultDurationTexts[index] = CreateText(
+                    durationRoot,
+                    "Text",
+                    "0:00",
+                    13,
+                    FontStyle.Bold,
+                    Vector2.zero,
+                    new Vector2(48f, 20f),
+                    TextAnchor.MiddleCenter,
+                    TextPrimary);
+                themeBindings.Remove(searchResultDurationTexts[index]);
+                searchResultDurationTexts[index].color = Color.white;
+
+                var contentLeft = -cardWidth * 0.5f + SearchResultCoverWidth;
+                var contentWidth = cardWidth - SearchResultCoverWidth;
                 searchResultTitleTexts[index] = CreateText(
                     row,
                     "Title",
                     "歌曲",
-                    18,
+                    17,
                     FontStyle.Bold,
-                    new Vector2(-62f, 11f),
-                    new Vector2(810f, 28f),
-                    TextAnchor.MiddleLeft,
+                    new Vector2(contentLeft + contentWidth * 0.5f, 25f),
+                    new Vector2(contentWidth - 24f, 68f),
+                    TextAnchor.UpperLeft,
                     TextPrimary);
-                searchResultTitleTexts[index].enableAutoSizing = true;
-                searchResultTitleTexts[index].fontSizeMin = 15f;
-                searchResultTitleTexts[index].fontSizeMax = 18f;
-                searchResultMetaTexts[index] = CreateText(
+                searchResultTitleTexts[index].overflowMode = TextOverflowModes.Ellipsis;
+                searchResultTitleTexts[index].maxVisibleLines = 3;
+
+                var badgeX = contentLeft + 27f;
+                var badgeRoot = EnsureRect(
                     row,
-                    "Meta",
-                    "Bilibili",
-                    15,
+                    "Uploader Badge",
+                    new Vector2(badgeX, -43f),
+                    new Vector2(30f, 20f));
+                EnsureSurface(badgeRoot, TextSecondary, 5f, false);
+                var badgeInner = EnsureRect(badgeRoot, "Inner", Vector2.zero, new Vector2(28f, 18f));
+                EnsureSurface(badgeInner, Surface, 4f, false);
+                CreateText(
+                    badgeInner,
+                    "Text",
+                    "UP",
+                    11,
+                    FontStyle.Bold,
+                    Vector2.zero,
+                    new Vector2(26f, 16f),
+                    TextAnchor.MiddleCenter,
+                    TextSecondary);
+                var authorLeft = badgeX + 21f;
+                var addButtonLeft = cardWidth * 0.5f - 54f;
+                var authorWidth = Mathf.Max(40f, addButtonLeft - authorLeft - 8f);
+                searchResultAuthorTexts[index] = CreateText(
+                    row,
+                    "Author",
+                    "未知 UP 主",
+                    13,
                     FontStyle.Normal,
-                    new Vector2(-62f, -15f),
-                    new Vector2(810f, 24f),
+                    new Vector2(authorLeft + authorWidth * 0.5f, -43f),
+                    new Vector2(authorWidth, 22f),
                     TextAnchor.MiddleLeft,
                     TextSecondary);
+                searchResultAuthorTexts[index].textWrappingMode = TextWrappingModes.NoWrap;
+                searchResultAuthorTexts[index].overflowMode = TextOverflowModes.Ellipsis;
                 searchResultAddButtons[index] = CreateIconButton(
                     row,
                     "Add",
                     QuestUiIconKind.Plus,
-                    new Vector2(460f, 0f),
-                    new Vector2(52f, 52f),
+                    new Vector2(cardWidth * 0.5f - 32f, -36f),
+                    new Vector2(44f, 44f),
                     SurfaceRaised,
                     AccentStrong,
                     out _);
+                SetChildActive(row, "Meta", false);
             }
 
             searchPreviousPageButton = CreateTextButton(songSearchPage, "Previous Search Page", "上一页", new Vector2(-424f, -226f), new Vector2(128f, 46f), Surface, TextPrimary);
@@ -1030,6 +1127,7 @@ namespace TsukiVox.AudioPrototype
                 searchResultRows[index].gameObject.SetActive(visible);
                 if (!visible)
                 {
+                    SetSearchResultCover(index, string.Empty);
                     continue;
                 }
 
@@ -1039,7 +1137,9 @@ namespace TsukiVox.AudioPrototype
                     ? palette.PendingSurface
                     : Surface;
                 searchResultTitleTexts[index].text = SafeText(item.title, item.bvid);
-                searchResultMetaTexts[index].text = $"{SafeText(item.author, "未知 UP 主")} · {FormatDuration(item)} · {item.bvid}";
+                searchResultAuthorTexts[index].text = SafeText(item.author, "未知 UP 主");
+                searchResultDurationTexts[index].text = FormatDuration(item);
+                SetSearchResultCover(index, item.coverUrl);
                 searchResultAddButtons[index].interactable = playlistPrototype.CanAddItem && !isPending;
             }
 
@@ -1705,10 +1805,13 @@ namespace TsukiVox.AudioPrototype
             songSearchInput?.GetComponent<QuestAndroidKeyboardInput>()?.SetKeyboardAnchoredY(
                 voiceVisible ? SongSearchKeyboardYWithVoice : SongSearchKeyboardY);
 
-            var firstResultY = voiceVisible ? 48f : 78f;
+            var firstResultY = voiceVisible ? 14f : 44f;
             for (var index = 0; index < searchResultRows.Length; index += 1)
             {
-                SetAnchoredY(searchResultRows[index], firstResultY - index * 66f);
+                var rowIndex = index / SearchResultColumnCount;
+                SetAnchoredY(
+                    searchResultRows[index],
+                    firstResultY - rowIndex * (SearchResultCardHeight + SearchResultRowGap));
             }
 
             var footerY = voiceVisible ? -226f : -200f;
@@ -2961,6 +3064,183 @@ namespace TsukiVox.AudioPrototype
             };
         }
 
+        private void SetSearchResultCover(int index, string url)
+        {
+            if (index < 0 || index >= SearchResultRowCount)
+            {
+                return;
+            }
+
+            var normalizedUrl = string.IsNullOrWhiteSpace(url) ? string.Empty : url.Trim();
+            var isSameUrl = string.Equals(
+                searchResultCoverUrls[index],
+                normalizedUrl,
+                StringComparison.Ordinal);
+            if (isSameUrl &&
+                (string.IsNullOrEmpty(normalizedUrl) ||
+                 searchResultCoverTextures[index] != null ||
+                 searchResultCoverRequests[index] != null ||
+                 Time.unscaledTime < searchResultCoverRetryAfter[index]))
+            {
+                return;
+            }
+
+            if (!isSameUrl)
+            {
+                CancelSearchResultCoverRequest(index);
+                ReleaseSearchResultCoverTexture(index);
+                searchResultCoverUrls[index] = normalizedUrl;
+                searchResultCoverRetryAfter[index] = 0f;
+            }
+
+            var image = searchResultCoverImages[index];
+            if (image != null)
+            {
+                image.texture = null;
+                image.uvRect = new Rect(0f, 0f, 1f, 1f);
+                image.enabled = false;
+            }
+
+            if (string.IsNullOrEmpty(normalizedUrl) || !isActiveAndEnabled)
+            {
+                return;
+            }
+
+            searchResultCoverRequests[index] = StartCoroutine(LoadSearchResultCover(index, normalizedUrl));
+        }
+
+        private IEnumerator LoadSearchResultCover(int index, string url)
+        {
+            Texture2D loadedTexture = null;
+            using (var request = UnityWebRequestTexture.GetTexture(url, true))
+            {
+                request.timeout = 10;
+                if (Uri.TryCreate(url, UriKind.Absolute, out var coverUri) &&
+                    coverUri.Host.EndsWith("hdslb.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    request.SetRequestHeader("Referer", "https://www.bilibili.com/");
+                }
+
+                yield return request.SendWebRequest();
+                if (request.result == UnityWebRequest.Result.Success)
+                {
+                    loadedTexture = DownloadHandlerTexture.GetContent(request);
+                }
+            }
+
+            if (!string.Equals(searchResultCoverUrls[index], url, StringComparison.Ordinal))
+            {
+                DestroySearchResultCoverTexture(loadedTexture);
+                yield break;
+            }
+
+            searchResultCoverRequests[index] = null;
+            if (loadedTexture == null)
+            {
+                searchResultCoverRetryAfter[index] = Time.unscaledTime + SearchResultCoverRetrySeconds;
+                yield break;
+            }
+
+            loadedTexture.wrapMode = TextureWrapMode.Clamp;
+            loadedTexture.filterMode = FilterMode.Bilinear;
+            ReleaseSearchResultCoverTexture(index);
+            searchResultCoverTextures[index] = loadedTexture;
+
+            var image = searchResultCoverImages[index];
+            if (image != null)
+            {
+                image.texture = loadedTexture;
+                image.uvRect = CalculateCoverUvRect(loadedTexture);
+                image.enabled = true;
+            }
+        }
+
+        private static Rect CalculateCoverUvRect(Texture texture)
+        {
+            const float targetAspect = 3f / 2f;
+            if (texture == null || texture.height <= 0)
+            {
+                return new Rect(0f, 0f, 1f, 1f);
+            }
+
+            var sourceAspect = texture.width / (float)texture.height;
+            if (sourceAspect > targetAspect)
+            {
+                var normalizedWidth = targetAspect / sourceAspect;
+                return new Rect((1f - normalizedWidth) * 0.5f, 0f, normalizedWidth, 1f);
+            }
+
+            if (sourceAspect < targetAspect)
+            {
+                var normalizedHeight = sourceAspect / targetAspect;
+                return new Rect(0f, (1f - normalizedHeight) * 0.5f, 1f, normalizedHeight);
+            }
+
+            return new Rect(0f, 0f, 1f, 1f);
+        }
+
+        private void CancelSearchResultCoverRequests()
+        {
+            for (var index = 0; index < searchResultCoverRequests.Length; index += 1)
+            {
+                CancelSearchResultCoverRequest(index);
+            }
+        }
+
+        private void CancelSearchResultCoverRequest(int index)
+        {
+            var request = searchResultCoverRequests[index];
+            if (request == null)
+            {
+                return;
+            }
+
+            StopCoroutine(request);
+            searchResultCoverRequests[index] = null;
+        }
+
+        private void ReleaseSearchResultCovers()
+        {
+            CancelSearchResultCoverRequests();
+            for (var index = 0; index < SearchResultRowCount; index += 1)
+            {
+                var image = searchResultCoverImages[index];
+                if (image != null)
+                {
+                    image.texture = null;
+                    image.enabled = false;
+                }
+
+                ReleaseSearchResultCoverTexture(index);
+                searchResultCoverUrls[index] = string.Empty;
+                searchResultCoverRetryAfter[index] = 0f;
+            }
+        }
+
+        private void ReleaseSearchResultCoverTexture(int index)
+        {
+            var texture = searchResultCoverTextures[index];
+            searchResultCoverTextures[index] = null;
+            DestroySearchResultCoverTexture(texture);
+        }
+
+        private static void DestroySearchResultCoverTexture(Texture2D texture)
+        {
+            if (texture == null)
+            {
+                return;
+            }
+
+            if (Application.isPlaying)
+            {
+                Destroy(texture);
+            }
+            else
+            {
+                DestroyImmediate(texture);
+            }
+        }
+
         private static string FormatDuration(BilibiliCatalogItem item)
         {
             if (!string.IsNullOrWhiteSpace(item?.durationText))
@@ -2969,7 +3249,12 @@ namespace TsukiVox.AudioPrototype
             }
 
             var totalSeconds = Mathf.Max(0, item?.durationSeconds ?? 0);
-            return $"{totalSeconds / 60}:{totalSeconds % 60:00}";
+            var hours = totalSeconds / 3600;
+            var minutes = totalSeconds % 3600 / 60;
+            var seconds = totalSeconds % 60;
+            return hours > 0
+                ? $"{hours}:{minutes:00}:{seconds:00}"
+                : $"{minutes}:{seconds:00}";
         }
 
         private static string SafeText(string value, string fallback)
