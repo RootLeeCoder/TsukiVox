@@ -33,6 +33,7 @@ namespace TsukiVox.AudioPrototype
         private const float SearchResultCardHeight = 128f;
         private const float SearchResultCoverWidth = 192f;
         private const float SearchResultCoverRetrySeconds = 30f;
+        private const int SearchResultSkeletonElementCount = 7;
         private const float MicClearanceStep = 0.0025f;
 
         private Color ScreenBackground => palette.ScreenBackground;
@@ -196,7 +197,12 @@ namespace TsukiVox.AudioPrototype
         private readonly TMP_Text[] searchResultTitleTexts = new TMP_Text[SearchResultRowCount];
         private readonly TMP_Text[] searchResultAuthorTexts = new TMP_Text[SearchResultRowCount];
         private readonly TMP_Text[] searchResultDurationTexts = new TMP_Text[SearchResultRowCount];
+        private readonly RectTransform[] searchResultDurationBadges = new RectTransform[SearchResultRowCount];
+        private readonly RectTransform[] searchResultUploaderBadges = new RectTransform[SearchResultRowCount];
         private readonly Button[] searchResultAddButtons = new Button[SearchResultRowCount];
+        private readonly RectTransform[] searchResultSkeletonRoots = new RectTransform[SearchResultRowCount];
+        private readonly QuestUiSurface[,] searchResultSkeletonSurfaces =
+            new QuestUiSurface[SearchResultRowCount, SearchResultSkeletonElementCount];
         private readonly string[] searchResultCoverUrls = new string[SearchResultRowCount];
         private readonly Texture2D[] searchResultCoverTextures = new Texture2D[SearchResultRowCount];
         private readonly Coroutine[] searchResultCoverRequests = new Coroutine[SearchResultRowCount];
@@ -207,6 +213,7 @@ namespace TsukiVox.AudioPrototype
         private TMP_Text songSearchStatusText;
         private int songSearchPageNumber = 1;
         private bool appendKtvToSearch;
+        private bool searchResultSkeletonVisible;
 
         private Button settingsBackButton;
         private Button openServiceSettingsButton;
@@ -339,7 +346,13 @@ namespace TsukiVox.AudioPrototype
 
         private void Update()
         {
-            if (!isConfigured || Time.unscaledTime < nextRefreshAt)
+            if (!isConfigured)
+            {
+                return;
+            }
+
+            UpdateSearchResultSkeletonAnimation();
+            if (Time.unscaledTime < nextRefreshAt)
             {
                 return;
             }
@@ -632,6 +645,7 @@ namespace TsukiVox.AudioPrototype
                     "Duration",
                     new Vector2(64f, -48f),
                     new Vector2(52f, 22f));
+                searchResultDurationBadges[index] = durationRoot;
                 var durationSurface = GetOrAddComponent<QuestUiSurface>(durationRoot.gameObject);
                 durationSurface.color = new Color(0f, 0f, 0f, 0.82f);
                 durationSurface.SetCornerRadius(4f);
@@ -664,26 +678,27 @@ namespace TsukiVox.AudioPrototype
                 searchResultTitleTexts[index].overflowMode = TextOverflowModes.Ellipsis;
                 searchResultTitleTexts[index].maxVisibleLines = 3;
 
-                var badgeX = contentLeft + 27f;
+                var badgeX = contentLeft + 24f;
                 var badgeRoot = EnsureRect(
                     row,
                     "Uploader Badge",
                     new Vector2(badgeX, -43f),
-                    new Vector2(30f, 20f));
-                EnsureSurface(badgeRoot, TextSecondary, 5f, false);
-                var badgeInner = EnsureRect(badgeRoot, "Inner", Vector2.zero, new Vector2(28f, 18f));
-                EnsureSurface(badgeInner, Surface, 4f, false);
+                    new Vector2(24f, 16f));
+                searchResultUploaderBadges[index] = badgeRoot;
+                EnsureSurface(badgeRoot, TextSecondary, 4f, false);
+                var badgeInner = EnsureRect(badgeRoot, "Inner", Vector2.zero, new Vector2(22f, 14f));
+                EnsureSurface(badgeInner, Surface, 3f, false);
                 CreateText(
                     badgeInner,
                     "Text",
                     "UP",
-                    11,
+                    9,
                     FontStyle.Bold,
                     Vector2.zero,
-                    new Vector2(26f, 16f),
+                    new Vector2(20f, 12f),
                     TextAnchor.MiddleCenter,
                     TextSecondary);
-                var authorLeft = badgeX + 21f;
+                var authorLeft = badgeX + 18f;
                 var addButtonLeft = cardWidth * 0.5f - 54f;
                 var authorWidth = Mathf.Max(40f, addButtonLeft - authorLeft - 8f);
                 searchResultAuthorTexts[index] = CreateText(
@@ -707,6 +722,8 @@ namespace TsukiVox.AudioPrototype
                     SurfaceRaised,
                     AccentStrong,
                     out _);
+
+                BuildSearchResultSkeleton(row, index, cardWidth, coverX, contentLeft, contentWidth, badgeX);
                 SetChildActive(row, "Meta", false);
             }
 
@@ -714,6 +731,142 @@ namespace TsukiVox.AudioPrototype
             songSearchStatusText = CreateText(songSearchPage, "Search Status", "输入关键词或按麦克风说出歌名", 16, FontStyle.Normal, new Vector2(0f, -226f), new Vector2(520f, 34f), TextAnchor.MiddleCenter, TextSecondary);
             searchNextPageButton = CreateTextButton(songSearchPage, "Next Search Page", "下一页", new Vector2(424f, -226f), new Vector2(128f, 46f), Surface, TextPrimary);
             clearSearchButton = CreateTextButton(songSearchPage, "Clear Search", "清空", new Vector2(-286f, -226f), new Vector2(104f, 46f), Surface, TextSecondary);
+        }
+
+        private void BuildSearchResultSkeleton(
+            RectTransform row,
+            int resultIndex,
+            float cardWidth,
+            float coverX,
+            float contentLeft,
+            float contentWidth,
+            float badgeX)
+        {
+            var root = EnsureRect(row, "Skeleton", Vector2.zero, row.sizeDelta);
+            searchResultSkeletonRoots[resultIndex] = root;
+
+            var titleLeft = contentLeft + 12f;
+            var titleLine1Width = Mathf.Min(236f, contentWidth - 24f);
+            var titleLine2Width = Mathf.Min(198f, contentWidth - 24f);
+            var titleLine3Width = Mathf.Min(142f, contentWidth - 24f);
+            CreateSearchResultSkeletonElement(
+                root,
+                resultIndex,
+                0,
+                "Cover",
+                new Vector2(coverX, 0f),
+                new Vector2(SearchResultCoverWidth, SearchResultCardHeight),
+                0f);
+            CreateSearchResultSkeletonElement(
+                root,
+                resultIndex,
+                1,
+                "Title 1",
+                new Vector2(titleLeft + titleLine1Width * 0.5f, 43f),
+                new Vector2(titleLine1Width, 13f),
+                5f);
+            CreateSearchResultSkeletonElement(
+                root,
+                resultIndex,
+                2,
+                "Title 2",
+                new Vector2(titleLeft + titleLine2Width * 0.5f, 21f),
+                new Vector2(titleLine2Width, 13f),
+                5f);
+            CreateSearchResultSkeletonElement(
+                root,
+                resultIndex,
+                3,
+                "Title 3",
+                new Vector2(titleLeft + titleLine3Width * 0.5f, -1f),
+                new Vector2(titleLine3Width, 13f),
+                5f);
+            CreateSearchResultSkeletonElement(
+                root,
+                resultIndex,
+                4,
+                "Uploader Badge",
+                new Vector2(badgeX, -43f),
+                new Vector2(24f, 16f),
+                4f);
+            CreateSearchResultSkeletonElement(
+                root,
+                resultIndex,
+                5,
+                "Author",
+                new Vector2(badgeX + 76f, -43f),
+                new Vector2(108f, 12f),
+                5f);
+            CreateSearchResultSkeletonElement(
+                root,
+                resultIndex,
+                6,
+                "Add",
+                new Vector2(cardWidth * 0.5f - 32f, -36f),
+                new Vector2(44f, 44f),
+                6f);
+
+            root.gameObject.SetActive(false);
+        }
+
+        private void CreateSearchResultSkeletonElement(
+            Transform parent,
+            int resultIndex,
+            int elementIndex,
+            string name,
+            Vector2 position,
+            Vector2 size,
+            float cornerRadius)
+        {
+            var rect = EnsureRect(parent, name, position, size);
+            searchResultSkeletonSurfaces[resultIndex, elementIndex] =
+                EnsureSurface(rect, SurfaceRaised, cornerRadius, false);
+        }
+
+        private void SetSearchResultSkeletonVisible(int index, bool visible)
+        {
+            var skeletonRoot = searchResultSkeletonRoots[index];
+            if (skeletonRoot != null)
+            {
+                skeletonRoot.gameObject.SetActive(visible);
+                if (visible)
+                {
+                    skeletonRoot.SetAsLastSibling();
+                }
+            }
+
+            searchResultTitleTexts[index]?.gameObject.SetActive(!visible);
+            searchResultAuthorTexts[index]?.gameObject.SetActive(!visible);
+            searchResultDurationBadges[index]?.gameObject.SetActive(!visible);
+            searchResultUploaderBadges[index]?.gameObject.SetActive(!visible);
+            searchResultAddButtons[index]?.gameObject.SetActive(!visible);
+        }
+
+        private void UpdateSearchResultSkeletonAnimation()
+        {
+            if (!searchResultSkeletonVisible)
+            {
+                return;
+            }
+
+            var animationTime = Time.unscaledTime * 3.4f;
+            for (var resultIndex = 0; resultIndex < SearchResultRowCount; resultIndex += 1)
+            {
+                for (var elementIndex = 0;
+                     elementIndex < SearchResultSkeletonElementCount;
+                     elementIndex += 1)
+                {
+                    var surface = searchResultSkeletonSurfaces[resultIndex, elementIndex];
+                    if (surface == null)
+                    {
+                        continue;
+                    }
+
+                    var phase = animationTime - resultIndex * 0.62f - elementIndex * 0.18f;
+                    var wave = 0.5f + 0.5f * Mathf.Sin(phase);
+                    surface.color = Color.Lerp(SurfaceRaised, Line, 0.2f + wave * 0.62f);
+                }
+            }
         }
 
         private void BuildVoicePage()
@@ -1121,8 +1274,18 @@ namespace TsukiVox.AudioPrototype
 
             var response = playlistPrototype.SearchResults;
             var items = response?.items ?? Array.Empty<BilibiliCatalogItem>();
+            searchResultSkeletonVisible = playlistPrototype.IsSearching;
             for (var index = 0; index < SearchResultRowCount; index += 1)
             {
+                if (searchResultSkeletonVisible)
+                {
+                    searchResultRows[index].gameObject.SetActive(true);
+                    searchResultSurfaces[index].color = Surface;
+                    SetSearchResultSkeletonVisible(index, true);
+                    continue;
+                }
+
+                SetSearchResultSkeletonVisible(index, false);
                 var visible = index < items.Length && items[index] != null && items[index].IsValid;
                 searchResultRows[index].gameObject.SetActive(visible);
                 if (!visible)
