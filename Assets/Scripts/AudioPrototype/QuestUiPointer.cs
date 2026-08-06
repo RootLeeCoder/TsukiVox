@@ -285,7 +285,19 @@ namespace TsukiVox.AudioPrototype
 
         private void ProcessPointerHold()
         {
-            if (pointerEventData == null || draggedObject == null)
+            if (pointerEventData == null)
+            {
+                return;
+            }
+
+            if (eligibleForClick &&
+                Vector2.Distance(pointerEventData.position, pressPosition) > ClickReleaseTolerancePixels)
+            {
+                eligibleForClick = false;
+                pointerEventData.eligibleForClick = false;
+            }
+
+            if (draggedObject == null)
             {
                 return;
             }
@@ -303,6 +315,10 @@ namespace TsukiVox.AudioPrototype
             }
 
             ExecuteEvents.Execute(draggedObject, pointerEventData, ExecuteEvents.dragHandler);
+            if (!pointerEventData.eligibleForClick)
+            {
+                eligibleForClick = false;
+            }
         }
 
         private void ProcessPointerRelease(GameObject currentTarget)

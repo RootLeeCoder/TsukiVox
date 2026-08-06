@@ -84,7 +84,7 @@ http://192.168.50.41:8080
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
 | `GET` | `/api/playlist/state` | 轮询当前队列、索引和播放状态 |
-| `POST` | `/api/playlist/control` | `play`（可选队列项 `id`）、`pause`、`prev`、`next`、`replay`、`remove`、`clear`、`clearAll` |
+| `POST` | `/api/playlist/control` | `play`（可选队列项 `id`）、`pause`、`prev`、`next`、`replay`、`remove`、`clear`、`clearPlayed`、`clearExceptCurrent`、`clearAll` |
 | `GET` | `/api/bilibili/search` | 按 `query`、`page`、`pageSize` 搜索视频 |
 | `POST` | `/api/playlist/items` | 把搜索结果加入队列，可请求立即播放 |
 | `GET` | `/downloads/...` | 获取 ready 条目的媒体文件 |

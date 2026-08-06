@@ -379,6 +379,18 @@ namespace TsukiVox.AudioPrototype
             SendControl(PlaylistClient.ControlClear);
         }
 
+        /// <summary>Removes playback history while preserving the current and future songs.</summary>
+        public void ClearPlayedQueue()
+        {
+            SendControl(PlaylistClient.ControlClearPlayed);
+        }
+
+        /// <summary>Removes every queue entry except the current song.</summary>
+        public void ClearQueueExceptCurrent()
+        {
+            SendControl(PlaylistClient.ControlClearExceptCurrent);
+        }
+
         /// <summary>Removes one queue entry by id.</summary>
         public void RemoveQueueItem(string itemId)
         {

@@ -24,6 +24,12 @@ namespace TsukiVox.AudioPrototype
         /// <summary>Clears everything including the current song. Used at startup.</summary>
         public const string ControlClearAll = "clearAll";
 
+        /// <summary>Clears entries before the current song while preserving current and future entries.</summary>
+        public const string ControlClearPlayed = "clearPlayed";
+
+        /// <summary>Clears every entry except the current song, if one exists.</summary>
+        public const string ControlClearExceptCurrent = "clearExceptCurrent";
+
         public const string ControlRemove = "remove";
 
         private const string DefaultPlaylistOrigin = "http://127.0.0.1:5175";

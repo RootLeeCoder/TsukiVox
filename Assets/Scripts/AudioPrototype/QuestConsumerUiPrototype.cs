@@ -107,6 +107,7 @@ namespace TsukiVox.AudioPrototype
         private RectTransform micProtectionPage;
         private RectTransform queueScrim;
         private RectTransform queueDrawer;
+        private RectTransform queueListViewport;
         private RectTransform queueScrollbarRoot;
         private RectTransform enqueueConfirmation;
         private RectTransform enqueueFlyer;
@@ -193,10 +194,12 @@ namespace TsukiVox.AudioPrototype
         private readonly QuestUiIcon[] queuePlayIcons = new QuestUiIcon[QueueRowCount];
         private readonly Button[] queueRemoveButtons = new Button[QueueRowCount];
         private readonly QuestUiIcon[] queueRemoveIcons = new QuestUiIcon[QueueRowCount];
+        private QuestQueueSwipeHandler queueSwipeHandler;
         private Scrollbar queueScrollbar;
         private TMP_Text queueEmptyText;
         private TMP_Text queueFooterText;
-        private Button clearQueueButton;
+        private Button clearPlayedButton;
+        private Button clearAllQueueButton;
         private readonly string[] queueRowItemIds = new string[QueueRowCount];
         private int queueWindowStartIndex;
         private int lastQueueCurrentIndex = int.MinValue;
@@ -1106,13 +1109,30 @@ namespace TsukiVox.AudioPrototype
                 TextPrimary,
                 out _);
 
-            const float firstY = 180f;
+            queueListViewport = EnsureRect(
+                queueDrawer,
+                "Queue List Viewport",
+                new Vector2(-5f, 10f),
+                new Vector2(440f, 408f));
+            EnsureSurface(queueListViewport, Color.clear, 0f, true);
+            GetOrAddComponent<RectMask2D>(queueListViewport.gameObject).padding = Vector4.zero;
+            queueSwipeHandler = GetOrAddComponent<QuestQueueSwipeHandler>(queueListViewport.gameObject);
+            queueSwipeHandler.Configure(ScrollQueueByRows);
+
+            const float firstY = 170f;
             for (var index = 0; index < QueueRowCount; index += 1)
             {
+                var rowName = $"Queue Row {index}";
+                var existingRow = queueDrawer.Find(rowName);
+                if (existingRow != null && existingRow.parent != queueListViewport)
+                {
+                    existingRow.SetParent(queueListViewport, false);
+                }
+
                 var row = EnsureRect(
-                    queueDrawer,
-                    $"Queue Row {index}",
-                    new Vector2(-5f, firstY - index * 64f),
+                    queueListViewport,
+                    rowName,
+                    new Vector2(0f, firstY - index * 64f),
                     new Vector2(440f, 62f));
                 queueRows[index] = row;
                 queueRowSurfaces[index] = EnsureSurface(row, Color.clear, 6f, false);
@@ -1126,7 +1146,8 @@ namespace TsukiVox.AudioPrototype
                 queueMetaTexts[index] = CreateText(row, "Meta", "等待", 12, FontStyle.Normal, new Vector2(-30f, -13f), new Vector2(204f, 21f), TextAnchor.MiddleLeft, TextSecondary);
                 queueMetaTexts[index].textWrappingMode = TextWrappingModes.NoWrap;
                 queueMetaTexts[index].overflowMode = TextOverflowModes.Ellipsis;
-                queueStateTexts[index] = CreateText(row, "State", "待播放", 12, FontStyle.Bold, new Vector2(100f, 0f), new Vector2(60f, 28f), TextAnchor.MiddleRight, TextSecondary);
+                queueStateTexts[index] = CreateText(row, "State", "播放中", 12, FontStyle.Bold, new Vector2(100f, 0f), new Vector2(60f, 28f), TextAnchor.MiddleRight, TextSecondary);
+                queueStateTexts[index].gameObject.SetActive(false);
                 queuePlayButtons[index] = CreateIconButton(
                     row,
                     "Play",
@@ -1156,9 +1177,9 @@ namespace TsukiVox.AudioPrototype
                 Line,
                 4f,
                 false);
-            var slidingArea = EnsureRect(queueScrollbarRoot, "Sliding Area", Vector2.zero, new Vector2(14f, 360f));
-            var handle = EnsureRect(slidingArea, "Handle", Vector2.zero, new Vector2(14f, 90f));
-            var handleSurface = EnsureSurface(handle, TextFaint, 7f, false);
+            var slidingArea = EnsureRect(queueScrollbarRoot, "Sliding Area", Vector2.zero, new Vector2(8f, 360f));
+            var handle = EnsureRect(slidingArea, "Handle", Vector2.zero, new Vector2(8f, 90f));
+            var handleSurface = EnsureSurface(handle, TextFaint, 4f, false);
             queueScrollbar = GetOrAddComponent<Scrollbar>(queueScrollbarRoot.gameObject);
             queueScrollbar.targetGraphic = handleSurface;
             queueScrollbar.handleRect = handle;
@@ -1180,10 +1201,14 @@ namespace TsukiVox.AudioPrototype
                 TextAnchor.MiddleCenter,
                 TextSecondary);
             CreateDivider(queueDrawer, "Footer Divider", new Vector2(0f, -194f), new Vector2(QueueDrawerContentWidth, 1f));
-            queueFooterText = CreateText(queueDrawer, "Queue Footer", "还没有点播歌曲", 13, FontStyle.Normal, new Vector2(-74f, -232f), new Vector2(286f, 32f), TextAnchor.MiddleLeft, TextSecondary);
-            clearQueueButton = CreateTextButton(queueDrawer, "Clear Queue", "清空待播", new Vector2(163f, -232f), new Vector2(124f, 42f), Surface, TextPrimary);
-            clearQueueButton.GetComponentInChildren<TMP_Text>(true).fontSize = 14f;
-            ConfigureHover(clearQueueButton, null, string.Empty);
+            queueFooterText = CreateText(queueDrawer, "Queue Footer", "还没有点播歌曲", 13, FontStyle.Normal, new Vector2(-100f, -232f), new Vector2(220f, 32f), TextAnchor.MiddleLeft, TextSecondary);
+            SetChildActive(queueDrawer, "Clear Queue", false);
+            clearPlayedButton = CreateTextButton(queueDrawer, "Clear Played", "清空已播", new Vector2(70f, -232f), new Vector2(96f, 38f), Surface, TextPrimary);
+            clearPlayedButton.GetComponentInChildren<TMP_Text>(true).fontSize = 13f;
+            ConfigureHover(clearPlayedButton, null, string.Empty);
+            clearAllQueueButton = CreateTextButton(queueDrawer, "Clear Except Current", "清空全部", new Vector2(174f, -232f), new Vector2(96f, 38f), Surface, TextPrimary);
+            clearAllQueueButton.GetComponentInChildren<TMP_Text>(true).fontSize = 13f;
+            ConfigureHover(clearAllQueueButton, null, string.Empty);
 
             queueScrim.SetAsLastSibling();
             queueDrawer.SetAsLastSibling();
@@ -1396,7 +1421,8 @@ namespace TsukiVox.AudioPrototype
             WireButton(searchPreviousPageButton, () => SearchSongs(Mathf.Max(1, songSearchPageNumber - 1)));
             WireButton(searchNextPageButton, () => SearchSongs(songSearchPageNumber + 1));
             WireButton(clearSearchButton, ClearSearchResults);
-            WireButton(clearQueueButton, ClearQueue);
+            WireButton(clearPlayedButton, ClearPlayedQueue);
+            WireButton(clearAllQueueButton, ClearQueueExceptCurrent);
             for (var index = 0; index < QueueRowCount; index += 1)
             {
                 var rowIndex = index;
@@ -1688,9 +1714,6 @@ namespace TsukiVox.AudioPrototype
             var currentIndex = state != null && state.currentIndex >= 0 && state.currentIndex < count
                 ? state.currentIndex
                 : -1;
-            var pendingStartIndex = currentIndex >= 0 ? currentIndex + 1 : 0;
-            var pendingCount = Mathf.Max(0, count - pendingStartIndex);
-
             if (currentIndex != lastQueueCurrentIndex)
             {
                 CenterQueueWindowOnCurrent(count, currentIndex);
@@ -1728,8 +1751,12 @@ namespace TsukiVox.AudioPrototype
                 queueMetaTexts[rowIndex].text = FormatQueueItemMeta(item);
                 queueNumberTexts[rowIndex].text = (itemIndex + 1).ToString();
                 queueNumberTexts[rowIndex].color = isCurrent ? Accent : TextFaint;
-                queueStateTexts[rowIndex].text = FormatQueueTimelineState(item, itemIndex, currentIndex, state.playback);
-                queueStateTexts[rowIndex].color = isCurrent ? Accent : isPast ? TextFaint : TextSecondary;
+                var isPlaying = isCurrent &&
+                                item.IsReady &&
+                                string.Equals(state.playback, "playing", StringComparison.OrdinalIgnoreCase);
+                queueStateTexts[rowIndex].gameObject.SetActive(isPlaying);
+                queueStateTexts[rowIndex].text = "播放中";
+                queueStateTexts[rowIndex].color = Accent;
                 queuePlayButtons[rowIndex].interactable = canPlay;
                 queuePlayIcons[rowIndex].color = canPlay ? AccentStrong : TextFaint;
                 queueRemoveButtons[rowIndex].interactable = canControl;
@@ -1742,8 +1769,8 @@ namespace TsukiVox.AudioPrototype
             queueFooterText.text = count == 0
                 ? "还没有点播歌曲"
                 : currentIndex >= 0
-                    ? $"第 {currentIndex + 1} / {count} 首 · 已播 {currentIndex} · 待播 {pendingCount}"
-                    : $"共 {count} 首 · 等待播放";
+                    ? $"当前第 {currentIndex + 1} / {count} 首"
+                    : $"共 {count} 首";
 
             var canScroll = maximumStartIndex > 0;
             queueScrollbarRoot.gameObject.SetActive(canScroll);
@@ -1755,11 +1782,16 @@ namespace TsukiVox.AudioPrototype
                 queueScrollbar.SetValueWithoutNotify(1f - queueWindowStartIndex / (float)maximumStartIndex);
             }
 
-            if (clearQueueButton != null)
+            var canSendControl = playlistPrototype != null && playlistPrototype.CanSendControl;
+            if (clearPlayedButton != null)
             {
-                clearQueueButton.interactable = playlistPrototype != null &&
-                                                playlistPrototype.CanSendControl &&
-                                                pendingCount > 0;
+                clearPlayedButton.interactable = canSendControl && currentIndex > 0;
+            }
+
+            if (clearAllQueueButton != null)
+            {
+                var removableCount = currentIndex >= 0 ? count - 1 : count;
+                clearAllQueueButton.interactable = canSendControl && removableCount > 0;
             }
         }
 
@@ -2112,7 +2144,7 @@ namespace TsukiVox.AudioPrototype
             RefreshSongSearch();
         }
 
-        private void ClearQueue()
+        private void ClearPlayedQueue()
         {
             if (playlistPrototype == null || !playlistPrototype.CanSendControl)
             {
@@ -2121,24 +2153,67 @@ namespace TsukiVox.AudioPrototype
 
             var state = playlistPrototype.CurrentState;
             var queue = state?.queue;
-            if (queue != null)
+            if (queue == null || state.currentIndex <= 0 || state.currentIndex >= queue.Length)
             {
-                var pendingStartIndex = state.currentIndex >= 0 ? state.currentIndex + 1 : 0;
-                for (var index = pendingStartIndex; index < queue.Length; index += 1)
-                {
-                    var catalogItemId = NormalizeCatalogItemId(queue[index]?.sourceInput);
-                    if (string.IsNullOrEmpty(catalogItemId))
-                    {
-                        continue;
-                    }
-
-                    confirmedSearchItemIds.Remove(catalogItemId);
-                    pendingQueueRemovalItemIds.Add(catalogItemId);
-                }
+                return;
             }
-            playlistPrototype.ClearQueue();
+
+            MarkQueueItemsPendingRemoval(queue, 0, state.currentIndex, -1);
+            playlistPrototype.ClearPlayedQueue();
             RefreshQueue();
             RefreshSongSearch();
+        }
+
+        private void ClearQueueExceptCurrent()
+        {
+            if (playlistPrototype == null || !playlistPrototype.CanSendControl)
+            {
+                return;
+            }
+
+            var state = playlistPrototype.CurrentState;
+            var queue = state?.queue;
+            if (queue == null || queue.Length == 0)
+            {
+                return;
+            }
+
+            var currentIndex = state.currentIndex >= 0 && state.currentIndex < queue.Length
+                ? state.currentIndex
+                : -1;
+            if (queue.Length == 1 && currentIndex == 0)
+            {
+                return;
+            }
+
+            MarkQueueItemsPendingRemoval(queue, 0, queue.Length, currentIndex);
+            playlistPrototype.ClearQueueExceptCurrent();
+            RefreshQueue();
+            RefreshSongSearch();
+        }
+
+        private void MarkQueueItemsPendingRemoval(
+            PlaylistItem[] queue,
+            int startIndex,
+            int endIndex,
+            int preservedIndex)
+        {
+            for (var index = Mathf.Max(0, startIndex); index < Mathf.Min(endIndex, queue.Length); index += 1)
+            {
+                if (index == preservedIndex)
+                {
+                    continue;
+                }
+
+                var catalogItemId = NormalizeCatalogItemId(queue[index]?.sourceInput);
+                if (string.IsNullOrEmpty(catalogItemId))
+                {
+                    continue;
+                }
+
+                confirmedSearchItemIds.Remove(catalogItemId);
+                pendingQueueRemovalItemIds.Add(catalogItemId);
+            }
         }
 
         private void PlayQueueRow(int rowIndex)
@@ -2174,6 +2249,25 @@ namespace TsukiVox.AudioPrototype
                 Mathf.RoundToInt((1f - Mathf.Clamp01(value)) * maximumStartIndex),
                 0,
                 maximumStartIndex);
+            if (nextStartIndex == queueWindowStartIndex)
+            {
+                return;
+            }
+
+            queueWindowStartIndex = nextStartIndex;
+            RefreshQueue();
+        }
+
+        private void ScrollQueueByRows(int rowDelta)
+        {
+            if (rowDelta == 0)
+            {
+                return;
+            }
+
+            var count = playlistPrototype?.CurrentState?.QueueCount ?? 0;
+            var maximumStartIndex = Mathf.Max(0, count - QueueRowCount);
+            var nextStartIndex = Mathf.Clamp(queueWindowStartIndex + rowDelta, 0, maximumStartIndex);
             if (nextStartIndex == queueWindowStartIndex)
             {
                 return;
@@ -4031,37 +4125,6 @@ namespace TsukiVox.AudioPrototype
                 ? FormatItemStatus(item.status)
                 : item.durationText.Trim();
             return $"{author} · {detail}";
-        }
-
-        private static string FormatQueueTimelineState(
-            PlaylistItem item,
-            int itemIndex,
-            int currentIndex,
-            string playback)
-        {
-            if (itemIndex < currentIndex)
-            {
-                return "已播放";
-            }
-
-            if (string.Equals(item?.status, PlaylistClient.StatusError, StringComparison.OrdinalIgnoreCase))
-            {
-                return "准备失败";
-            }
-
-            if (string.Equals(item?.status, PlaylistClient.StatusDownloading, StringComparison.OrdinalIgnoreCase))
-            {
-                return "准备中";
-            }
-
-            if (itemIndex == currentIndex)
-            {
-                return string.Equals(playback, "playing", StringComparison.OrdinalIgnoreCase)
-                    ? "播放中"
-                    : "已暂停";
-            }
-
-            return "待播放";
         }
 
         private static string NormalizeCatalogItemId(BilibiliCatalogItem item)
