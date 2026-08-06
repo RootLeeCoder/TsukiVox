@@ -18,7 +18,7 @@ namespace TsukiVox.AudioPrototype
         public const string ControlNext = "next";
         public const string ControlReplay = "replay";
 
-        /// <summary>Clears the queue but keeps the current song playing.</summary>
+        /// <summary>Clears future entries while preserving history and the current song.</summary>
         public const string ControlClear = "clear";
 
         /// <summary>Clears everything including the current song. Used at startup.</summary>

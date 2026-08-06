@@ -360,9 +360,19 @@ namespace TsukiVox.AudioPrototype
             SendControl(PlaylistClient.ControlReplay);
         }
 
+        /// <summary>Starts or resumes one queue entry selected by id.</summary>
+        public void PlayQueueItem(string itemId)
+        {
+            if (string.IsNullOrWhiteSpace(itemId))
+            {
+                return;
+            }
+            SendControl(PlaylistClient.ControlPlay, itemId);
+        }
+
         /// <summary>
-        /// Empties the queue but keeps the current song, so clearing never
-        /// interrupts what is playing.
+        /// Clears future entries while preserving playback history and the current
+        /// song, so clearing never interrupts what is playing.
         /// </summary>
         public void ClearQueue()
         {
