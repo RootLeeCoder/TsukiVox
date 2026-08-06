@@ -15,6 +15,7 @@ namespace TsukiVox.AudioPrototype
         private const string RootName = "Consumer UI";
         private const string AppendKtvSearchPrefsKey = "TsukiVox.AppendKtvToSearch";
         private const int QueueRowCount = 5;
+        private const int QueueCoverSlotCount = QueueRowCount + 1;
         private const int SearchResultRowCount = 4;
         private const int SuggestRowCount = 9;
         private const int SuggestColumnCount = 3;
@@ -35,6 +36,9 @@ namespace TsukiVox.AudioPrototype
         private const float SearchResultCoverRetrySeconds = 30f;
         private const int SearchResultSkeletonElementCount = 7;
         private const float MicClearanceStep = 0.0025f;
+        private const float QueueDrawerWidth = 510f;
+        private const float QueueDrawerContentWidth = 450f;
+        private const float EnqueueConfirmationSeconds = 6.5f;
 
         private Color ScreenBackground => palette.ScreenBackground;
         private Color Surface => palette.Surface;
@@ -88,7 +92,6 @@ namespace TsukiVox.AudioPrototype
             Home,
             SongSearch,
             Voice,
-            Queue,
             Settings,
             Service,
             MicProtection,
@@ -99,10 +102,14 @@ namespace TsukiVox.AudioPrototype
         private RectTransform homePage;
         private RectTransform songSearchPage;
         private RectTransform voicePage;
-        private RectTransform queuePage;
         private RectTransform settingsPage;
         private RectTransform servicePage;
         private RectTransform micProtectionPage;
+        private RectTransform queueScrim;
+        private RectTransform queueDrawer;
+        private RectTransform queueCurrentRow;
+        private RectTransform enqueueConfirmation;
+        private RectTransform enqueueFlyer;
         private RectTransform debugScrim;
         private RectTransform debugDrawer;
         private RectTransform rawDetailsRoot;
@@ -110,10 +117,13 @@ namespace TsukiVox.AudioPrototype
         private CanvasGroup homeGroup;
         private CanvasGroup songSearchGroup;
         private CanvasGroup voiceGroup;
-        private CanvasGroup queueGroup;
         private CanvasGroup settingsGroup;
         private CanvasGroup serviceGroup;
         private CanvasGroup micProtectionGroup;
+        private CanvasGroup queueScrimGroup;
+        private CanvasGroup queueDrawerGroup;
+        private CanvasGroup enqueueConfirmationGroup;
+        private CanvasGroup enqueueFlyerGroup;
         private CanvasGroup debugScrimGroup;
         private CanvasGroup debugDrawerGroup;
 
@@ -143,7 +153,8 @@ namespace TsukiVox.AudioPrototype
         private QuestUiSurface voiceLiveDot;
         private QuestUiSurface[] waveBars;
 
-        private Button queuePageButton;
+        private Button queueDrawerButton;
+        private QuestUiSurface queueDrawerButtonSurface;
         private Button songSearchPageButton;
         private Button settingsPageButton;
         private Button replayButton;
@@ -163,16 +174,29 @@ namespace TsukiVox.AudioPrototype
         private readonly Button[] presetButtons = new Button[4];
         private readonly QuestUiSurface[] presetSurfaces = new QuestUiSurface[4];
 
-        private Button queueBackButton;
+        private Button closeQueueDrawerButton;
+        private Button queueScrimButton;
+        private Button queueCurrentRemoveButton;
+        private QuestUiIcon queueCurrentRemoveIcon;
+        private TMP_Text queueDrawerCountText;
+        private TMP_Text queueCurrentTitleText;
+        private TMP_Text queueCurrentMetaText;
+        private TMP_Text queueCurrentStateText;
         private readonly RectTransform[] queueRows = new RectTransform[QueueRowCount];
-        private readonly QuestUiSurface[] queueRowSurfaces = new QuestUiSurface[QueueRowCount];
-        private readonly QuestUiSurface[] queueIndicators = new QuestUiSurface[QueueRowCount];
+        private readonly RawImage[] queueCoverImages = new RawImage[QueueCoverSlotCount];
+        private readonly string[] queueCoverUrls = new string[QueueCoverSlotCount];
+        private readonly Texture2D[] queueCoverTextures = new Texture2D[QueueCoverSlotCount];
+        private readonly Coroutine[] queueCoverRequests = new Coroutine[QueueCoverSlotCount];
+        private readonly float[] queueCoverRetryAfter = new float[QueueCoverSlotCount];
         private readonly TMP_Text[] queueTitleTexts = new TMP_Text[QueueRowCount];
         private readonly TMP_Text[] queueMetaTexts = new TMP_Text[QueueRowCount];
+        private readonly TMP_Text[] queueNumberTexts = new TMP_Text[QueueRowCount];
         private readonly Button[] queueRemoveButtons = new Button[QueueRowCount];
         private readonly QuestUiIcon[] queueRemoveIcons = new QuestUiIcon[QueueRowCount];
+        private TMP_Text queueEmptyText;
         private TMP_Text queueFooterText;
         private Button clearQueueButton;
+        private string queueCurrentItemId;
         private readonly string[] queueRowItemIds = new string[QueueRowCount];
 
         private Button songSearchBackButton;
@@ -200,6 +224,8 @@ namespace TsukiVox.AudioPrototype
         private readonly RectTransform[] searchResultDurationBadges = new RectTransform[SearchResultRowCount];
         private readonly RectTransform[] searchResultUploaderBadges = new RectTransform[SearchResultRowCount];
         private readonly Button[] searchResultAddButtons = new Button[SearchResultRowCount];
+        private readonly QuestUiIcon[] searchResultAddIcons = new QuestUiIcon[SearchResultRowCount];
+        private readonly TMP_Text[] searchResultAddTexts = new TMP_Text[SearchResultRowCount];
         private readonly RectTransform[] searchResultSkeletonRoots = new RectTransform[SearchResultRowCount];
         private readonly QuestUiSurface[,] searchResultSkeletonSurfaces =
             new QuestUiSurface[SearchResultRowCount, SearchResultSkeletonElementCount];
@@ -264,14 +290,28 @@ namespace TsukiVox.AudioPrototype
         private TMP_Text rawDiagnosticsText;
         private Button copyDiagnosticsButton;
 
+        private TMP_Text enqueueConfirmationTitleText;
+        private TMP_Text enqueueConfirmationDetailText;
+        private Button enqueueConfirmationButton;
+        private RawImage enqueueFlyerImage;
+        private QuestUiIcon enqueueFlyerFallbackIcon;
+
         private UiPage currentPage;
         private bool isConfigured;
         private bool rawDetailsVisible;
+        private bool queueDrawerVisible;
         private float nextRefreshAt;
         private Coroutine pageTransition;
-        private Coroutine drawerTransition;
+        private Coroutine debugDrawerTransition;
+        private Coroutine queueDrawerTransition;
+        private Coroutine enqueueFeedbackCoroutine;
+        private Coroutine enqueueConfirmationCoroutine;
         private Coroutine micCalibrationCoroutine;
         private Coroutine suggestDebounceRoutine;
+        private BilibiliCatalogItem pendingEnqueueFeedbackItem;
+        private int pendingEnqueueFeedbackIndex = -1;
+        private readonly HashSet<string> confirmedSearchItemIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> pendingQueueRemovalItemIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public void Configure(
             RectTransform targetPanel,
@@ -307,9 +347,12 @@ namespace TsukiVox.AudioPrototype
             if (requiresBuild)
             {
                 ReleaseSearchResultCovers();
+                ReleaseQueueCovers();
                 themeBindings.Clear();
                 EnsureUiHierarchy();
                 ShowPageImmediate(UiPage.Home);
+                SetQueueDrawerImmediate(false);
+                SetEnqueueConfirmationImmediate(false);
                 SetDebugDrawerImmediate(false);
             }
             else
@@ -320,6 +363,7 @@ namespace TsukiVox.AudioPrototype
             WireUi();
             SubscribePlaylist();
             SubscribeRoom();
+            ReconcileConfirmedSearchItems(playlistPrototype?.CurrentState);
             RefreshAll();
             isConfigured = true;
         }
@@ -328,13 +372,34 @@ namespace TsukiVox.AudioPrototype
         {
             SubscribePlaylist();
             SubscribeRoom();
+            TryCompleteEnqueueFeedback(playlistPrototype);
         }
 
         private void OnDisable()
         {
+            if (queueDrawerTransition != null)
+            {
+                StopCoroutine(queueDrawerTransition);
+                queueDrawerTransition = null;
+            }
+            if (enqueueFeedbackCoroutine != null)
+            {
+                StopCoroutine(enqueueFeedbackCoroutine);
+                enqueueFeedbackCoroutine = null;
+            }
+            HideEnqueueConfirmation();
+            if (enqueueFlyer != null)
+            {
+                enqueueFlyer.gameObject.SetActive(false);
+            }
+            if (queueDrawer != null)
+            {
+                SetQueueDrawerImmediate(false);
+            }
             CancelMicFaceCalibration();
             CancelSuggestionDebounce();
             CancelSearchResultCoverRequests();
+            CancelQueueCoverRequests();
             UnsubscribePlaylist();
             UnsubscribeRoom();
         }
@@ -342,6 +407,7 @@ namespace TsukiVox.AudioPrototype
         private void OnDestroy()
         {
             ReleaseSearchResultCovers();
+            ReleaseQueueCovers();
         }
 
         private void Update()
@@ -382,18 +448,18 @@ namespace TsukiVox.AudioPrototype
             homePage = EnsurePage(consumerRoot, "Home Page", out homeGroup);
             songSearchPage = EnsurePage(consumerRoot, "Song Search Page", out songSearchGroup);
             voicePage = EnsurePage(consumerRoot, "Voice Page", out voiceGroup);
-            queuePage = EnsurePage(consumerRoot, "Queue Page", out queueGroup);
             settingsPage = EnsurePage(consumerRoot, "Settings Page", out settingsGroup);
             servicePage = EnsurePage(consumerRoot, "Service Page", out serviceGroup);
             micProtectionPage = EnsurePage(consumerRoot, "Mic Protection Page", out micProtectionGroup);
+            SetChildActive(consumerRoot, "Queue Page", false);
 
             BuildHomePage();
             BuildSongSearchPage();
             BuildVoicePage();
-            BuildQueuePage();
             BuildSettingsPage();
             BuildServicePage();
             BuildMicProtectionPage();
+            BuildQueueDrawer();
             BuildDebugDrawer();
             HideLegacyUi();
             consumerRoot.SetAsLastSibling();
@@ -422,15 +488,9 @@ namespace TsukiVox.AudioPrototype
             SetChildActive(homePage, "Header Hover Label", false);
 
             songSearchPageButton = CreateIconButton(homePage, "Open Song Search", QuestUiIconKind.Search, new Vector2(336f, 232f), new Vector2(64f, 64f), Accent, AccentInk, out _);
-            queuePageButton = CreateIconButton(homePage, "Open Queue", QuestUiIconKind.Queue, new Vector2(408f, 232f), new Vector2(64f, 64f), Surface, TextPrimary, out _);
             settingsPageButton = CreateIconButton(homePage, "Open Settings", QuestUiIconKind.Settings, new Vector2(480f, 232f), new Vector2(64f, 64f), Surface, TextPrimary, out _);
             ConfigureHover(songSearchPageButton, null, string.Empty);
-            ConfigureHover(queuePageButton, null, string.Empty);
             ConfigureHover(settingsPageButton, null, string.Empty);
-
-            queueBadge = EnsureRect(queuePageButton.transform, "Badge", new Vector2(25f, 25f), new Vector2(24f, 24f));
-            EnsureSurface(queueBadge, Accent, 12f, false);
-            queueBadgeText = CreateText(queueBadge, "Label", "0", 14, FontStyle.Bold, Vector2.zero, queueBadge.sizeDelta, TextAnchor.MiddleCenter, AccentInk);
 
             songMetaText = CreateText(homePage, "Song Meta", "播放队列为空", 18, FontStyle.Bold, new Vector2(-270f, 150f), new Vector2(450f, 32f), TextAnchor.MiddleLeft, Accent);
             songTitleText = CreateText(homePage, "Song Title", "等待点歌", 44, FontStyle.Bold, new Vector2(-190f, 103f), new Vector2(610f, 66f), TextAnchor.MiddleLeft, TextPrimary);
@@ -699,7 +759,7 @@ namespace TsukiVox.AudioPrototype
                     TextAnchor.MiddleCenter,
                     TextSecondary);
                 var authorLeft = badgeX + 18f;
-                var addButtonLeft = cardWidth * 0.5f - 54f;
+                var addButtonLeft = cardWidth * 0.5f - 98f;
                 var authorWidth = Mathf.Max(40f, addButtonLeft - authorLeft - 8f);
                 searchResultAuthorTexts[index] = CreateText(
                     row,
@@ -713,15 +773,31 @@ namespace TsukiVox.AudioPrototype
                     TextSecondary);
                 searchResultAuthorTexts[index].textWrappingMode = TextWrappingModes.NoWrap;
                 searchResultAuthorTexts[index].overflowMode = TextOverflowModes.Ellipsis;
-                searchResultAddButtons[index] = CreateIconButton(
+                searchResultAddButtons[index] = CreateSurfaceButton(
                     row,
                     "Add",
-                    QuestUiIconKind.Plus,
-                    new Vector2(cardWidth * 0.5f - 32f, -36f),
-                    new Vector2(44f, 44f),
+                    new Vector2(cardWidth * 0.5f - 54f, -36f),
+                    new Vector2(88f, 44f),
                     SurfaceRaised,
-                    AccentStrong,
-                    out _);
+                    Line);
+                searchResultAddIcons[index] = EnsureIcon(
+                    searchResultAddButtons[index].transform,
+                    "Icon",
+                    QuestUiIconKind.Plus,
+                    new Vector2(-24f, 0f),
+                    new Vector2(20f, 20f),
+                    AccentStrong);
+                searchResultAddTexts[index] = CreateText(
+                    searchResultAddButtons[index].transform,
+                    "Label",
+                    "点歌",
+                    15,
+                    FontStyle.Bold,
+                    new Vector2(14f, 0f),
+                    new Vector2(48f, 30f),
+                    TextAnchor.MiddleCenter,
+                    AccentStrong);
+                ConfigureHover(searchResultAddButtons[index], null, string.Empty);
 
                 BuildSearchResultSkeleton(row, index, cardWidth, coverX, contentLeft, contentWidth, badgeX);
                 SetChildActive(row, "Meta", false);
@@ -802,8 +878,8 @@ namespace TsukiVox.AudioPrototype
                 resultIndex,
                 6,
                 "Add",
-                new Vector2(cardWidth * 0.5f - 32f, -36f),
-                new Vector2(44f, 44f),
+                new Vector2(cardWidth * 0.5f - 54f, -36f),
+                new Vector2(88f, 44f),
                 6f);
 
             root.gameObject.SetActive(false);
@@ -901,35 +977,224 @@ namespace TsukiVox.AudioPrototype
             CreateText(safetyNote, "Label", "安全保护会在返听过响时自动降低音量", 16, FontStyle.Normal, Vector2.zero, new Vector2(930f, 32f), TextAnchor.MiddleCenter, TextSecondary);
         }
 
-        private void BuildQueuePage()
+        private void BuildQueueDrawer()
         {
-            BuildSubpageHeader(queuePage, "播放队列", out queueBackButton);
-            var firstY = 145f;
+            queueDrawerButton = CreateIconButton(
+                consumerRoot,
+                "Open Queue Drawer",
+                QuestUiIconKind.Queue,
+                new Vector2(408f, 232f),
+                new Vector2(64f, 64f),
+                Surface,
+                TextPrimary,
+                out _);
+            queueDrawerButtonSurface = queueDrawerButton.targetGraphic as QuestUiSurface;
+            ConfigureHover(queueDrawerButton, null, string.Empty);
+
+            queueBadge = EnsureRect(queueDrawerButton.transform, "Badge", new Vector2(25f, 25f), new Vector2(24f, 24f));
+            EnsureSurface(queueBadge, Accent, 12f, false);
+            queueBadgeText = CreateText(queueBadge, "Label", "0", 14, FontStyle.Bold, Vector2.zero, queueBadge.sizeDelta, TextAnchor.MiddleCenter, AccentInk);
+
+            enqueueConfirmation = EnsureRect(
+                consumerRoot,
+                "Enqueue Confirmation",
+                new Vector2(118f, 232f),
+                new Vector2(500f, 52f));
+            EnsureSurface(enqueueConfirmation, palette.PendingSurface, 7f, false);
+            var confirmationOutline = GetOrAddComponent<Outline>(enqueueConfirmation.gameObject);
+            confirmationOutline.effectColor = Accent;
+            confirmationOutline.effectDistance = new Vector2(1f, -1f);
+            confirmationOutline.useGraphicAlpha = false;
+            BindTheme(confirmationOutline, ThemeColorRole.Accent);
+            enqueueConfirmationGroup = GetOrAddComponent<CanvasGroup>(enqueueConfirmation.gameObject);
+            EnsureSurface(
+                EnsureRect(enqueueConfirmation, "Check Background", new Vector2(-224f, 0f), new Vector2(30f, 30f)),
+                Accent,
+                15f,
+                false);
+            EnsureIcon(
+                enqueueConfirmation,
+                "Check",
+                QuestUiIconKind.Check,
+                new Vector2(-224f, 0f),
+                new Vector2(18f, 18f),
+                AccentInk);
+            enqueueConfirmationTitleText = CreateText(
+                enqueueConfirmation,
+                "Title",
+                "已加入播放队列",
+                15,
+                FontStyle.Bold,
+                new Vector2(-55f, 9f),
+                new Vector2(292f, 24f),
+                TextAnchor.MiddleLeft,
+                TextPrimary);
+            enqueueConfirmationTitleText.enableAutoSizing = true;
+            enqueueConfirmationTitleText.fontSizeMin = 12f;
+            enqueueConfirmationTitleText.fontSizeMax = 15f;
+            enqueueConfirmationTitleText.textWrappingMode = TextWrappingModes.NoWrap;
+            enqueueConfirmationTitleText.overflowMode = TextOverflowModes.Ellipsis;
+            enqueueConfirmationDetailText = CreateText(
+                enqueueConfirmation,
+                "Detail",
+                "已加入播放队列",
+                12,
+                FontStyle.Normal,
+                new Vector2(-55f, -11f),
+                new Vector2(292f, 20f),
+                TextAnchor.MiddleLeft,
+                TextSecondary);
+            enqueueConfirmationButton = CreateTextButton(
+                enqueueConfirmation,
+                "View Queue",
+                "查看队列",
+                new Vector2(192f, 0f),
+                new Vector2(104f, 40f),
+                Accent,
+                AccentInk);
+            enqueueConfirmationButton.GetComponentInChildren<TMP_Text>(true).fontSize = 14f;
+
+            enqueueFlyer = EnsureRect(consumerRoot, "Enqueue Flyer", Vector2.zero, new Vector2(150f, 72f));
+            EnsureSurface(enqueueFlyer, palette.PendingSurface, 6f, false);
+            enqueueFlyerGroup = GetOrAddComponent<CanvasGroup>(enqueueFlyer.gameObject);
+            enqueueFlyerGroup.alpha = 0f;
+            enqueueFlyerGroup.interactable = false;
+            enqueueFlyerGroup.blocksRaycasts = false;
+            var flyerImageRect = EnsureRect(enqueueFlyer, "Image", Vector2.zero, enqueueFlyer.sizeDelta);
+            enqueueFlyerImage = GetOrAddComponent<RawImage>(flyerImageRect.gameObject);
+            enqueueFlyerImage.raycastTarget = false;
+            enqueueFlyerImage.enabled = false;
+            enqueueFlyerFallbackIcon = EnsureIcon(
+                enqueueFlyer,
+                "Fallback",
+                QuestUiIconKind.Queue,
+                Vector2.zero,
+                new Vector2(34f, 34f),
+                AccentStrong);
+            enqueueFlyer.gameObject.SetActive(false);
+
+            queueScrim = EnsureRect(consumerRoot, "Queue Scrim", Vector2.zero, QuestAppShellPrototype.ControlPanelSize);
+            var scrimSurface = EnsureSurface(queueScrim, palette.DebugScrim, 0f, true);
+            queueScrimButton = GetOrAddComponent<Button>(queueScrim.gameObject);
+            queueScrimButton.targetGraphic = scrimSurface;
+            queueScrimButton.transition = Selectable.Transition.None;
+            queueScrimGroup = GetOrAddComponent<CanvasGroup>(queueScrim.gameObject);
+
+            var visibleDrawerX = (QuestAppShellPrototype.ControlPanelSize.x - QueueDrawerWidth) * 0.5f;
+            queueDrawer = EnsureRect(
+                consumerRoot,
+                "Queue Drawer",
+                new Vector2(visibleDrawerX, 0f),
+                new Vector2(QueueDrawerWidth, QuestAppShellPrototype.ControlPanelSize.y));
+            EnsureSurface(queueDrawer, palette.DrawerSurface, 0f, true);
+            GetOrAddComponent<RectMask2D>(queueDrawer.gameObject).padding = Vector4.zero;
+            queueDrawerGroup = GetOrAddComponent<CanvasGroup>(queueDrawer.gameObject);
+
+            CreateDivider(queueDrawer, "Header Divider", new Vector2(0f, 216f), new Vector2(QueueDrawerContentWidth, 1f));
+            CreateText(queueDrawer, "Title", "播放队列", 26, FontStyle.Bold, new Vector2(-100f, 248f), new Vector2(250f, 46f), TextAnchor.MiddleLeft, TextPrimary);
+            queueDrawerCountText = CreateText(queueDrawer, "Count", "0 首", 15, FontStyle.Normal, new Vector2(64f, 248f), new Vector2(80f, 36f), TextAnchor.MiddleLeft, TextSecondary);
+            closeQueueDrawerButton = CreateIconButton(
+                queueDrawer,
+                "Close",
+                QuestUiIconKind.Close,
+                new Vector2(215f, 248f),
+                new Vector2(46f, 46f),
+                Surface,
+                TextPrimary,
+                out _);
+
+            queueCurrentRow = EnsureRect(queueDrawer, "Current Item", new Vector2(0f, 170f), new Vector2(QueueDrawerContentWidth, 72f));
+            EnsureSurface(queueCurrentRow, palette.PendingSurface, 6f, false);
+            CreateQueueCover(
+                queueCurrentRow,
+                "Cover",
+                0,
+                new Vector2(-194f, 0f),
+                new Vector2(52f, 48f));
+            queueCurrentTitleText = CreateText(queueCurrentRow, "Title", "等待点歌", 16, FontStyle.Bold, new Vector2(-32f, 11f), new Vector2(250f, 28f), TextAnchor.MiddleLeft, TextPrimary);
+            queueCurrentTitleText.textWrappingMode = TextWrappingModes.NoWrap;
+            queueCurrentTitleText.overflowMode = TextOverflowModes.Ellipsis;
+            queueCurrentMetaText = CreateText(queueCurrentRow, "Meta", string.Empty, 13, FontStyle.Normal, new Vector2(-32f, -13f), new Vector2(250f, 22f), TextAnchor.MiddleLeft, TextSecondary);
+            queueCurrentMetaText.textWrappingMode = TextWrappingModes.NoWrap;
+            queueCurrentMetaText.overflowMode = TextOverflowModes.Ellipsis;
+            queueCurrentStateText = CreateText(queueCurrentRow, "State", "正在播放", 12, FontStyle.Bold, new Vector2(137f, 0f), new Vector2(72f, 28f), TextAnchor.MiddleRight, Accent);
+            queueCurrentRemoveButton = CreateIconButton(
+                queueCurrentRow,
+                "Remove",
+                QuestUiIconKind.Trash,
+                new Vector2(202f, 0f),
+                new Vector2(36f, 36f),
+                SurfaceRaised,
+                Danger,
+                out queueCurrentRemoveIcon);
+            ConfigureHover(queueCurrentRemoveButton, null, string.Empty);
+
+            const float firstY = 98f;
             for (var index = 0; index < QueueRowCount; index += 1)
             {
-                var row = EnsureRect(queuePage, $"Queue Row {index}", new Vector2(0f, firstY - index * 72f), new Vector2(ContentWidth, 64f));
+                var row = EnsureRect(
+                    queueDrawer,
+                    $"Queue Row {index}",
+                    new Vector2(0f, firstY - index * 64f),
+                    new Vector2(QueueDrawerContentWidth, 62f));
                 queueRows[index] = row;
-                queueRowSurfaces[index] = EnsureSurface(row, Surface, 6f, false);
-                queueIndicators[index] = EnsureSurface(EnsureRect(row, "Indicator", new Vector2(-480f, 0f), new Vector2(5f, 42f)), Accent, 2f, false);
-                // 标题和信息行给右侧删除按钮留出空间。
-                queueTitleTexts[index] = CreateText(row, "Title", "歌曲", 18, FontStyle.Bold, new Vector2(5f, 12f), new Vector2(780f, 30f), TextAnchor.MiddleLeft, TextPrimary);
-                queueMetaTexts[index] = CreateText(row, "Meta", "等待", 16, FontStyle.Normal, new Vector2(5f, -15f), new Vector2(780f, 24f), TextAnchor.MiddleLeft, TextSecondary);
-                CreateText(row, "Number", (index + 1).ToString("00"), 16, FontStyle.Bold, new Vector2(-442f, 0f), new Vector2(58f, 32f), TextAnchor.MiddleCenter, TextSecondary);
+                CreateDivider(row, "Divider", new Vector2(0f, -31f), new Vector2(QueueDrawerContentWidth, 1f));
+                queueNumberTexts[index] = CreateText(row, "Number", (index + 1).ToString(), 13, FontStyle.Normal, new Vector2(-211f, 0f), new Vector2(22f, 30f), TextAnchor.MiddleCenter, TextFaint);
+                CreateQueueCover(row, "Cover", index + 1, new Vector2(-169f, 0f), new Vector2(48f, 44f));
+                queueTitleTexts[index] = CreateText(row, "Title", "歌曲", 15, FontStyle.Bold, new Vector2(8f, 10f), new Vector2(274f, 27f), TextAnchor.MiddleLeft, TextPrimary);
+                queueTitleTexts[index].textWrappingMode = TextWrappingModes.NoWrap;
+                queueTitleTexts[index].overflowMode = TextOverflowModes.Ellipsis;
+                queueMetaTexts[index] = CreateText(row, "Meta", "等待", 12, FontStyle.Normal, new Vector2(8f, -13f), new Vector2(274f, 21f), TextAnchor.MiddleLeft, TextSecondary);
+                queueMetaTexts[index].textWrappingMode = TextWrappingModes.NoWrap;
+                queueMetaTexts[index].overflowMode = TextOverflowModes.Ellipsis;
                 queueRemoveButtons[index] = CreateIconButton(
                     row,
                     "Remove",
-                    QuestUiIconKind.Close,
-                    new Vector2(462f, 0f),
-                    new Vector2(44f, 44f),
+                    QuestUiIconKind.Trash,
+                    new Vector2(202f, 0f),
+                    new Vector2(36f, 36f),
                     SurfaceRaised,
-                    TextSecondary,
+                    Danger,
                     out queueRemoveIcons[index]);
                 ConfigureHover(queueRemoveButtons[index], null, string.Empty);
             }
 
-            queueFooterText = CreateText(queuePage, "Queue Footer", "队列为空", 16, FontStyle.Normal, new Vector2(-70f, -225f), new Vector2(560f, 32f), TextAnchor.MiddleCenter, TextSecondary);
-            clearQueueButton = CreateTextButton(queuePage, "Clear Queue", "清空待播", new Vector2(400f, -225f), new Vector2(176f, 48f), Surface, TextPrimary);
+            queueEmptyText = CreateText(
+                queueDrawer,
+                "Empty Queue",
+                "待播队列为空",
+                15,
+                FontStyle.Normal,
+                new Vector2(0f, -3f),
+                new Vector2(410f, 40f),
+                TextAnchor.MiddleCenter,
+                TextSecondary);
+            CreateDivider(queueDrawer, "Footer Divider", new Vector2(0f, -202f), new Vector2(QueueDrawerContentWidth, 1f));
+            queueFooterText = CreateText(queueDrawer, "Queue Footer", "当前歌曲播放结束后停止", 13, FontStyle.Normal, new Vector2(-74f, -235f), new Vector2(286f, 32f), TextAnchor.MiddleLeft, TextSecondary);
+            clearQueueButton = CreateTextButton(queueDrawer, "Clear Queue", "清空待播", new Vector2(163f, -235f), new Vector2(124f, 42f), Surface, TextPrimary);
+            clearQueueButton.GetComponentInChildren<TMP_Text>(true).fontSize = 14f;
             ConfigureHover(clearQueueButton, null, string.Empty);
+
+            queueScrim.SetAsLastSibling();
+            queueDrawer.SetAsLastSibling();
+        }
+
+        private RawImage CreateQueueCover(
+            Transform parent,
+            string name,
+            int slot,
+            Vector2 position,
+            Vector2 size)
+        {
+            var root = EnsureRect(parent, name, position, size);
+            EnsureSurface(root, SurfaceRaised, 5f, false);
+            EnsureIcon(root, "Fallback", QuestUiIconKind.Queue, Vector2.zero, size * 0.42f, TextFaint);
+            var imageRect = EnsureRect(root, "Image", Vector2.zero, size);
+            var image = GetOrAddComponent<RawImage>(imageRect.gameObject);
+            image.raycastTarget = false;
+            image.enabled = false;
+            queueCoverImages[slot] = image;
+            return image;
         }
 
         private void BuildSettingsPage()
@@ -1087,12 +1352,14 @@ namespace TsukiVox.AudioPrototype
         private void WireUi()
         {
             WireButton(songSearchPageButton, OpenSongSearchPage);
-            WireButton(queuePageButton, () => ShowPage(UiPage.Queue));
+            WireButton(queueDrawerButton, ToggleQueueDrawer);
+            WireButton(closeQueueDrawerButton, () => SetQueueDrawerVisible(false));
+            WireButton(queueScrimButton, () => SetQueueDrawerVisible(false));
+            WireButton(enqueueConfirmationButton, () => SetQueueDrawerVisible(true));
             WireButton(settingsPageButton, () => ShowPage(UiPage.Settings));
             WireButton(voicePageButton, () => ShowPage(UiPage.Voice));
             WireButton(voiceBackButton, () => ShowPage(UiPage.Home));
             WireButton(songSearchBackButton, () => ShowPage(UiPage.Home));
-            WireButton(queueBackButton, () => ShowPage(UiPage.Home));
             WireButton(settingsBackButton, () => ShowPage(UiPage.Home));
             WireButton(openServiceSettingsButton, () => ShowPage(UiPage.Service));
             WireButton(serviceBackButton, () => ShowPage(UiPage.Settings));
@@ -1120,6 +1387,7 @@ namespace TsukiVox.AudioPrototype
             WireButton(searchNextPageButton, () => SearchSongs(songSearchPageNumber + 1));
             WireButton(clearSearchButton, ClearSearchResults);
             WireButton(clearQueueButton, ClearQueue);
+            WireButton(queueCurrentRemoveButton, RemoveCurrentQueueItem);
             for (var index = 0; index < QueueRowCount; index += 1)
             {
                 var rowIndex = index;
@@ -1184,7 +1452,11 @@ namespace TsukiVox.AudioPrototype
             WireButton(captureCriticalDistanceButton, () => StartMicFaceCalibration(captureWarning: false));
             WireButton(resetMicProtectionButton, ResetMicProtectionPreferences);
 
-            WireButton(openDiagnosticsButton, () => SetDebugDrawerVisible(true));
+            WireButton(openDiagnosticsButton, () =>
+            {
+                SetQueueDrawerVisible(false);
+                SetDebugDrawerVisible(true);
+            });
             WireButton(closeDiagnosticsButton, () => SetDebugDrawerVisible(false));
             WireButton(debugScrimButton, () => SetDebugDrawerVisible(false));
             WireButton(rawDetailsButton, ToggleRawDetails);
@@ -1296,6 +1568,9 @@ namespace TsukiVox.AudioPrototype
 
                 var item = items[index];
                 var isPending = playlistPrototype.IsAddingItem && playlistPrototype.PendingAddItem == item;
+                var catalogItemId = NormalizeCatalogItemId(item);
+                var isRemoving = pendingQueueRemovalItemIds.Contains(catalogItemId);
+                var isConfirmed = confirmedSearchItemIds.Contains(catalogItemId) && !isRemoving;
                 searchResultSurfaces[index].color = isPending
                     ? palette.PendingSurface
                     : Surface;
@@ -1303,7 +1578,7 @@ namespace TsukiVox.AudioPrototype
                 searchResultAuthorTexts[index].text = SafeText(item.author, "未知 UP 主");
                 searchResultDurationTexts[index].text = FormatDuration(item);
                 SetSearchResultCover(index, item.coverUrl);
-                searchResultAddButtons[index].interactable = playlistPrototype.CanAddItem && !isPending;
+                RefreshSearchResultAddButton(index, isPending, isConfirmed, isRemoving);
             }
 
             songSearchButton.interactable = playlistPrototype.IsConnected &&
@@ -1398,52 +1673,76 @@ namespace TsukiVox.AudioPrototype
         {
             var state = playlistPrototype?.CurrentState;
             var count = state?.QueueCount ?? 0;
-            var startIndex = count <= QueueRowCount
-                ? 0
-                : Mathf.Clamp(state.currentIndex, 0, count - QueueRowCount);
+            var currentIndex = state != null && state.currentIndex >= 0 && state.currentIndex < count
+                ? state.currentIndex
+                : -1;
+            var currentItem = currentIndex >= 0 ? state.queue[currentIndex] : null;
+            var pendingStartIndex = currentIndex >= 0 ? currentIndex + 1 : 0;
+            var pendingCount = Mathf.Max(0, count - pendingStartIndex);
+
+            queueDrawerCountText.text = $"{count} 首";
+            queueCurrentRow.gameObject.SetActive(currentItem != null);
+            queueCurrentItemId = currentItem?.id;
+            if (currentItem != null)
+            {
+                queueCurrentTitleText.text = SafeText(currentItem.title, "未命名歌曲");
+                queueCurrentMetaText.text = FormatQueueItemMeta(currentItem);
+                queueCurrentStateText.text = currentItem.status == PlaylistClient.StatusDownloading
+                    ? "正在准备"
+                    : "正在播放";
+                var canRemoveCurrent = playlistPrototype != null &&
+                                       playlistPrototype.CanSendControl &&
+                                       !string.IsNullOrWhiteSpace(queueCurrentItemId);
+                queueCurrentRemoveButton.interactable = canRemoveCurrent;
+                queueCurrentRemoveIcon.color = canRemoveCurrent ? Danger : TextFaint;
+                SetQueueCover(0, currentItem.coverUrl);
+            }
+            else
+            {
+                queueCurrentRemoveButton.interactable = false;
+                queueCurrentRemoveIcon.color = TextFaint;
+                SetQueueCover(0, string.Empty);
+            }
 
             for (var rowIndex = 0; rowIndex < QueueRowCount; rowIndex += 1)
             {
-                var itemIndex = startIndex + rowIndex;
+                var itemIndex = pendingStartIndex + rowIndex;
                 var visible = state?.queue != null && itemIndex >= 0 && itemIndex < count;
                 queueRows[rowIndex].gameObject.SetActive(visible);
                 if (!visible)
                 {
                     queueRowItemIds[rowIndex] = null;
+                    SetQueueCover(rowIndex + 1, string.Empty);
                     continue;
                 }
 
                 var item = state.queue[itemIndex];
-                var isCurrent = itemIndex == state.currentIndex;
                 queueRowItemIds[rowIndex] = item.id;
                 if (queueRemoveButtons[rowIndex] != null)
                 {
-                    queueRemoveButtons[rowIndex].interactable =
-                        playlistPrototype != null && playlistPrototype.CanSendControl;
+                    var canRemove = playlistPrototype != null &&
+                                    playlistPrototype.CanSendControl &&
+                                    !string.IsNullOrWhiteSpace(queueRowItemIds[rowIndex]);
+                    queueRemoveButtons[rowIndex].interactable = canRemove;
+                    queueRemoveIcons[rowIndex].color = canRemove ? Danger : TextFaint;
                 }
-                queueRowSurfaces[rowIndex].color = isCurrent
-                    ? palette.PendingSurface
-                    : Surface;
-                queueIndicators[rowIndex].gameObject.SetActive(isCurrent);
                 queueTitleTexts[rowIndex].text = SafeText(item.title, "未命名歌曲");
-                queueMetaTexts[rowIndex].text = $"{FormatSource(item.sourceType)} · {FormatItemStatus(item.status)}";
-                var numberText = queueRows[rowIndex].Find("Number")?.GetComponent<TMP_Text>();
-                if (numberText != null)
-                {
-                    numberText.text = (itemIndex + 1).ToString("00");
-                }
+                queueMetaTexts[rowIndex].text = FormatQueueItemMeta(item);
+                queueNumberTexts[rowIndex].text = (rowIndex + 1).ToString();
+                SetQueueCover(rowIndex + 1, item.coverUrl);
             }
 
-            queueFooterText.text = count == 0
-                ? "播放队列为空"
-                : count > QueueRowCount ? $"共 {count} 首 · 当前显示附近歌曲" : $"共 {count} 首";
+            queueEmptyText.gameObject.SetActive(pendingCount == 0);
+            queueEmptyText.text = count == 0 ? "播放队列为空" : "待播队列为空";
+            queueFooterText.text = pendingCount > 0
+                ? $"还有 {pendingCount} 首待播"
+                : count > 0 ? "当前歌曲播放结束后停止" : "还没有点播歌曲";
 
             if (clearQueueButton != null)
             {
-                // 清空会保留正在播放的那首，所以只有一首歌时点它没有意义。
                 clearQueueButton.interactable = playlistPrototype != null &&
                                                 playlistPrototype.CanSendControl &&
-                                                count > 1;
+                                                pendingCount > 0;
             }
         }
 
@@ -1798,8 +2097,36 @@ namespace TsukiVox.AudioPrototype
 
         private void ClearQueue()
         {
-            playlistPrototype?.ClearQueue();
+            if (playlistPrototype == null || !playlistPrototype.CanSendControl)
+            {
+                return;
+            }
+
+            var state = playlistPrototype.CurrentState;
+            var queue = state?.queue;
+            if (queue != null)
+            {
+                var pendingStartIndex = state.currentIndex >= 0 ? state.currentIndex + 1 : 0;
+                for (var index = pendingStartIndex; index < queue.Length; index += 1)
+                {
+                    var catalogItemId = NormalizeCatalogItemId(queue[index]?.sourceInput);
+                    if (string.IsNullOrEmpty(catalogItemId))
+                    {
+                        continue;
+                    }
+
+                    confirmedSearchItemIds.Remove(catalogItemId);
+                    pendingQueueRemovalItemIds.Add(catalogItemId);
+                }
+            }
+            playlistPrototype.ClearQueue();
             RefreshQueue();
+            RefreshSongSearch();
+        }
+
+        private void RemoveCurrentQueueItem()
+        {
+            RemoveQueueItem(queueCurrentItemId);
         }
 
         /// <summary>
@@ -1820,8 +2147,39 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
-            playlistPrototype?.RemoveQueueItem(itemId);
+            RemoveQueueItem(itemId);
+        }
+
+        private void RemoveQueueItem(string itemId)
+        {
+            if (string.IsNullOrWhiteSpace(itemId) ||
+                playlistPrototype == null ||
+                !playlistPrototype.CanSendControl)
+            {
+                return;
+            }
+
+            var queue = playlistPrototype?.CurrentState?.queue;
+            if (queue != null)
+            {
+                for (var index = 0; index < queue.Length; index += 1)
+                {
+                    if (queue[index] != null && string.Equals(queue[index].id, itemId, StringComparison.Ordinal))
+                    {
+                        var catalogItemId = NormalizeCatalogItemId(queue[index].sourceInput);
+                        if (!string.IsNullOrEmpty(catalogItemId))
+                        {
+                            confirmedSearchItemIds.Remove(catalogItemId);
+                            pendingQueueRemovalItemIds.Add(catalogItemId);
+                        }
+                        break;
+                    }
+                }
+            }
+
+            playlistPrototype.RemoveQueueItem(itemId);
             RefreshQueue();
+            RefreshSongSearch();
         }
 
         private void ToggleVoiceSearch()
@@ -2226,7 +2584,25 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
-            playlistPrototype.AddItem(items[index], true);
+            var item = items[index];
+            var catalogItemId = NormalizeCatalogItemId(item);
+            if (pendingQueueRemovalItemIds.Contains(catalogItemId))
+            {
+                return;
+            }
+
+            if (confirmedSearchItemIds.Contains(catalogItemId))
+            {
+                if (TryFindActiveQueueItem(item, out var queueItem))
+                {
+                    RemoveQueueItem(queueItem.id);
+                }
+                return;
+            }
+
+            pendingEnqueueFeedbackItem = item;
+            pendingEnqueueFeedbackIndex = index;
+            playlistPrototype.AddItem(item, false);
         }
 
         private void ApplyDefaultServiceAddress()
@@ -2558,12 +2934,70 @@ namespace TsukiVox.AudioPrototype
 
         private void HandlePlaylistStateChanged(QuestPlaylistPrototype sender, PlaylistState state)
         {
+            ReconcileConfirmedSearchItems(state);
+            TryCompleteEnqueueFeedback(sender);
             RefreshAll();
         }
 
         private void HandleSearchStateChanged(QuestPlaylistPrototype sender)
         {
+            TryCompleteEnqueueFeedback(sender);
             RefreshSongSearch();
+        }
+
+        private void TryCompleteEnqueueFeedback(QuestPlaylistPrototype sender)
+        {
+            if (pendingEnqueueFeedbackItem == null || sender == null || sender.IsAddingItem)
+            {
+                return;
+            }
+
+            var item = pendingEnqueueFeedbackItem;
+            var resultIndex = pendingEnqueueFeedbackIndex;
+            pendingEnqueueFeedbackItem = null;
+            pendingEnqueueFeedbackIndex = -1;
+
+            var itemId = NormalizeCatalogItemId(item);
+            var lastAddedId = NormalizeCatalogItemId(sender.LastAddedItem);
+            var succeeded = !string.IsNullOrEmpty(itemId) &&
+                            string.Equals(itemId, lastAddedId, StringComparison.OrdinalIgnoreCase) &&
+                            string.IsNullOrWhiteSpace(sender.LastAddItemError);
+            if (!succeeded)
+            {
+                return;
+            }
+
+            confirmedSearchItemIds.Add(itemId);
+            StartEnqueueFeedback(resultIndex, item);
+        }
+
+        private void ReconcileConfirmedSearchItems(PlaylistState state)
+        {
+            if (state?.queue == null)
+            {
+                return;
+            }
+
+            var queuedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var activeStartIndex = state.currentIndex >= 0 ? state.currentIndex : 0;
+            for (var index = activeStartIndex; index < state.queue.Length; index += 1)
+            {
+                var itemId = NormalizeCatalogItemId(state.queue[index]?.sourceInput);
+                if (!string.IsNullOrEmpty(itemId))
+                {
+                    queuedIds.Add(itemId);
+                }
+            }
+
+            if (state.queue.Length > 0 && queuedIds.Count == 0)
+            {
+                pendingQueueRemovalItemIds.Clear();
+                return;
+            }
+
+            confirmedSearchItemIds.Clear();
+            confirmedSearchItemIds.UnionWith(queuedIds);
+            pendingQueueRemovalItemIds.Clear();
         }
 
         private void HandleSuggestStateChanged(QuestPlaylistPrototype sender)
@@ -2664,26 +3098,302 @@ namespace TsukiVox.AudioPrototype
             SetPageGroupImmediate(homeGroup, page == UiPage.Home);
             SetPageGroupImmediate(songSearchGroup, page == UiPage.SongSearch);
             SetPageGroupImmediate(voiceGroup, page == UiPage.Voice);
-            SetPageGroupImmediate(queueGroup, page == UiPage.Queue);
             SetPageGroupImmediate(settingsGroup, page == UiPage.Settings);
             SetPageGroupImmediate(serviceGroup, page == UiPage.Service);
             SetPageGroupImmediate(micProtectionGroup, page == UiPage.MicProtection);
         }
 
+        private void ToggleQueueDrawer()
+        {
+            SetQueueDrawerVisible(!queueDrawerVisible);
+        }
+
+        private void SetQueueDrawerVisible(bool visible)
+        {
+            HideEnqueueConfirmation();
+            if (visible && debugDrawer != null && debugDrawer.gameObject.activeSelf)
+            {
+                SetDebugDrawerImmediate(false);
+            }
+            if (queueDrawerVisible == visible && queueDrawerTransition == null)
+            {
+                return;
+            }
+
+            if (!Application.isPlaying)
+            {
+                SetQueueDrawerImmediate(visible);
+                return;
+            }
+
+            if (queueDrawerTransition != null)
+            {
+                StopCoroutine(queueDrawerTransition);
+            }
+
+            queueDrawerTransition = StartCoroutine(AnimateQueueDrawer(visible));
+        }
+
+        private IEnumerator AnimateQueueDrawer(bool visible)
+        {
+            if (visible)
+            {
+                queueScrim.gameObject.SetActive(true);
+                queueDrawer.gameObject.SetActive(true);
+                queueScrim.SetAsLastSibling();
+                queueDrawer.SetAsLastSibling();
+            }
+
+            var visibleX = (QuestAppShellPrototype.ControlPanelSize.x - QueueDrawerWidth) * 0.5f;
+            var hiddenX = QuestAppShellPrototype.ControlPanelSize.x * 0.5f + QueueDrawerWidth * 0.5f;
+            var startAlpha = queueScrimGroup.alpha;
+            var endAlpha = visible ? 1f : 0f;
+            var startX = queueDrawer.anchoredPosition.x;
+            var endX = visible ? visibleX : hiddenX;
+            const float duration = 0.24f;
+            var elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                var normalized = Mathf.Clamp01(elapsed / duration);
+                var eased = 1f - Mathf.Pow(1f - normalized, 3f);
+                queueScrimGroup.alpha = Mathf.Lerp(startAlpha, endAlpha, eased);
+                queueDrawerGroup.alpha = Mathf.Lerp(startAlpha, endAlpha, eased);
+                queueDrawer.anchoredPosition = new Vector2(Mathf.Lerp(startX, endX, eased), 0f);
+                yield return null;
+            }
+
+            SetQueueDrawerImmediate(visible);
+            queueDrawerTransition = null;
+        }
+
+        private void SetQueueDrawerImmediate(bool visible)
+        {
+            queueDrawerVisible = visible;
+            queueScrim.gameObject.SetActive(visible);
+            queueDrawer.gameObject.SetActive(visible);
+            queueScrimGroup.alpha = visible ? 1f : 0f;
+            queueScrimGroup.interactable = visible;
+            queueScrimGroup.blocksRaycasts = visible;
+            queueDrawerGroup.alpha = visible ? 1f : 0f;
+            queueDrawerGroup.interactable = visible;
+            queueDrawerGroup.blocksRaycasts = visible;
+            var visibleX = (QuestAppShellPrototype.ControlPanelSize.x - QueueDrawerWidth) * 0.5f;
+            var hiddenX = QuestAppShellPrototype.ControlPanelSize.x * 0.5f + QueueDrawerWidth * 0.5f;
+            queueDrawer.anchoredPosition = new Vector2(visible ? visibleX : hiddenX, 0f);
+            if (queueDrawerButtonSurface != null)
+            {
+                queueDrawerButtonSurface.color = visible ? SurfaceHover : Surface;
+            }
+        }
+
+        private void StartEnqueueFeedback(int resultIndex, BilibiliCatalogItem item)
+        {
+            if (enqueueFeedbackCoroutine != null)
+            {
+                StopCoroutine(enqueueFeedbackCoroutine);
+            }
+            HideEnqueueConfirmation();
+            enqueueFlyer.gameObject.SetActive(false);
+            enqueueFlyerImage.texture = null;
+            queueBadge.localScale = Vector3.one;
+
+            if (!Application.isPlaying)
+            {
+                ShowEnqueueConfirmation(item);
+                return;
+            }
+
+            enqueueFeedbackCoroutine = StartCoroutine(AnimateEnqueueFeedback(resultIndex, item));
+        }
+
+        private IEnumerator AnimateEnqueueFeedback(int resultIndex, BilibiliCatalogItem item)
+        {
+            var canFly = !queueDrawerVisible &&
+                         currentPage == UiPage.SongSearch &&
+                         resultIndex >= 0 &&
+                         resultIndex < SearchResultRowCount &&
+                         searchResultRows[resultIndex] != null &&
+                         searchResultRows[resultIndex].gameObject.activeInHierarchy &&
+                         IsSearchResultIndex(resultIndex, item);
+            if (canFly)
+            {
+                var sourceRect = searchResultCoverImages[resultIndex].rectTransform;
+                var sourceBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(consumerRoot, sourceRect);
+                var targetBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
+                    consumerRoot,
+                    queueDrawerButton.GetComponent<RectTransform>());
+                var start = new Vector2(sourceBounds.center.x, sourceBounds.center.y);
+                var target = new Vector2(targetBounds.center.x, targetBounds.center.y);
+                var control = Vector2.Lerp(start, target, 0.52f) + Vector2.up * 96f;
+                var sourceTexture = searchResultCoverImages[resultIndex].texture;
+
+                enqueueFlyer.gameObject.SetActive(true);
+                enqueueFlyer.SetAsLastSibling();
+                enqueueFlyerGroup.alpha = 0f;
+                enqueueFlyerGroup.interactable = false;
+                enqueueFlyerGroup.blocksRaycasts = false;
+                enqueueFlyer.anchoredPosition = start;
+                enqueueFlyer.localScale = Vector3.one * 0.92f;
+                enqueueFlyerImage.texture = sourceTexture;
+                enqueueFlyerImage.uvRect = searchResultCoverImages[resultIndex].uvRect;
+                enqueueFlyerImage.enabled = sourceTexture != null;
+                enqueueFlyerFallbackIcon.gameObject.SetActive(sourceTexture == null);
+
+                const float duration = 0.72f;
+                var elapsed = 0f;
+                while (elapsed < duration)
+                {
+                    elapsed += Time.unscaledDeltaTime;
+                    var normalized = Mathf.Clamp01(elapsed / duration);
+                    var eased = 1f - Mathf.Pow(1f - normalized, 3f);
+                    var oneMinus = 1f - eased;
+                    enqueueFlyer.anchoredPosition = oneMinus * oneMinus * start +
+                                                     2f * oneMinus * eased * control +
+                                                     eased * eased * target;
+                    enqueueFlyer.localScale = Vector3.one * Mathf.Lerp(0.92f, 0.24f, eased);
+                    enqueueFlyerGroup.alpha = normalized < 0.15f
+                        ? normalized / 0.15f
+                        : Mathf.Clamp01(1f - (normalized - 0.72f) / 0.28f);
+                    yield return null;
+                }
+
+                enqueueFlyerImage.texture = null;
+                enqueueFlyer.gameObject.SetActive(false);
+            }
+
+            if (!queueDrawerVisible)
+            {
+                ShowEnqueueConfirmation(item);
+            }
+            yield return AnimateQueueBadgePulse();
+            enqueueFeedbackCoroutine = null;
+        }
+
+        private IEnumerator AnimateQueueBadgePulse()
+        {
+            queueBadge.gameObject.SetActive(true);
+            const float duration = 0.42f;
+            var elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                var normalized = Mathf.Clamp01(elapsed / duration);
+                var pulse = Mathf.Sin(normalized * Mathf.PI);
+                queueBadge.localScale = Vector3.one * (1f + pulse * 0.38f);
+                if (queueDrawerButtonSurface != null)
+                {
+                    queueDrawerButtonSurface.color = Color.Lerp(Surface, Accent, pulse * 0.7f);
+                }
+                yield return null;
+            }
+
+            queueBadge.localScale = Vector3.one;
+            if (queueDrawerButtonSurface != null)
+            {
+                queueDrawerButtonSurface.color = queueDrawerVisible ? SurfaceHover : Surface;
+            }
+        }
+
+        private void ShowEnqueueConfirmation(BilibiliCatalogItem item)
+        {
+            enqueueConfirmationTitleText.text = $"《{SafeText(item?.title, item?.bvid)}》已加入";
+            enqueueConfirmationDetailText.text = BuildEnqueueConfirmationDetail(item);
+            if (enqueueConfirmationCoroutine != null)
+            {
+                StopCoroutine(enqueueConfirmationCoroutine);
+            }
+
+            if (!Application.isPlaying)
+            {
+                SetEnqueueConfirmationImmediate(true);
+                return;
+            }
+
+            enqueueConfirmationCoroutine = StartCoroutine(AnimateEnqueueConfirmation());
+        }
+
+        private IEnumerator AnimateEnqueueConfirmation()
+        {
+            enqueueConfirmation.gameObject.SetActive(true);
+            enqueueConfirmation.SetAsLastSibling();
+            enqueueConfirmationGroup.interactable = true;
+            enqueueConfirmationGroup.blocksRaycasts = true;
+            enqueueConfirmationGroup.alpha = 0f;
+            var target = new Vector2(118f, 232f);
+            enqueueConfirmation.anchoredPosition = target + Vector2.up * 8f;
+            const float transitionDuration = 0.16f;
+            var elapsed = 0f;
+            while (elapsed < transitionDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                var eased = 1f - Mathf.Pow(1f - Mathf.Clamp01(elapsed / transitionDuration), 3f);
+                enqueueConfirmationGroup.alpha = eased;
+                enqueueConfirmation.anchoredPosition = Vector2.Lerp(target + Vector2.up * 8f, target, eased);
+                yield return null;
+            }
+
+            enqueueConfirmationGroup.alpha = 1f;
+            enqueueConfirmation.anchoredPosition = target;
+            var visibleElapsed = 0f;
+            while (visibleElapsed < EnqueueConfirmationSeconds)
+            {
+                visibleElapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+
+            elapsed = 0f;
+            while (elapsed < transitionDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                enqueueConfirmationGroup.alpha = 1f - Mathf.Clamp01(elapsed / transitionDuration);
+                yield return null;
+            }
+
+            SetEnqueueConfirmationImmediate(false);
+            enqueueConfirmationCoroutine = null;
+        }
+
+        private void HideEnqueueConfirmation()
+        {
+            if (enqueueConfirmationCoroutine != null)
+            {
+                StopCoroutine(enqueueConfirmationCoroutine);
+                enqueueConfirmationCoroutine = null;
+            }
+            if (enqueueConfirmation != null)
+            {
+                SetEnqueueConfirmationImmediate(false);
+            }
+        }
+
+        private void SetEnqueueConfirmationImmediate(bool visible)
+        {
+            enqueueConfirmation.gameObject.SetActive(visible);
+            enqueueConfirmation.anchoredPosition = new Vector2(118f, 232f);
+            enqueueConfirmationGroup.alpha = visible ? 1f : 0f;
+            enqueueConfirmationGroup.interactable = visible;
+            enqueueConfirmationGroup.blocksRaycasts = visible;
+        }
+
         private void SetDebugDrawerVisible(bool visible)
         {
+            if (visible && queueDrawerVisible)
+            {
+                SetQueueDrawerImmediate(false);
+            }
             if (!Application.isPlaying)
             {
                 SetDebugDrawerImmediate(visible);
                 return;
             }
 
-            if (drawerTransition != null)
+            if (debugDrawerTransition != null)
             {
-                StopCoroutine(drawerTransition);
+                StopCoroutine(debugDrawerTransition);
             }
 
-            drawerTransition = StartCoroutine(AnimateDebugDrawer(visible));
+            debugDrawerTransition = StartCoroutine(AnimateDebugDrawer(visible));
         }
 
         private IEnumerator AnimateDebugDrawer(bool visible)
@@ -2692,6 +3402,8 @@ namespace TsukiVox.AudioPrototype
             {
                 debugScrim.gameObject.SetActive(true);
                 debugDrawer.gameObject.SetActive(true);
+                debugScrim.SetAsLastSibling();
+                debugDrawer.SetAsLastSibling();
             }
 
             var startAlpha = debugDrawerGroup.alpha;
@@ -2711,7 +3423,7 @@ namespace TsukiVox.AudioPrototype
             }
 
             SetDebugDrawerImmediate(visible);
-            drawerTransition = null;
+            debugDrawerTransition = null;
         }
 
         private void SetDebugDrawerImmediate(bool visible)
@@ -2732,7 +3444,6 @@ namespace TsukiVox.AudioPrototype
             {
                 UiPage.Voice => voiceGroup,
                 UiPage.SongSearch => songSearchGroup,
-                UiPage.Queue => queueGroup,
                 UiPage.Settings => settingsGroup,
                 UiPage.Service => serviceGroup,
                 UiPage.MicProtection => micProtectionGroup,
@@ -3227,6 +3938,265 @@ namespace TsukiVox.AudioPrototype
             };
         }
 
+        private static string FormatQueueItemMeta(PlaylistItem item)
+        {
+            if (item == null)
+            {
+                return "等待中";
+            }
+
+            var author = string.IsNullOrWhiteSpace(item.author)
+                ? FormatSource(item.sourceType)
+                : item.author.Trim();
+            var detail = string.IsNullOrWhiteSpace(item.durationText)
+                ? FormatItemStatus(item.status)
+                : item.durationText.Trim();
+            return $"{author} · {detail}";
+        }
+
+        private static string NormalizeCatalogItemId(BilibiliCatalogItem item)
+        {
+            return NormalizeCatalogItemId(item?.bvid);
+        }
+
+        private static string NormalizeCatalogItemId(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var trimmed = value.Trim();
+            var marker = trimmed.IndexOf("BV", StringComparison.OrdinalIgnoreCase);
+            if (marker < 0)
+            {
+                return string.Empty;
+            }
+
+            var end = marker + 2;
+            while (end < trimmed.Length && char.IsLetterOrDigit(trimmed[end]))
+            {
+                end += 1;
+            }
+            return trimmed.Substring(marker, end - marker);
+        }
+
+        private bool TryFindActiveQueueItem(BilibiliCatalogItem catalogItem, out PlaylistItem queueItem)
+        {
+            queueItem = null;
+            var state = playlistPrototype?.CurrentState;
+            var queue = state?.queue;
+            var catalogItemId = NormalizeCatalogItemId(catalogItem);
+            if (queue == null || string.IsNullOrEmpty(catalogItemId))
+            {
+                return false;
+            }
+
+            var activeStartIndex = state.currentIndex >= 0 ? state.currentIndex : 0;
+            for (var index = queue.Length - 1; index >= activeStartIndex; index -= 1)
+            {
+                var candidate = queue[index];
+                if (candidate == null || string.IsNullOrWhiteSpace(candidate.id))
+                {
+                    continue;
+                }
+
+                if (string.Equals(
+                        NormalizeCatalogItemId(candidate.sourceInput),
+                        catalogItemId,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    queueItem = candidate;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsSearchResultIndex(int index, BilibiliCatalogItem expectedItem)
+        {
+            var items = playlistPrototype?.SearchResults?.items;
+            return items != null &&
+                   index >= 0 &&
+                   index < items.Length &&
+                   string.Equals(
+                       NormalizeCatalogItemId(items[index]),
+                       NormalizeCatalogItemId(expectedItem),
+                       StringComparison.OrdinalIgnoreCase);
+        }
+
+        private string BuildEnqueueConfirmationDetail(BilibiliCatalogItem item)
+        {
+            var state = playlistPrototype?.CurrentState;
+            var queue = state?.queue;
+            var itemId = NormalizeCatalogItemId(item);
+            if (queue == null || queue.Length == 0 || string.IsNullOrEmpty(itemId))
+            {
+                return "已加入播放队列";
+            }
+
+            for (var index = queue.Length - 1; index >= 0; index -= 1)
+            {
+                if (!string.Equals(
+                        NormalizeCatalogItemId(queue[index]?.sourceInput),
+                        itemId,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (index == state.currentIndex)
+                {
+                    return "正在准备播放";
+                }
+
+                if (state.currentIndex >= 0 && index > state.currentIndex)
+                {
+                    return $"将在 {index - state.currentIndex} 首后播放";
+                }
+                break;
+            }
+
+            return $"队列现有 {queue.Length} 首";
+        }
+
+        private void SetQueueCover(int slot, string url)
+        {
+            if (slot < 0 || slot >= QueueCoverSlotCount)
+            {
+                return;
+            }
+
+            var resolvedUrl = string.IsNullOrWhiteSpace(url)
+                ? string.Empty
+                : playlistPrototype?.ResolveCatalogAssetUrl(url) ?? url.Trim();
+            var normalizedUrl = string.IsNullOrWhiteSpace(resolvedUrl) ? string.Empty : resolvedUrl.Trim();
+            var isSameUrl = string.Equals(queueCoverUrls[slot], normalizedUrl, StringComparison.Ordinal);
+            if (isSameUrl &&
+                (string.IsNullOrEmpty(normalizedUrl) ||
+                 queueCoverTextures[slot] != null ||
+                 queueCoverRequests[slot] != null ||
+                 Time.unscaledTime < queueCoverRetryAfter[slot]))
+            {
+                return;
+            }
+
+            if (!isSameUrl)
+            {
+                CancelQueueCoverRequest(slot);
+                ReleaseQueueCoverTexture(slot);
+                queueCoverUrls[slot] = normalizedUrl;
+                queueCoverRetryAfter[slot] = 0f;
+            }
+
+            var image = queueCoverImages[slot];
+            if (image != null)
+            {
+                image.texture = null;
+                image.uvRect = new Rect(0f, 0f, 1f, 1f);
+                image.enabled = false;
+            }
+
+            if (string.IsNullOrEmpty(normalizedUrl) || !isActiveAndEnabled)
+            {
+                return;
+            }
+
+            queueCoverRequests[slot] = StartCoroutine(LoadQueueCover(slot, normalizedUrl));
+        }
+
+        private IEnumerator LoadQueueCover(int slot, string url)
+        {
+            Texture2D loadedTexture = null;
+            using (var request = UnityWebRequestTexture.GetTexture(url, true))
+            {
+                request.timeout = 10;
+                if (Uri.TryCreate(url, UriKind.Absolute, out var coverUri) &&
+                    coverUri.Host.EndsWith("hdslb.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    request.SetRequestHeader("Referer", "https://www.bilibili.com/");
+                }
+
+                yield return request.SendWebRequest();
+                if (request.result == UnityWebRequest.Result.Success)
+                {
+                    loadedTexture = DownloadHandlerTexture.GetContent(request);
+                }
+            }
+
+            if (!string.Equals(queueCoverUrls[slot], url, StringComparison.Ordinal))
+            {
+                DestroySearchResultCoverTexture(loadedTexture);
+                yield break;
+            }
+
+            queueCoverRequests[slot] = null;
+            if (loadedTexture == null)
+            {
+                queueCoverRetryAfter[slot] = Time.unscaledTime + SearchResultCoverRetrySeconds;
+                yield break;
+            }
+
+            loadedTexture.wrapMode = TextureWrapMode.Clamp;
+            loadedTexture.filterMode = FilterMode.Bilinear;
+            ReleaseQueueCoverTexture(slot);
+            queueCoverTextures[slot] = loadedTexture;
+
+            var image = queueCoverImages[slot];
+            if (image != null)
+            {
+                image.texture = loadedTexture;
+                image.uvRect = CalculateCoverUvRect(loadedTexture);
+                image.enabled = true;
+            }
+        }
+
+        private void CancelQueueCoverRequests()
+        {
+            for (var slot = 0; slot < QueueCoverSlotCount; slot += 1)
+            {
+                CancelQueueCoverRequest(slot);
+            }
+        }
+
+        private void CancelQueueCoverRequest(int slot)
+        {
+            var request = queueCoverRequests[slot];
+            if (request == null)
+            {
+                return;
+            }
+
+            StopCoroutine(request);
+            queueCoverRequests[slot] = null;
+        }
+
+        private void ReleaseQueueCovers()
+        {
+            CancelQueueCoverRequests();
+            for (var slot = 0; slot < QueueCoverSlotCount; slot += 1)
+            {
+                var image = queueCoverImages[slot];
+                if (image != null)
+                {
+                    image.texture = null;
+                    image.enabled = false;
+                }
+
+                ReleaseQueueCoverTexture(slot);
+                queueCoverUrls[slot] = string.Empty;
+                queueCoverRetryAfter[slot] = 0f;
+            }
+        }
+
+        private void ReleaseQueueCoverTexture(int slot)
+        {
+            var texture = queueCoverTextures[slot];
+            queueCoverTextures[slot] = null;
+            DestroySearchResultCoverTexture(texture);
+        }
+
         private void SetSearchResultCover(int index, string url)
         {
             if (index < 0 || index >= SearchResultRowCount)
@@ -3316,6 +4286,61 @@ namespace TsukiVox.AudioPrototype
                 image.uvRect = CalculateCoverUvRect(loadedTexture);
                 image.enabled = true;
             }
+        }
+
+        private void RefreshSearchResultAddButton(int index, bool isPending, bool isConfirmed, bool isRemoving)
+        {
+            var button = searchResultAddButtons[index];
+            var icon = searchResultAddIcons[index];
+            var label = searchResultAddTexts[index];
+            if (button == null || icon == null || label == null)
+            {
+                return;
+            }
+
+            var surface = button.targetGraphic as QuestUiSurface;
+            if (isRemoving)
+            {
+                button.interactable = false;
+                button.transition = Selectable.Transition.None;
+                if (surface != null)
+                {
+                    surface.color = palette.PendingSurface;
+                }
+                icon.SetIcon(QuestUiIconKind.Trash);
+                icon.color = TextSecondary;
+                label.text = "移除中";
+                label.color = TextSecondary;
+                return;
+            }
+
+            if (isConfirmed)
+            {
+                button.interactable = playlistPrototype.CanSendControl;
+                button.transition = Selectable.Transition.ColorTint;
+                button.colors = CreateButtonColors(Accent);
+                if (surface != null)
+                {
+                    surface.color = Accent;
+                }
+                icon.SetIcon(QuestUiIconKind.Check);
+                icon.color = AccentInk;
+                label.text = "已点";
+                label.color = AccentInk;
+                return;
+            }
+
+            button.transition = Selectable.Transition.ColorTint;
+            button.colors = CreateButtonColors(isPending ? palette.PendingSurface : SurfaceRaised);
+            button.interactable = playlistPrototype.CanAddItem && !isPending;
+            if (surface != null)
+            {
+                surface.color = isPending ? palette.PendingSurface : SurfaceRaised;
+            }
+            icon.SetIcon(isPending ? QuestUiIconKind.Queue : QuestUiIconKind.Plus);
+            icon.color = isPending ? Accent : AccentStrong;
+            label.text = isPending ? "加入中" : "点歌";
+            label.color = isPending ? Accent : AccentStrong;
         }
 
         private static Rect CalculateCoverUvRect(Texture texture)

@@ -25,6 +25,8 @@ namespace TsukiVox.AudioPrototype
         BrandRing,
         BrandSmile,
         Sparkles,
+        Check,
+        Trash,
     }
 
     /// <summary>
@@ -96,6 +98,16 @@ namespace TsukiVox.AudioPrototype
                 case QuestUiIconKind.Plus:
                     AddLine(vertexHelper, rect, 12f, 5f, 12f, 19f, thickness);
                     AddLine(vertexHelper, rect, 5f, 12f, 19f, 12f, thickness);
+                    break;
+                case QuestUiIconKind.Check:
+                    AddPolyline(vertexHelper, rect, thickness, 4f, 12.5f, 9f, 17f, 20f, 6f);
+                    break;
+                case QuestUiIconKind.Trash:
+                    AddLine(vertexHelper, rect, 3f, 6f, 21f, 6f, thickness);
+                    AddLine(vertexHelper, rect, 9f, 3f, 15f, 3f, thickness);
+                    AddRoundedRect(vertexHelper, rect, 6f, 6f, 12f, 16f, 2f, thickness);
+                    AddLine(vertexHelper, rect, 10f, 10f, 10f, 18f, thickness);
+                    AddLine(vertexHelper, rect, 14f, 10f, 14f, 18f, thickness);
                     break;
                 case QuestUiIconKind.Queue:
                     AddLine(vertexHelper, rect, 3f, 5f, 13f, 5f, thickness);

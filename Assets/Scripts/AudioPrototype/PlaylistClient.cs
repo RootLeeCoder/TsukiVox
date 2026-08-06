@@ -981,6 +981,10 @@ namespace TsukiVox.AudioPrototype
     {
         public string id;
         public string title;
+        public string author;
+        public string coverUrl;
+        public int durationSeconds;
+        public string durationText;
         public string sourceType;
         public string sourceInput;
         public string playableUrl;
