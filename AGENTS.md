@@ -13,7 +13,7 @@
 - 如果修改了中文 UI 字符范围、TMP 设置或源字体，运行 `TsukiVox > Generate Consumer UI Font Asset` 重新生成动态多图集 SDF 字体；不要把 V0.76 消费级 UI 改回旧版 `UnityEngine.UI.Text`。
 - 如需把当前默认 Companion 地址写入场景，可运行 `TsukiVox > Apply Current Helper Host To Scene`；此命令不修改在线服务 origin。
 - Companion 模式连接局域网 PC：playlist 服务 `http://<PC IP>:5175`，下载/搜索服务 `http://<PC IP>:5174`。Quest 真机不能用 `127.0.0.1` 或 `localhost` 访问 PC，应在头显内 `设置 > 点歌服务` 输入局域网地址。
-- 点歌服务支持“局域网 Companion”和“在线服务”两种配置。Companion 继续使用 PC IP 与 `5174/5175`；在线服务使用一个完整的 HTTP(S) origin，并同时承载文字搜索、`/api/bilibili/suggest` 拼音候选、`/api/voice-search` 语音找歌、`/api/voice/provider` 供应商选择、队列和媒体下载。当前 Ubuntu 局域网测试地址为 `http://192.168.50.41:8080`，正式公网地址必须使用 HTTPS。
+- 点歌服务提供“局域网 Companion”“公网服务”“本地开发”三个入口。Companion 继续使用 PC IP 与 `5174/5175`；公网默认 origin 为 `https://api.tsukivox.com`，本地开发入口为 `http://192.168.50.41:8080`。在线协议同时承载设备登记、文字搜索、`/api/bilibili/suggest` 拼音候选、`/api/voice-search` 语音找歌、`/api/voice/provider` 供应商选择、队列和签名媒体下载。
 - Quest 3 日常构建部署使用 `pwsh -NoLogo -NoProfile -File .\Tools\Deploy-Quest.ps1`。脚本会生成 `build/TsukiVox-Quest.apk`，通过 `adb install -r` 保留应用数据地覆盖安装，启动应用，并核对 `logcat` 中的 Build ID。
 - 只构建 APK 使用 `pwsh -NoLogo -NoProfile -File .\Tools\Deploy-Quest.ps1 -BuildOnly`；只安装已有 APK 使用 `pwsh -NoLogo -NoProfile -File .\Tools\Deploy-Quest.ps1 -InstallOnly`。同一项目已在 Unity Editor 中打开时，脚本会向当前编辑器提交一次显式构建请求；编辑器关闭时则自动使用无界面 Unity，不需要手动切换模式。
 - 可用以下命令做无界面启动检查：
@@ -37,7 +37,7 @@
 ## V0.7-V0.76 点歌与设备体验约定
 
 - 头显内搜索点歌是 V0.7 之后的核心入口。Quest 客户端只调用服务端文字搜索、拼音候选、语音识别、队列和下载协议，不在 App 内加入 Bilibili/YouTube 下载器、云端语音密钥、Cookie 或平台凭据。
-- `PlaylistClient` 的状态、控制、文字搜索、拼音候选、语音搜索、供应商读写和添加请求都必须携带持久化的 `X-TsukiVox-Device-Id`。不要把设备 ID 改成每次启动重新生成，也不要让不同设备默认共享在线队列或语音供应商偏好。
+- `PlaylistClient` 的在线状态、控制、文字搜索、拼音候选、语音搜索、供应商读写和添加请求都必须携带持久化的 `X-TsukiVox-Device-Id` 与该 origin 独立的 Bearer 凭证。不要把设备 ID 改成每次启动重新生成，也不要把凭证、在线队列或语音供应商偏好跨设备或跨 origin 共享。
 - Companion 和在线服务必须保留各自独立的持久化地址。Companion 使用 PC IP 加 `5174/5175`，在线服务使用单一完整 HTTP(S) origin；切换模式必须取消旧文字/拼音/语音/点播请求、清空陈旧状态并重启轮询及供应商状态读取。
 - 搜索和服务地址继续使用 `TMP_InputField + QuestAndroidKeyboardInput`。V0.76 的 `QuestAndroidKeyboardInput` 是世界空间软键盘，不是 Android 系统输入法；修改时必须保留字母/符号切换、大小写、光标、退格、清空、完成/取消、原文恢复、输入框焦点和控制器射线连续命中。
 - 麦克风防贴脸触觉必须使用网头表面间隙而不是手柄原点距离，并保留轻震/强震阈值、迟滞、节流、强度缩放、校准期间抑制震动和 `PlayerPrefs` 持久化。

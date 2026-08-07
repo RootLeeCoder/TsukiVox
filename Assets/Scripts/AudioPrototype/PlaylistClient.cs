@@ -41,6 +41,7 @@ namespace TsukiVox.AudioPrototype
         private const string BilibiliSuggestPath = "/api/bilibili/suggest";
         private const string VoiceSearchPath = "/api/voice-search";
         private const string VoiceProviderPath = "/api/voice/provider";
+        private const string DeviceEnrollmentPath = "/api/devices/enroll";
         private const string DeviceIdHeader = "X-TsukiVox-Device-Id";
         private const string AudioDurationHeader = "X-TsukiVox-Audio-Ms";
         private const int RequestTimeoutSeconds = 6;
@@ -52,11 +53,17 @@ namespace TsukiVox.AudioPrototype
         private string playlistOrigin;
         private string downloadOrigin;
         private string deviceId;
+        private string deviceToken;
 
-        public PlaylistClient(string playlistOrigin, string downloadOrigin, string deviceId = "")
+        public PlaylistClient(
+            string playlistOrigin,
+            string downloadOrigin,
+            string deviceId = "",
+            string deviceToken = "")
         {
             SetOrigins(playlistOrigin, downloadOrigin);
             SetDeviceId(deviceId);
+            SetDeviceToken(deviceToken);
         }
 
         public string PlaylistOrigin => playlistOrigin;
@@ -72,6 +79,64 @@ namespace TsukiVox.AudioPrototype
         public void SetDeviceId(string nextDeviceId)
         {
             deviceId = string.IsNullOrWhiteSpace(nextDeviceId) ? string.Empty : nextDeviceId.Trim();
+        }
+
+        public void SetDeviceToken(string nextDeviceToken)
+        {
+            deviceToken = string.IsNullOrWhiteSpace(nextDeviceToken) ? string.Empty : nextDeviceToken.Trim();
+        }
+
+        public IEnumerator EnrollDevice(
+            Action<DeviceEnrollmentResponse> onSuccess,
+            Action<PlaylistRequestError> onFailure)
+        {
+            if (string.IsNullOrEmpty(deviceId))
+            {
+                onFailure?.Invoke(PlaylistRequestError.Local(
+                    "DEVICE_ID_REQUIRED",
+                    "设备标识尚未准备好。",
+                    false));
+                yield break;
+            }
+
+            using (var request = new UnityWebRequest(
+                CombineUrl(playlistOrigin, DeviceEnrollmentPath),
+                UnityWebRequest.kHttpVerbPOST))
+            {
+                request.downloadHandler = new DownloadHandlerBuffer();
+                ConfigureRequest(request);
+                yield return request.SendWebRequest();
+
+                if (!IsRequestSuccessful(request))
+                {
+                    onFailure?.Invoke(CreateRequestFailure(request, "设备登记"));
+                    yield break;
+                }
+
+                try
+                {
+                    var response = JsonUtility.FromJson<DeviceEnrollmentResponse>(request.downloadHandler.text);
+                    if (response == null || string.IsNullOrWhiteSpace(response.token))
+                    {
+                        onFailure?.Invoke(PlaylistRequestError.Local(
+                            "INVALID_RESPONSE",
+                            "设备登记返回了无效凭证。",
+                            false));
+                        yield break;
+                    }
+
+                    response.Normalize();
+                    SetDeviceToken(response.token);
+                    onSuccess?.Invoke(response);
+                }
+                catch (Exception exception)
+                {
+                    onFailure?.Invoke(PlaylistRequestError.Local(
+                        "INVALID_RESPONSE",
+                        $"设备登记返回了无效数据：{exception.Message}",
+                        false));
+                }
+            }
         }
 
         public IEnumerator FetchState(Action<PlaylistState> onSuccess, Action<string> onFailure)
@@ -430,6 +495,10 @@ namespace TsukiVox.AudioPrototype
             {
                 request.SetRequestHeader(DeviceIdHeader, deviceId);
             }
+            if (!string.IsNullOrEmpty(deviceToken))
+            {
+                request.SetRequestHeader("Authorization", $"Bearer {deviceToken}");
+            }
         }
 
         private static bool IsRequestSuccessful(UnityWebRequest request)
@@ -702,6 +771,21 @@ namespace TsukiVox.AudioPrototype
             public string error;
             public string code;
             public bool retryable;
+        }
+    }
+
+    [Serializable]
+    public sealed class DeviceEnrollmentResponse
+    {
+        public string deviceId;
+        public string token;
+        public string tokenType;
+
+        public void Normalize()
+        {
+            deviceId = string.IsNullOrWhiteSpace(deviceId) ? string.Empty : deviceId.Trim();
+            token = string.IsNullOrWhiteSpace(token) ? string.Empty : token.Trim();
+            tokenType = string.IsNullOrWhiteSpace(tokenType) ? "Bearer" : tokenType.Trim();
         }
     }
 

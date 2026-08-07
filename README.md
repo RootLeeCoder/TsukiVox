@@ -49,7 +49,7 @@ C:\Program Files\Unity\Hub\Editor\6000.5.0f1\Editor\Unity.exe
    ```
 
 4. 首次启动时在 Quest 中允许麦克风权限。
-5. 打开茶几平板的 `设置 > 点歌服务`，选择服务模式并填写地址。
+5. 正式构建默认连接公网服务；本地调试可在 `设置 > 点歌服务` 一键切换。
 6. 回到主页打开搜索点歌，输入歌名、歌手或 BV 号，选择结果加入队列。
 
 部署脚本会生成 `build/TsukiVox-Quest.apk`，保留应用数据地覆盖安装，并写入 `build/last-deploy.json`。只有 APK 构建、ADB 安装和 Package Manager 版本核验都成功后，才算安装完成。
@@ -69,15 +69,19 @@ Companion 模式使用同一台局域网 PC 的 IP 地址：
 
 ### 在线服务
 
-在线模式输入一个完整 HTTP(S) origin，例如当前局域网测试服务：
+正式构建默认使用：
 
 ```text
-http://192.168.50.41:8080
+https://api.tsukivox.com
 ```
 
-同一 origin 必须同时提供搜索、队列控制和媒体下载。正式公网部署必须使用 HTTPS，不要把密钥、Cookie 或个人下载内容放进 Unity 项目。
+点歌服务页同时保留“本地开发”入口，可快速切换到 `http://192.168.50.41:8080`。
+同一 origin 必须同时提供设备登记、搜索、队列控制和媒体下载。公网服务使用 HTTPS，
+客户端只保存每个 origin 独立的可撤销设备凭证，不持有云服务密钥或 Cookie。
 
-服务模式、Companion 地址和在线服务地址分别保存在 `PlayerPrefs`。每台 Quest 还会生成稳定设备 ID，并通过 `X-TsukiVox-Device-Id` 请求头发送，使服务端可以按设备隔离播放队列。
+服务模式、Companion 地址、在线服务地址和各 origin 的设备凭证分别保存在应用私有的
+`PlayerPrefs`。每台 Quest 还会生成稳定设备 ID，并通过 `X-TsukiVox-Device-Id` 与 Bearer
+凭证发送，使服务端可以隔离队列并单独撤销设备访问。
 
 ## 服务 API 契约
 

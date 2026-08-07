@@ -33,7 +33,11 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestPlaylistPrototype : MonoBehaviour
     {
         public const string DefaultHelperHostAddress = "192.168.50.191";
-        public const string DefaultOnlineServiceOrigin = "http://192.168.50.41:8080";
+        public const string DefaultOnlineServiceOrigin = "https://api.tsukivox.com";
+        public const string LocalDevelopmentServiceOrigin = "http://192.168.50.41:8080";
+
+        private const string LegacyOnlineServiceOrigin = "http://192.168.50.41:8080";
+        private const int CurrentServiceSettingsVersion = 2;
 
         private const float MinimumPollIntervalSeconds = 0.25f;
         private const float MinimumRetryIntervalSeconds = 0.5f;
@@ -42,11 +46,13 @@ namespace TsukiVox.AudioPrototype
         private const string HelperHostPrefsKey = "TsukiVox.HelperHost";
         private const string ServiceModePrefsKey = "TsukiVox.ServiceMode";
         private const string OnlineServiceOriginPrefsKey = "TsukiVox.OnlineServiceOrigin";
+        private const string ServiceSettingsVersionPrefsKey = "TsukiVox.ServiceSettingsVersion";
+        private const string DeviceTokenPrefsPrefix = "TsukiVox.DeviceToken.";
         private const string DeviceIdPrefsKey = "TsukiVox.DeviceId";
         private const string VoiceSearchEnabledPrefsKey = "TsukiVox.VoiceSearchEnabled";
 
         [Header("Service Origins")]
-        [SerializeField] private TsukiVoxServiceMode serviceMode = TsukiVoxServiceMode.Companion;
+        [SerializeField] private TsukiVoxServiceMode serviceMode = TsukiVoxServiceMode.Online;
         [SerializeField] private string helperHost = DefaultHelperHostAddress;
         [SerializeField] private string onlineServiceOrigin = DefaultOnlineServiceOrigin;
         [SerializeField] private string playlistOrigin = "http://192.168.50.191:5175";
@@ -77,6 +83,8 @@ namespace TsukiVox.AudioPrototype
         private readonly StringBuilder queueBuilder = new StringBuilder(256);
 
         private PlaylistClient client;
+        private string deviceToken;
+        private bool hasValidatedDeviceCredential;
         private PlaylistState state;
         private Coroutine pollRoutine;
         private bool isConnected;
@@ -165,9 +173,17 @@ namespace TsukiVox.AudioPrototype
 
         public bool IsOnlineService => serviceMode == TsukiVoxServiceMode.Online;
 
+        public bool IsLocalDevelopmentService => IsOnlineService &&
+                                                 string.Equals(
+                                                     onlineServiceOrigin,
+                                                     LocalDevelopmentServiceOrigin,
+                                                     StringComparison.OrdinalIgnoreCase);
+
         public string ServiceAddress => IsOnlineService ? onlineServiceOrigin : helperHost;
 
-        public string ServiceDisplayName => IsOnlineService ? "在线服务" : "局域网 Companion";
+        public string ServiceDisplayName => IsLocalDevelopmentService
+            ? "本地开发"
+            : IsOnlineService ? "公网服务" : "局域网 Companion";
 
         public VoiceSearchUiState VoiceState => voiceState;
 
@@ -234,8 +250,9 @@ namespace TsukiVox.AudioPrototype
         {
             LoadServiceSettings();
             ApplyOriginsFromService();
+            LoadDeviceCredential();
             EnsureUiReferences();
-            client = new PlaylistClient(playlistOrigin, downloadOrigin, deviceId);
+            client = new PlaylistClient(playlistOrigin, downloadOrigin, deviceId, deviceToken);
             WireUi();
             SyncHostInput();
             RefreshUi();
@@ -278,6 +295,7 @@ namespace TsukiVox.AudioPrototype
 
             client.SetOrigins(playlistOrigin, downloadOrigin);
             client.SetDeviceId(deviceId);
+            client.SetDeviceToken(deviceToken);
             pollRoutine = StartCoroutine(PollLoop());
         }
 
@@ -315,7 +333,12 @@ namespace TsukiVox.AudioPrototype
 
         public void UseOnlineService()
         {
-            ApplyServiceMode(TsukiVoxServiceMode.Online, true);
+            ApplyOnlineServiceOrigin(DefaultOnlineServiceOrigin, true);
+        }
+
+        public void UseLocalDevelopmentService()
+        {
+            ApplyOnlineServiceOrigin(LocalDevelopmentServiceOrigin, true);
         }
 
         public void ApplyServiceAddress(string nextAddress)
@@ -1032,6 +1055,31 @@ namespace TsukiVox.AudioPrototype
         {
             while (enabled)
             {
+                if (IsOnlineService && !hasValidatedDeviceCredential)
+                {
+                    isRequestInFlight = true;
+                    pendingStatus = "Registering this device...";
+                    DeviceEnrollmentResponse enrollment = null;
+                    PlaylistRequestError enrollmentError = null;
+                    yield return client.EnrollDevice(
+                        value => enrollment = value,
+                        value => enrollmentError = value);
+                    isRequestInFlight = false;
+
+                    if (enrollment == null)
+                    {
+                        OnRequestFailed(enrollmentError?.message ?? "Device enrollment failed.");
+                        RefreshUi();
+                        yield return new WaitForSeconds(Mathf.Max(MinimumRetryIntervalSeconds, retryIntervalSeconds));
+                        continue;
+                    }
+
+                    deviceToken = enrollment.token;
+                    SaveDeviceCredential();
+                    client.SetDeviceToken(deviceToken);
+                    hasValidatedDeviceCredential = true;
+                }
+
                 isRequestInFlight = true;
                 yield return client.FetchState(OnStateReceived, OnRequestFailed);
                 isRequestInFlight = false;
@@ -1367,7 +1415,7 @@ namespace TsukiVox.AudioPrototype
         {
             if (client == null)
             {
-                client = new PlaylistClient(playlistOrigin, downloadOrigin, deviceId);
+                client = new PlaylistClient(playlistOrigin, downloadOrigin, deviceId, deviceToken);
             }
 
             return client.ResolvePlayableUrl(playableUrl);
@@ -1377,7 +1425,7 @@ namespace TsukiVox.AudioPrototype
         {
             if (client == null)
             {
-                client = new PlaylistClient(playlistOrigin, downloadOrigin, deviceId);
+                client = new PlaylistClient(playlistOrigin, downloadOrigin, deviceId, deviceToken);
             }
         }
 
@@ -1430,13 +1478,20 @@ namespace TsukiVox.AudioPrototype
                 PlayerPrefs.Save();
             }
 
-            onlineServiceOrigin = NormalizeOnlineOrigin(
+            var storedOnlineOrigin = NormalizeOnlineOrigin(
                 PlayerPrefs.GetString(OnlineServiceOriginPrefsKey, onlineServiceOrigin),
                 DefaultOnlineServiceOrigin);
+            var settingsVersion = PlayerPrefs.GetInt(ServiceSettingsVersionPrefsKey, 0);
+            if (settingsVersion < CurrentServiceSettingsVersion &&
+                string.Equals(storedOnlineOrigin, LegacyOnlineServiceOrigin, StringComparison.OrdinalIgnoreCase))
+            {
+                storedOnlineOrigin = DefaultOnlineServiceOrigin;
+            }
+            onlineServiceOrigin = storedOnlineOrigin;
             var storedMode = PlayerPrefs.GetInt(ServiceModePrefsKey, (int)serviceMode);
             serviceMode = Enum.IsDefined(typeof(TsukiVoxServiceMode), storedMode)
                 ? (TsukiVoxServiceMode)storedMode
-                : TsukiVoxServiceMode.Companion;
+                : TsukiVoxServiceMode.Online;
             deviceId = PlayerPrefs.GetString(DeviceIdPrefsKey, string.Empty).Trim();
             if (string.IsNullOrEmpty(deviceId))
             {
@@ -1448,6 +1503,7 @@ namespace TsukiVox.AudioPrototype
 
             PlayerPrefs.SetString(OnlineServiceOriginPrefsKey, onlineServiceOrigin);
             PlayerPrefs.SetInt(ServiceModePrefsKey, (int)serviceMode);
+            PlayerPrefs.SetInt(ServiceSettingsVersionPrefsKey, CurrentServiceSettingsVersion);
             PlayerPrefs.Save();
         }
 
@@ -1478,16 +1534,18 @@ namespace TsukiVox.AudioPrototype
         {
             CancelCatalogRequests();
             ApplyOriginsFromService();
+            LoadDeviceCredential();
             SyncHostInput();
 
             if (client == null)
             {
-                client = new PlaylistClient(playlistOrigin, downloadOrigin, deviceId);
+                client = new PlaylistClient(playlistOrigin, downloadOrigin, deviceId, deviceToken);
             }
             else
             {
                 client.SetOrigins(playlistOrigin, downloadOrigin);
                 client.SetDeviceId(deviceId);
+                client.SetDeviceToken(deviceToken);
             }
 
             state = null;
@@ -1515,6 +1573,39 @@ namespace TsukiVox.AudioPrototype
             SearchStateChanged?.Invoke(this);
             AddItemStateChanged?.Invoke(this);
             SuggestStateChanged?.Invoke(this);
+        }
+
+        private void ApplyOnlineServiceOrigin(string origin, bool restartPolling)
+        {
+            onlineServiceOrigin = NormalizeOnlineOrigin(origin, DefaultOnlineServiceOrigin);
+            serviceMode = TsukiVoxServiceMode.Online;
+            PlayerPrefs.SetString(OnlineServiceOriginPrefsKey, onlineServiceOrigin);
+            PlayerPrefs.SetInt(ServiceModePrefsKey, (int)serviceMode);
+            PlayerPrefs.Save();
+            ApplyServiceConfiguration(restartPolling);
+        }
+
+        private void LoadDeviceCredential()
+        {
+            deviceToken = IsOnlineService
+                ? PlayerPrefs.GetString(DeviceTokenPrefsKey(onlineServiceOrigin), string.Empty).Trim()
+                : string.Empty;
+            hasValidatedDeviceCredential = !IsOnlineService;
+        }
+
+        private void SaveDeviceCredential()
+        {
+            if (!IsOnlineService || string.IsNullOrWhiteSpace(deviceToken))
+            {
+                return;
+            }
+            PlayerPrefs.SetString(DeviceTokenPrefsKey(onlineServiceOrigin), deviceToken);
+            PlayerPrefs.Save();
+        }
+
+        private static string DeviceTokenPrefsKey(string origin)
+        {
+            return $"{DeviceTokenPrefsPrefix}{Hash128.Compute(origin)}";
         }
 
         private void ApplyOriginsFromService()

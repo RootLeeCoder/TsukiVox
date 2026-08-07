@@ -258,6 +258,7 @@ namespace TsukiVox.AudioPrototype
         private Button serviceBackButton;
         private Button companionModeButton;
         private Button onlineModeButton;
+        private Button localDevelopmentModeButton;
         private TMP_Text serviceConnectionText;
         private Toggle voiceSearchEnabledToggle;
         private TMP_Text voiceSearchHintText;
@@ -1268,8 +1269,9 @@ namespace TsukiVox.AudioPrototype
         private void BuildServicePage()
         {
             BuildSubpageHeader(servicePage, "点歌服务", out serviceBackButton);
-            companionModeButton = CreateTextButton(servicePage, "Companion Mode", "局域网 Companion", new Vector2(-250f, 132f), new Vector2(480f, 60f), Surface, TextPrimary);
-            onlineModeButton = CreateTextButton(servicePage, "Online Mode", "在线服务", new Vector2(250f, 132f), new Vector2(480f, 60f), Surface, TextPrimary);
+            companionModeButton = CreateTextButton(servicePage, "Companion Mode", "局域网 Companion", new Vector2(-332f, 132f), new Vector2(314f, 60f), Surface, TextPrimary);
+            onlineModeButton = CreateTextButton(servicePage, "Online Mode", "公网服务", new Vector2(0f, 132f), new Vector2(314f, 60f), Surface, TextPrimary);
+            localDevelopmentModeButton = CreateTextButton(servicePage, "Local Development Mode", "本地开发", new Vector2(332f, 132f), new Vector2(314f, 60f), Surface, TextPrimary);
 
             CreateText(servicePage, "Address Label", "服务地址", 17, FontStyle.Bold, new Vector2(-402f, 75f), new Vector2(180f, 32f), TextAnchor.MiddleLeft, TextSecondary);
             serviceConnectionText = CreateText(servicePage, "Connection Status", "正在连接", 17, FontStyle.Bold, new Vector2(330f, 75f), new Vector2(320f, 32f), TextAnchor.MiddleRight, Accent);
@@ -1458,6 +1460,7 @@ namespace TsukiVox.AudioPrototype
 
             WireButton(companionModeButton, SelectCompanionService);
             WireButton(onlineModeButton, SelectOnlineService);
+            WireButton(localDevelopmentModeButton, SelectLocalDevelopmentService);
             WireButton(tencentProviderButton, () => SelectVoiceProvider("tencent"));
             WireButton(mimoProviderButton, () => SelectVoiceProvider("mimo"));
             WireButton(applyHostButton, ApplyServiceAddress);
@@ -1826,8 +1829,15 @@ namespace TsukiVox.AudioPrototype
                     : QuestPlaylistPrototype.DefaultHelperHostAddress;
             }
 
-            SetServiceModeButtonVisual(companionModeButton, playlistPrototype == null || !playlistPrototype.IsOnlineService);
-            SetServiceModeButtonVisual(onlineModeButton, playlistPrototype != null && playlistPrototype.IsOnlineService);
+            SetServiceModeButtonVisual(companionModeButton, playlistPrototype != null && !playlistPrototype.IsOnlineService);
+            SetServiceModeButtonVisual(
+                onlineModeButton,
+                playlistPrototype != null &&
+                playlistPrototype.IsOnlineService &&
+                !playlistPrototype.IsLocalDevelopmentService);
+            SetServiceModeButtonVisual(
+                localDevelopmentModeButton,
+                playlistPrototype != null && playlistPrototype.IsLocalDevelopmentService);
 
             if (voiceSearchEnabledToggle != null && playlistPrototype != null)
             {
@@ -2791,6 +2801,14 @@ namespace TsukiVox.AudioPrototype
         {
             playlistPrototype?.UseOnlineService();
             helperHostInput?.SetTextWithoutNotify(playlistPrototype?.ServiceAddress ?? QuestPlaylistPrototype.DefaultOnlineServiceOrigin);
+            RefreshSettings();
+        }
+
+        private void SelectLocalDevelopmentService()
+        {
+            playlistPrototype?.UseLocalDevelopmentService();
+            helperHostInput?.SetTextWithoutNotify(
+                playlistPrototype?.ServiceAddress ?? QuestPlaylistPrototype.LocalDevelopmentServiceOrigin);
             RefreshSettings();
         }
 
