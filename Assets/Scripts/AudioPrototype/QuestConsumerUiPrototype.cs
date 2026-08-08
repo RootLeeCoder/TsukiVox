@@ -263,6 +263,7 @@ namespace TsukiVox.AudioPrototype
         private Button onlineModeButton;
         private Button localDevelopmentModeButton;
         private TMP_Text serviceConnectionText;
+        private Toggle onlineFullCacheToggle;
         private Toggle voiceSearchEnabledToggle;
         private TMP_Text voiceSearchHintText;
         private TMP_Text voiceProviderLabelText;
@@ -1303,20 +1304,24 @@ namespace TsukiVox.AudioPrototype
             SetChildActive(servicePage, "Voice Divider", false);
             CreateDivider(servicePage, "Address Divider", new Vector2(0f, -32f), new Vector2(ContentWidth, 1f));
 
-            CreateText(servicePage, "Voice Title", "语音找歌", 19, FontStyle.Bold, new Vector2(-356f, -74f), new Vector2(280f, 32f), TextAnchor.MiddleLeft, TextPrimary);
-            voiceSearchEnabledToggle = CreateSwitch(servicePage, "Voice Search Switch", new Vector2(460f, -74f));
+            CreateText(servicePage, "Online Cache Title", "在线媒体完整缓存", 18, FontStyle.Bold, new Vector2(-330f, -76f), new Vector2(340f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            onlineFullCacheToggle = CreateSwitch(servicePage, "Online Full Cache Switch", new Vector2(460f, -76f));
+            CreateDivider(servicePage, "Online Cache Divider", new Vector2(0f, -116f), new Vector2(ContentWidth, 1f));
+
+            CreateText(servicePage, "Voice Title", "语音找歌", 19, FontStyle.Bold, new Vector2(-356f, -154f), new Vector2(280f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            voiceSearchEnabledToggle = CreateSwitch(servicePage, "Voice Search Switch", new Vector2(460f, -154f));
 
             // 识别供应商二选一，与上方服务模式相同的互斥按钮样式。
-            voiceProviderLabelText = CreateText(servicePage, "Provider Label", "识别供应商", 16, FontStyle.Normal, new Vector2(-380f, -132f), new Vector2(230f, 28f), TextAnchor.MiddleLeft, TextSecondary);
-            tencentProviderButton = CreateTextButton(servicePage, "Tencent Provider", "腾讯云", new Vector2(-60f, -132f), new Vector2(210f, 50f), Surface, TextPrimary);
-            mimoProviderButton = CreateTextButton(servicePage, "MiMo Provider", "小米 MiMo", new Vector2(170f, -132f), new Vector2(210f, 50f), Surface, TextPrimary);
+            voiceProviderLabelText = CreateText(servicePage, "Provider Label", "识别供应商", 16, FontStyle.Normal, new Vector2(-380f, -208f), new Vector2(230f, 28f), TextAnchor.MiddleLeft, TextSecondary);
+            tencentProviderButton = CreateTextButton(servicePage, "Tencent Provider", "腾讯云", new Vector2(-60f, -208f), new Vector2(210f, 50f), Surface, TextPrimary);
+            mimoProviderButton = CreateTextButton(servicePage, "MiMo Provider", "小米 MiMo", new Vector2(170f, -208f), new Vector2(210f, 50f), Surface, TextPrimary);
             voiceSearchHintText = CreateText(
                 servicePage,
                 "Voice Hint",
                 "关闭后不再采集或上传语音",
                 15,
                 FontStyle.Normal,
-                new Vector2(0f, -180f),
+                new Vector2(0f, -254f),
                 new Vector2(ContentWidth, 26f),
                 TextAnchor.MiddleLeft,
                 TextSecondary);
@@ -1484,6 +1489,15 @@ namespace TsukiVox.AudioPrototype
             WireButton(mimoProviderButton, () => SelectVoiceProvider("mimo"));
             WireButton(applyHostButton, ApplyServiceAddress);
             WireButton(defaultHostButton, ApplyDefaultServiceAddress);
+            if (onlineFullCacheToggle != null)
+            {
+                onlineFullCacheToggle.onValueChanged.RemoveAllListeners();
+                onlineFullCacheToggle.onValueChanged.AddListener(value =>
+                {
+                    videoScreenPrototype?.SetFullCacheOnlineMedia(value);
+                    RefreshAll();
+                });
+            }
             monitorOutputToggle.onValueChanged.RemoveAllListeners();
             monitorOutputToggle.onValueChanged.AddListener(value => audioPrototype?.SetMonitorOutput(value));
             safetyToggle.onValueChanged.RemoveAllListeners();
@@ -1557,11 +1571,18 @@ namespace TsukiVox.AudioPrototype
             else
             {
                 var index = Mathf.Clamp(state.currentIndex + 1, 1, Mathf.Max(count, 1));
+                var isCaching = videoScreenPrototype != null &&
+                                videoScreenPrototype.IsCachingVideo &&
+                                string.Equals(videoScreenPrototype.ActiveItemId, item.id, StringComparison.Ordinal);
                 songMetaText.text = item.status == PlaylistClient.StatusDownloading
                     ? $"正在准备歌曲 · {FormatProgress(item.progress)}"
+                    : isCaching
+                        ? $"正在缓存歌曲 · {FormatProgress(videoScreenPrototype.CacheProgress)}"
                     : $"正在播放 · 第 {index} / {count} 首";
                 songTitleText.text = SafeText(item.title, "未命名歌曲");
-                songDetailText.text = $"{FormatSource(item.sourceType)} · {FormatPlayback(item, state.playback)}";
+                songDetailText.text = isCaching
+                    ? $"{FormatSource(item.sourceType)} · 缓存到头显"
+                    : $"{FormatSource(item.sourceType)} · {FormatPlayback(item, state.playback)}";
             }
 
             var isPlaying = string.Equals(state?.playback, "playing", StringComparison.OrdinalIgnoreCase);
@@ -1775,18 +1796,24 @@ namespace TsukiVox.AudioPrototype
                 queueNumberTexts[rowIndex].color = isCurrent ? Accent : TextFaint;
                 var isPlaying = isCurrent &&
                                 item.IsReady &&
+                                !(videoScreenPrototype != null && videoScreenPrototype.IsCachingVideo) &&
                                 string.Equals(state.playback, "playing", StringComparison.OrdinalIgnoreCase);
-                queueStateTexts[rowIndex].gameObject.SetActive(isPlaying);
-                queueStateTexts[rowIndex].text = "播放中";
-                queueStateTexts[rowIndex].color = Accent;
-                var isPreparing = string.Equals(
+                var isCaching = isCurrent &&
+                                videoScreenPrototype != null &&
+                                videoScreenPrototype.IsCachingVideo &&
+                                string.Equals(videoScreenPrototype.ActiveItemId, item.id, StringComparison.Ordinal);
+                queueStateTexts[rowIndex].gameObject.SetActive(isPlaying || isCaching);
+                queueStateTexts[rowIndex].text = isCaching ? "缓存中" : "播放中";
+                queueStateTexts[rowIndex].color = isCaching ? Warm : Accent;
+                var isPreparingOnServer = string.Equals(
                     item.status,
                     PlaylistClient.StatusDownloading,
                     StringComparison.OrdinalIgnoreCase);
-                var progress = Mathf.Clamp01(item.progress);
-                queueProgressSliders[rowIndex].gameObject.SetActive(isPreparing);
+                var showProgress = isPreparingOnServer || isCaching;
+                var progress = Mathf.Clamp01(isCaching ? videoScreenPrototype.CacheProgress : item.progress);
+                queueProgressSliders[rowIndex].gameObject.SetActive(showProgress);
                 queueProgressSliders[rowIndex].SetValueWithoutNotify(progress);
-                queueProgressTexts[rowIndex].gameObject.SetActive(isPreparing);
+                queueProgressTexts[rowIndex].gameObject.SetActive(showProgress);
                 queueProgressTexts[rowIndex].text = FormatProgress(progress);
                 queuePlayButtons[rowIndex].interactable = canPlay;
                 queuePlayIcons[rowIndex].color = canPlay ? AccentStrong : TextFaint;
@@ -1866,6 +1893,14 @@ namespace TsukiVox.AudioPrototype
             SetServiceModeButtonVisual(
                 localDevelopmentModeButton,
                 playlistPrototype != null && playlistPrototype.IsLocalDevelopmentService);
+
+            if (onlineFullCacheToggle != null)
+            {
+                onlineFullCacheToggle.SetIsOnWithoutNotify(
+                    videoScreenPrototype != null && videoScreenPrototype.FullCacheOnlineMedia);
+                onlineFullCacheToggle.interactable = playlistPrototype != null && playlistPrototype.IsOnlineService;
+                RefreshSwitchVisual(onlineFullCacheToggle, Accent);
+            }
 
             if (voiceSearchEnabledToggle != null && playlistPrototype != null)
             {
@@ -1981,6 +2016,7 @@ namespace TsukiVox.AudioPrototype
                 : audioPrototype.IsMonitoring ? "音频正常" : "音频待机";
             var videoStatus = videoScreenPrototype == null
                 ? "视频缺失"
+                : videoScreenPrototype.IsCachingVideo ? $"视频缓存中 {FormatProgress(videoScreenPrototype.CacheProgress)}"
                 : videoScreenPrototype.IsPreparing ? "视频准备中" : "视频正常";
             diagnosticsHealthText.text = $"应用正常 · {audioStatus} · {videoStatus}";
             diagnosticsHealthText.color = audioPrototype == null || videoScreenPrototype == null ? Warm : TextPrimary;
@@ -1991,6 +2027,7 @@ namespace TsukiVox.AudioPrototype
 
             var videoSummary = videoScreenPrototype == null
                 ? "视频组件缺失"
+                : videoScreenPrototype.IsCachingVideo ? $"视频正在缓存 {FormatProgress(videoScreenPrototype.CacheProgress)}"
                 : videoScreenPrototype.IsPreparing ? "视频正在准备"
                 : videoScreenPrototype.IsPlaying ? "视频正在播放"
                 : "视频待机";

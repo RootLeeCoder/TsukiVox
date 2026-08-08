@@ -1077,13 +1077,18 @@ namespace TsukiVox.AudioPrototype
         public string durationText;
         public string sourceType;
         public string sourceInput;
+        public string jobId;
         public string playableUrl;
+        public string cacheUrl;
+        public string streamUrl;
         public string status;
         public string message;
         public float progress;
 
         public bool IsReady => string.Equals(status, PlaylistClient.StatusReady, StringComparison.OrdinalIgnoreCase) &&
-                               !string.IsNullOrWhiteSpace(playableUrl);
+                               (!string.IsNullOrWhiteSpace(playableUrl) ||
+                                !string.IsNullOrWhiteSpace(cacheUrl) ||
+                                !string.IsNullOrWhiteSpace(streamUrl));
     }
 
     [Serializable]

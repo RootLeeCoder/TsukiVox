@@ -7,7 +7,7 @@ TsukiVox 是面向 Meta Quest 3 的原生单人 VR K 歌客户端。项目从 We
 ## 当前能力
 
 - 使用 Quest 3 内置麦克风进行实时返听，提供 Dry Reference、KTV Room、Strong KTV 和 Safe Small Room 四档预设。
-- 使用 `VideoPlayer + RenderTexture` 在房间大屏播放 ready 视频；在线服务通过 HTTP Range 流式播放，Companion 保留远端文件缓存，再按实际宽高比显示。
+- 使用 `VideoPlayer + RenderTexture` 在房间大屏播放 ready 视频；在线服务优先 HLS、回退 MP4 Range，并可按设置或卡顿自动完整缓存，Companion 保留远端文件缓存。
 - 程序化生成单人 KTV 包厢、沙发、茶几、大屏、灯带和麦克风电平反馈。
 - 右手手柄显示为麦克风，左手显示为多色荧光棒；灯光和道具亮度响应输入电平。
 - 茶几平板提供主页、搜索点歌、人声、播放队列、设置、点歌服务、麦克风防碰撞和诊断界面。
@@ -78,6 +78,8 @@ https://api.tsukivox.com
 点歌服务页同时保留“本地开发”入口，可快速切换到 `http://192.168.50.41:8080`。
 同一 origin 必须同时提供设备登记、搜索、队列控制和媒体下载。公网服务使用 HTTPS，
 客户端只保存每个 origin 独立的可撤销设备凭证，不持有云服务密钥或 Cookie。
+“在线媒体完整缓存”默认关闭；开启后公网和本地开发服务都会先完整缓存 MP4，并在主页和
+播放队列显示百分比。关闭时优先 HLS，HLS 不兼容会回退 MP4 Range，连续卡顿再自动缓存并续播。
 
 服务模式、Companion 地址、在线服务地址和各 origin 的设备凭证分别保存在应用私有的
 `PlayerPrefs`。每台 Quest 还会生成稳定设备 ID，并通过 `X-TsukiVox-Device-Id` 与 Bearer
@@ -93,7 +95,7 @@ https://api.tsukivox.com
 | `POST` | `/api/playlist/items` | 把搜索结果加入队列，可请求立即播放 |
 | `GET` | `/downloads/...` | 获取 ready 条目的媒体文件 |
 
-客户端会解析完整 `playableUrl`、`/downloads/...` 相对路径和直接 MP4/WebM 路径。队列响应中的 `updatedAt` 用于拒绝晚到的旧状态。
+客户端会解析 `streamUrl`、`cacheUrl`、兼容字段 `playableUrl`、`/downloads/...` 相对路径和直接 MP4/WebM 路径。队列响应中的 `updatedAt` 用于拒绝晚到的旧状态；同一媒体的签名 query 轮换不会触发重新加载。
 
 ## Quest 交互
 
@@ -158,7 +160,7 @@ pwsh -NoLogo -NoProfile -File .\Tools\Deploy-Quest.ps1 -Release
 | `PlaylistClient.cs` | HTTP 搜索、队列状态、播放控制、点播请求和 URL 解析 |
 | `QuestPlaylistPrototype.cs` | 服务模式、持久化设备 ID、轮询及点歌状态机 |
 | `QuestAndroidKeyboardInput.cs` | Quest 系统键盘与 TMP 输入框桥接 |
-| `QuestVideoScreenPrototype.cs` | 在线流式播放、Companion 缓存、视频探测、prepare、宽高比和播放同步 |
+| `QuestVideoScreenPrototype.cs` | HLS/MP4 流式播放、卡顿回退、完整缓存、视频探测、prepare、宽高比和播放同步 |
 | `QuestKtvRoomPrototype.cs` | KTV 房间几何、材质、灯光反馈和空间锚点 |
 | `QuestHandheldPropsPrototype.cs` | 右手麦克风、左手荧光棒及麦克风防贴脸触觉 |
 | `QuestConsumerUiPrototype.cs` | 普通用户控制面板、搜索点歌、服务设置和诊断抽屉 |
@@ -177,7 +179,7 @@ pwsh -NoLogo -NoProfile -File .\Tools\Deploy-Quest.ps1 -Release
 - 四档人声预设、监听音量、安全限制，以及是否出现削波、啸叫或明显拖拍。
 - Companion/在线服务切换、地址持久化、不同设备队列隔离和断网恢复。
 - 中文系统键盘、搜索分页、点播成功/失败状态和队列更新。
-- ready 视频的在线 Range 流式播放、Companion 缓存、首帧、宽高比、播放/暂停/重播/切歌和结束后 `next`。
+- ready 视频的在线 HLS、MP4 Range 回退、完整缓存开关及进度、卡顿自动续播、Companion 缓存、首帧、宽高比、播放/暂停/重播/切歌和结束后 `next`。
 - 0/30/60/90 度下平板底板、屏幕和 Canvas 共面，所有页面文字无重叠且按钮可命中。
 - 麦克风防碰撞的轻震、强震、强度、校准、关闭和持久化。
 - OpenXR、GameActivity、Build ID 和完整诊断复制。

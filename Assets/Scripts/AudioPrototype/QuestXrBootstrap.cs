@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SpatialTracking;
 using UnityEngine.XR;
@@ -16,12 +17,20 @@ namespace TsukiVox.AudioPrototype
         private const float StableYawToleranceDegrees = 4f;
         private const float StablePositionToleranceMeters = 0.05f;
         private const float AlignmentTimeoutSeconds = 8f;
+        private const float InputSubsystemRefreshSeconds = 1f;
+        private const float HeadYawDiscontinuityDegrees = 45f;
 
         private static Transform trackingOrigin;
 
+        private readonly List<XRInputSubsystem> inputSubsystems = new List<XRInputSubsystem>();
+        private readonly List<XRInputSubsystem> subscribedInputSubsystems = new List<XRInputSubsystem>();
         private Coroutine alignmentCoroutine;
         private int alignmentRequestVersion;
+        private float nextInputSubsystemRefreshAt;
+        private float lastObservedHeadYaw;
         private bool hasStarted;
+        private bool hasAppliedAlignment;
+        private bool hasObservedHeadYaw;
 
         public static QuestXrBootstrap EnsureSceneBootstrap()
         {
@@ -90,7 +99,19 @@ namespace TsukiVox.AudioPrototype
         {
             LogLoaderState();
             hasStarted = true;
-            RequestStartupAlignment();
+            RefreshInputSubsystemSubscriptions();
+            RequestAlignment("startup");
+        }
+
+        private void Update()
+        {
+            if (Time.unscaledTime >= nextInputSubsystemRefreshAt)
+            {
+                nextInputSubsystemRefreshAt = Time.unscaledTime + InputSubsystemRefreshSeconds;
+                RefreshInputSubsystemSubscriptions();
+            }
+
+            DetectTrackingSpaceDiscontinuity();
         }
 
         private void OnApplicationFocus(bool hasFocus)
@@ -102,10 +123,12 @@ namespace TsukiVox.AudioPrototype
 
             if (hasFocus)
             {
-                RequestStartupAlignment();
+                RefreshInputSubsystemSubscriptions();
+                RequestAlignment("application focus restored");
             }
             else
             {
+                hasObservedHeadYaw = false;
                 CancelPendingAlignment();
             }
         }
@@ -119,17 +142,20 @@ namespace TsukiVox.AudioPrototype
 
             if (isPaused)
             {
+                hasObservedHeadYaw = false;
                 CancelPendingAlignment();
             }
             else
             {
-                RequestStartupAlignment();
+                RefreshInputSubsystemSubscriptions();
+                RequestAlignment("application resumed");
             }
         }
 
         private void OnDestroy()
         {
             CancelPendingAlignment();
+            UnsubscribeFromInputSubsystems();
             if (trackingOrigin == transform)
             {
                 trackingOrigin = null;
@@ -183,11 +209,11 @@ namespace TsukiVox.AudioPrototype
             poseDriver.updateType = TrackedPoseDriver.UpdateType.UpdateAndBeforeRender;
         }
 
-        private void RequestStartupAlignment()
+        private void RequestAlignment(string reason)
         {
             CancelPendingAlignment();
             ConfigureMainCameraTracking();
-            alignmentCoroutine = StartCoroutine(AlignWhenTrackingIsStable(alignmentRequestVersion));
+            alignmentCoroutine = StartCoroutine(AlignWhenTrackingIsStable(alignmentRequestVersion, reason));
         }
 
         private void CancelPendingAlignment()
@@ -202,7 +228,7 @@ namespace TsukiVox.AudioPrototype
             alignmentCoroutine = null;
         }
 
-        private IEnumerator AlignWhenTrackingIsStable(int requestVersion)
+        private IEnumerator AlignWhenTrackingIsStable(int requestVersion, string reason)
         {
             var startedAt = Time.unscaledTime;
             var candidateStartedAt = 0f;
@@ -239,7 +265,7 @@ namespace TsukiVox.AudioPrototype
                         }
                         else if (now - candidateStartedAt >= StablePoseDurationSeconds)
                         {
-                            ApplyTrackingOriginAlignment(position, rotation, "stable");
+                            ApplyTrackingOriginAlignment(position, rotation, $"{reason}, stable");
                             alignmentCoroutine = null;
                             yield break;
                         }
@@ -250,7 +276,7 @@ namespace TsukiVox.AudioPrototype
                 {
                     if (hasLastPose && TryGetHorizontalYaw(lastRotation, out _))
                     {
-                        ApplyTrackingOriginAlignment(lastPosition, lastRotation, "timeout fallback");
+                        ApplyTrackingOriginAlignment(lastPosition, lastRotation, $"{reason}, timeout fallback");
                     }
                     else
                     {
@@ -279,11 +305,104 @@ namespace TsukiVox.AudioPrototype
             var originPosition = QuestKtvRoomPrototype.PlayerStartPosition - originRotation * horizontalHeadPosition;
             originPosition.y = QuestKtvRoomPrototype.PlayerStartPosition.y;
             transform.SetPositionAndRotation(originPosition, originRotation);
+            lastObservedHeadYaw = sourceYaw;
+            hasObservedHeadYaw = true;
+            hasAppliedAlignment = true;
 
             Debug.Log(
-                $"[TsukiVox XR] Startup alignment applied ({reason}); " +
+                $"[TsukiVox XR] Reference-space alignment applied ({reason}); " +
                 $"headYaw={sourceYaw:F1}, correctionYaw={-sourceYaw:F1}, " +
                 $"headXZ=({headPosition.x:F2}, {headPosition.z:F2}).");
+        }
+
+        private void RefreshInputSubsystemSubscriptions()
+        {
+            inputSubsystems.Clear();
+            SubsystemManager.GetSubsystems(inputSubsystems);
+
+            for (var index = subscribedInputSubsystems.Count - 1; index >= 0; index -= 1)
+            {
+                var subsystem = subscribedInputSubsystems[index];
+                if (subsystem != null && inputSubsystems.Contains(subsystem))
+                {
+                    continue;
+                }
+
+                if (subsystem != null)
+                {
+                    subsystem.trackingOriginUpdated -= OnTrackingOriginUpdated;
+                }
+
+                subscribedInputSubsystems.RemoveAt(index);
+            }
+
+            for (var index = 0; index < inputSubsystems.Count; index += 1)
+            {
+                var subsystem = inputSubsystems[index];
+                if (subsystem == null || subscribedInputSubsystems.Contains(subsystem))
+                {
+                    continue;
+                }
+
+                subsystem.trackingOriginUpdated -= OnTrackingOriginUpdated;
+                subsystem.trackingOriginUpdated += OnTrackingOriginUpdated;
+                subscribedInputSubsystems.Add(subsystem);
+            }
+        }
+
+        private void UnsubscribeFromInputSubsystems()
+        {
+            for (var index = 0; index < subscribedInputSubsystems.Count; index += 1)
+            {
+                var subsystem = subscribedInputSubsystems[index];
+                if (subsystem != null)
+                {
+                    subsystem.trackingOriginUpdated -= OnTrackingOriginUpdated;
+                }
+            }
+
+            subscribedInputSubsystems.Clear();
+            inputSubsystems.Clear();
+        }
+
+        private void OnTrackingOriginUpdated(XRInputSubsystem subsystem)
+        {
+            if (!hasStarted || !isActiveAndEnabled)
+            {
+                return;
+            }
+
+            hasObservedHeadYaw = false;
+            var mode = subsystem == null ? TrackingOriginModeFlags.Unknown : subsystem.GetTrackingOriginMode();
+            Debug.Log($"[TsukiVox XR] Quest tracking origin updated; scheduling alignment. mode={mode}.");
+            RequestAlignment("Quest recenter event");
+        }
+
+        private void DetectTrackingSpaceDiscontinuity()
+        {
+            if (!hasAppliedAlignment || alignmentCoroutine != null ||
+                !TryGetHeadTrackingPose(out _, out var rotation) ||
+                !TryGetHorizontalYaw(rotation, out var yaw))
+            {
+                return;
+            }
+
+            if (hasObservedHeadYaw)
+            {
+                var yawDelta = Mathf.Abs(Mathf.DeltaAngle(lastObservedHeadYaw, yaw));
+                if (yawDelta >= HeadYawDiscontinuityDegrees)
+                {
+                    hasObservedHeadYaw = false;
+                    Debug.Log(
+                        $"[TsukiVox XR] Tracking-space yaw jumped {yawDelta:F1} degrees; " +
+                        "scheduling recenter alignment fallback.");
+                    RequestAlignment("tracking-space yaw discontinuity");
+                    return;
+                }
+            }
+
+            lastObservedHeadYaw = yaw;
+            hasObservedHeadYaw = true;
         }
 
         private static bool TryGetHeadTrackingPose(out Vector3 position, out Quaternion rotation)
