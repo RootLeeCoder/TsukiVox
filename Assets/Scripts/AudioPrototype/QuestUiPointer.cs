@@ -662,7 +662,13 @@ namespace TsukiVox.AudioPrototype
 
             position = positionControl.ReadValue();
             rotation = NormalizeRotation(rawRotation);
-            return IsFinite(position) && IsUsableRotation(rotation);
+            if (!IsFinite(position) || !IsUsableRotation(rotation))
+            {
+                return false;
+            }
+
+            QuestXrBootstrap.TransformTrackingPose(ref position, ref rotation);
+            return true;
         }
 
         private static bool IsControllerTracked(InputSystemDevice device)
