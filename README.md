@@ -7,7 +7,7 @@ TsukiVox 是面向 Meta Quest 3 的原生单人 VR K 歌客户端。项目从 We
 ## 当前能力
 
 - 使用 Quest 3 内置麦克风进行实时返听，提供 Dry Reference、KTV Room、Strong KTV 和 Safe Small Room 四档预设。
-- 使用 `VideoPlayer + RenderTexture` 在房间大屏播放 ready 视频；Quest 端先缓存远端文件，再按实际宽高比显示。
+- 使用 `VideoPlayer + RenderTexture` 在房间大屏播放 ready 视频；在线服务通过 HTTP Range 流式播放，Companion 保留远端文件缓存，再按实际宽高比显示。
 - 程序化生成单人 KTV 包厢、沙发、茶几、大屏、灯带和麦克风电平反馈。
 - 右手手柄显示为麦克风，左手显示为多色荧光棒；灯光和道具亮度响应输入电平。
 - 茶几平板提供主页、搜索点歌、人声、播放队列、设置、点歌服务、麦克风防碰撞和诊断界面。
@@ -158,7 +158,7 @@ pwsh -NoLogo -NoProfile -File .\Tools\Deploy-Quest.ps1 -Release
 | `PlaylistClient.cs` | HTTP 搜索、队列状态、播放控制、点播请求和 URL 解析 |
 | `QuestPlaylistPrototype.cs` | 服务模式、持久化设备 ID、轮询及点歌状态机 |
 | `QuestAndroidKeyboardInput.cs` | Quest 系统键盘与 TMP 输入框桥接 |
-| `QuestVideoScreenPrototype.cs` | 视频探测、缓存、prepare、宽高比和播放同步 |
+| `QuestVideoScreenPrototype.cs` | 在线流式播放、Companion 缓存、视频探测、prepare、宽高比和播放同步 |
 | `QuestKtvRoomPrototype.cs` | KTV 房间几何、材质、灯光反馈和空间锚点 |
 | `QuestHandheldPropsPrototype.cs` | 右手麦克风、左手荧光棒及麦克风防贴脸触觉 |
 | `QuestConsumerUiPrototype.cs` | 普通用户控制面板、搜索点歌、服务设置和诊断抽屉 |
@@ -177,7 +177,7 @@ pwsh -NoLogo -NoProfile -File .\Tools\Deploy-Quest.ps1 -Release
 - 四档人声预设、监听音量、安全限制，以及是否出现削波、啸叫或明显拖拍。
 - Companion/在线服务切换、地址持久化、不同设备队列隔离和断网恢复。
 - 中文系统键盘、搜索分页、点播成功/失败状态和队列更新。
-- ready 视频缓存、首帧、宽高比、播放/暂停/重播/切歌和结束后 `next`。
+- ready 视频的在线 Range 流式播放、Companion 缓存、首帧、宽高比、播放/暂停/重播/切歌和结束后 `next`。
 - 0/30/60/90 度下平板底板、屏幕和 Canvas 共面，所有页面文字无重叠且按钮可命中。
 - 麦克风防碰撞的轻震、强震、强度、校准、关闭和持久化。
 - OpenXR、GameActivity、Build ID 和完整诊断复制。

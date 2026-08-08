@@ -743,6 +743,11 @@ namespace TsukiVox.AudioPrototype
 
         private bool ShouldCacheRemoteVideos()
         {
+            if (playlistPrototype != null && playlistPrototype.IsOnlineService)
+            {
+                return false;
+            }
+
             return cacheRemoteVideosBeforePlayback || Application.platform == RuntimePlatform.Android;
         }
 

@@ -1080,6 +1080,7 @@ namespace TsukiVox.AudioPrototype
         public string playableUrl;
         public string status;
         public string message;
+        public float progress;
 
         public bool IsReady => string.Equals(status, PlaylistClient.StatusReady, StringComparison.OrdinalIgnoreCase) &&
                                !string.IsNullOrWhiteSpace(playableUrl);

@@ -36,8 +36,9 @@ namespace TsukiVox.AudioPrototype
         private const float SearchResultCoverRetrySeconds = 30f;
         private const int SearchResultSkeletonElementCount = 7;
         private const float MicClearanceStep = 0.0025f;
-        private const float QueueDrawerWidth = 510f;
-        private const float QueueDrawerContentWidth = 450f;
+        private const float QueueDrawerWidth = 650f;
+        private const float QueueDrawerContentWidth = 590f;
+        private const float QueueRowWidth = 580f;
         private const float EnqueueConfirmationSeconds = 6.5f;
 
         private Color ScreenBackground => palette.ScreenBackground;
@@ -190,6 +191,8 @@ namespace TsukiVox.AudioPrototype
         private readonly TMP_Text[] queueMetaTexts = new TMP_Text[QueueRowCount];
         private readonly TMP_Text[] queueNumberTexts = new TMP_Text[QueueRowCount];
         private readonly TMP_Text[] queueStateTexts = new TMP_Text[QueueRowCount];
+        private readonly Slider[] queueProgressSliders = new Slider[QueueRowCount];
+        private readonly TMP_Text[] queueProgressTexts = new TMP_Text[QueueRowCount];
         private readonly Button[] queuePlayButtons = new Button[QueueRowCount];
         private readonly QuestUiIcon[] queuePlayIcons = new QuestUiIcon[QueueRowCount];
         private readonly Button[] queueRemoveButtons = new Button[QueueRowCount];
@@ -1098,13 +1101,13 @@ namespace TsukiVox.AudioPrototype
             SetChildActive(queueDrawer, "Current Item", false);
 
             CreateDivider(queueDrawer, "Header Divider", new Vector2(0f, 216f), new Vector2(QueueDrawerContentWidth, 1f));
-            CreateText(queueDrawer, "Title", "播放队列", 26, FontStyle.Bold, new Vector2(-100f, 248f), new Vector2(250f, 46f), TextAnchor.MiddleLeft, TextPrimary);
-            queueDrawerCountText = CreateText(queueDrawer, "Count", "0 首", 15, FontStyle.Normal, new Vector2(64f, 248f), new Vector2(80f, 36f), TextAnchor.MiddleLeft, TextSecondary);
+            CreateText(queueDrawer, "Title", "播放队列", 26, FontStyle.Bold, new Vector2(-170f, 248f), new Vector2(250f, 46f), TextAnchor.MiddleLeft, TextPrimary);
+            queueDrawerCountText = CreateText(queueDrawer, "Count", "0 首", 15, FontStyle.Normal, new Vector2(-6f, 248f), new Vector2(80f, 36f), TextAnchor.MiddleLeft, TextSecondary);
             closeQueueDrawerButton = CreateIconButton(
                 queueDrawer,
                 "Close",
                 QuestUiIconKind.Close,
-                new Vector2(215f, 248f),
+                new Vector2(285f, 248f),
                 new Vector2(46f, 46f),
                 Surface,
                 TextPrimary,
@@ -1114,7 +1117,7 @@ namespace TsukiVox.AudioPrototype
                 queueDrawer,
                 "Queue List Viewport",
                 new Vector2(-5f, 10f),
-                new Vector2(440f, 408f));
+                new Vector2(QueueRowWidth, 408f));
             EnsureSurface(queueListViewport, Color.clear, 0f, true);
             GetOrAddComponent<RectMask2D>(queueListViewport.gameObject).padding = Vector4.zero;
             queueSwipeHandler = GetOrAddComponent<QuestQueueSwipeHandler>(queueListViewport.gameObject);
@@ -1134,26 +1137,42 @@ namespace TsukiVox.AudioPrototype
                     queueListViewport,
                     rowName,
                     new Vector2(0f, firstY - index * 64f),
-                    new Vector2(440f, 62f));
+                    new Vector2(QueueRowWidth, 62f));
                 queueRows[index] = row;
                 queueRowSurfaces[index] = EnsureSurface(row, Color.clear, 6f, false);
                 queueRowGroups[index] = GetOrAddComponent<CanvasGroup>(row.gameObject);
-                CreateDivider(row, "Divider", new Vector2(0f, -31f), new Vector2(440f, 1f));
-                queueNumberTexts[index] = CreateText(row, "Number", (index + 1).ToString(), 13, FontStyle.Normal, new Vector2(-208f, 0f), new Vector2(20f, 30f), TextAnchor.MiddleCenter, TextFaint);
-                CreateQueueCover(row, "Cover", index, new Vector2(-174f, 0f), new Vector2(46f, 44f));
-                queueTitleTexts[index] = CreateText(row, "Title", "歌曲", 15, FontStyle.Bold, new Vector2(-30f, 10f), new Vector2(204f, 27f), TextAnchor.MiddleLeft, TextPrimary);
+                CreateDivider(row, "Divider", new Vector2(0f, -31f), new Vector2(QueueRowWidth, 1f));
+                queueNumberTexts[index] = CreateText(row, "Number", (index + 1).ToString(), 13, FontStyle.Normal, new Vector2(-278f, 0f), new Vector2(20f, 30f), TextAnchor.MiddleCenter, TextFaint);
+                CreateQueueCover(row, "Cover", index, new Vector2(-244f, 0f), new Vector2(46f, 44f));
+                queueTitleTexts[index] = CreateText(row, "Title", "歌曲", 15, FontStyle.Bold, new Vector2(-62f, 12f), new Vector2(310f, 25f), TextAnchor.MiddleLeft, TextPrimary);
                 queueTitleTexts[index].textWrappingMode = TextWrappingModes.NoWrap;
                 queueTitleTexts[index].overflowMode = TextOverflowModes.Ellipsis;
-                queueMetaTexts[index] = CreateText(row, "Meta", "等待", 12, FontStyle.Normal, new Vector2(-30f, -13f), new Vector2(204f, 21f), TextAnchor.MiddleLeft, TextSecondary);
+                queueMetaTexts[index] = CreateText(row, "Meta", "等待", 12, FontStyle.Normal, new Vector2(-80f, -9f), new Vector2(240f, 19f), TextAnchor.MiddleLeft, TextSecondary);
                 queueMetaTexts[index].textWrappingMode = TextWrappingModes.NoWrap;
                 queueMetaTexts[index].overflowMode = TextOverflowModes.Ellipsis;
-                queueStateTexts[index] = CreateText(row, "State", "播放中", 12, FontStyle.Bold, new Vector2(100f, 0f), new Vector2(60f, 28f), TextAnchor.MiddleRight, TextSecondary);
+                queueProgressSliders[index] = CreateSlider(
+                    row,
+                    "Preparation Progress",
+                    new Vector2(-82f, -23f),
+                    new Vector2(270f, 10f),
+                    false);
+                queueProgressTexts[index] = CreateText(
+                    row,
+                    "Preparation Percent",
+                    "0%",
+                    11,
+                    FontStyle.Bold,
+                    new Vector2(87f, -22f),
+                    new Vector2(54f, 18f),
+                    TextAnchor.MiddleRight,
+                    AccentStrong);
+                queueStateTexts[index] = CreateText(row, "State", "播放中", 12, FontStyle.Bold, new Vector2(170f, 0f), new Vector2(70f, 28f), TextAnchor.MiddleRight, TextSecondary);
                 queueStateTexts[index].gameObject.SetActive(false);
                 queuePlayButtons[index] = CreateIconButton(
                     row,
                     "Play",
                     QuestUiIconKind.Play,
-                    new Vector2(153f, 0f),
+                    new Vector2(223f, 0f),
                     new Vector2(34f, 34f),
                     SurfaceRaised,
                     AccentStrong,
@@ -1163,7 +1182,7 @@ namespace TsukiVox.AudioPrototype
                     row,
                     "Remove",
                     QuestUiIconKind.Trash,
-                    new Vector2(194f, 0f),
+                    new Vector2(264f, 0f),
                     new Vector2(34f, 34f),
                     SurfaceRaised,
                     Danger,
@@ -1171,7 +1190,7 @@ namespace TsukiVox.AudioPrototype
                 ConfigureHover(queueRemoveButtons[index], null, string.Empty);
             }
 
-            queueScrollbarRoot = EnsureRect(queueDrawer, "Queue Scrollbar", new Vector2(236f, 2f), new Vector2(14f, 382f));
+            queueScrollbarRoot = EnsureRect(queueDrawer, "Queue Scrollbar", new Vector2(306f, 2f), new Vector2(14f, 382f));
             EnsureSurface(queueScrollbarRoot, Color.clear, 7f, true);
             EnsureSurface(
                 EnsureRect(queueScrollbarRoot, "Track", Vector2.zero, new Vector2(8f, 374f)),
@@ -1198,16 +1217,16 @@ namespace TsukiVox.AudioPrototype
                 15,
                 FontStyle.Normal,
                 new Vector2(0f, -3f),
-                new Vector2(410f, 40f),
+                new Vector2(550f, 40f),
                 TextAnchor.MiddleCenter,
                 TextSecondary);
             CreateDivider(queueDrawer, "Footer Divider", new Vector2(0f, -194f), new Vector2(QueueDrawerContentWidth, 1f));
-            queueFooterText = CreateText(queueDrawer, "Queue Footer", "还没有点播歌曲", 13, FontStyle.Normal, new Vector2(-100f, -232f), new Vector2(220f, 32f), TextAnchor.MiddleLeft, TextSecondary);
+            queueFooterText = CreateText(queueDrawer, "Queue Footer", "还没有点播歌曲", 13, FontStyle.Normal, new Vector2(-170f, -232f), new Vector2(300f, 32f), TextAnchor.MiddleLeft, TextSecondary);
             SetChildActive(queueDrawer, "Clear Queue", false);
-            clearPlayedButton = CreateTextButton(queueDrawer, "Clear Played", "清空已播", new Vector2(70f, -232f), new Vector2(96f, 38f), Surface, TextPrimary);
+            clearPlayedButton = CreateTextButton(queueDrawer, "Clear Played", "清空已播", new Vector2(140f, -232f), new Vector2(96f, 38f), Surface, TextPrimary);
             clearPlayedButton.GetComponentInChildren<TMP_Text>(true).fontSize = 13f;
             ConfigureHover(clearPlayedButton, null, string.Empty);
-            clearAllQueueButton = CreateTextButton(queueDrawer, "Clear Except Current", "清空全部", new Vector2(174f, -232f), new Vector2(96f, 38f), Surface, TextPrimary);
+            clearAllQueueButton = CreateTextButton(queueDrawer, "Clear Except Current", "清空全部", new Vector2(244f, -232f), new Vector2(96f, 38f), Surface, TextPrimary);
             clearAllQueueButton.GetComponentInChildren<TMP_Text>(true).fontSize = 13f;
             ConfigureHover(clearAllQueueButton, null, string.Empty);
 
@@ -1539,7 +1558,7 @@ namespace TsukiVox.AudioPrototype
             {
                 var index = Mathf.Clamp(state.currentIndex + 1, 1, Mathf.Max(count, 1));
                 songMetaText.text = item.status == PlaylistClient.StatusDownloading
-                    ? "正在准备歌曲"
+                    ? $"正在准备歌曲 · {FormatProgress(item.progress)}"
                     : $"正在播放 · 第 {index} / {count} 首";
                 songTitleText.text = SafeText(item.title, "未命名歌曲");
                 songDetailText.text = $"{FormatSource(item.sourceType)} · {FormatPlayback(item, state.playback)}";
@@ -1760,6 +1779,15 @@ namespace TsukiVox.AudioPrototype
                 queueStateTexts[rowIndex].gameObject.SetActive(isPlaying);
                 queueStateTexts[rowIndex].text = "播放中";
                 queueStateTexts[rowIndex].color = Accent;
+                var isPreparing = string.Equals(
+                    item.status,
+                    PlaylistClient.StatusDownloading,
+                    StringComparison.OrdinalIgnoreCase);
+                var progress = Mathf.Clamp01(item.progress);
+                queueProgressSliders[rowIndex].gameObject.SetActive(isPreparing);
+                queueProgressSliders[rowIndex].SetValueWithoutNotify(progress);
+                queueProgressTexts[rowIndex].gameObject.SetActive(isPreparing);
+                queueProgressTexts[rowIndex].text = FormatProgress(progress);
                 queuePlayButtons[rowIndex].interactable = canPlay;
                 queuePlayIcons[rowIndex].color = canPlay ? AccentStrong : TextFaint;
                 queueRemoveButtons[rowIndex].interactable = canControl;
@@ -4139,10 +4167,17 @@ namespace TsukiVox.AudioPrototype
             var author = string.IsNullOrWhiteSpace(item.author)
                 ? FormatSource(item.sourceType)
                 : item.author.Trim();
-            var detail = string.IsNullOrWhiteSpace(item.durationText)
+            var detail = item.status == PlaylistClient.StatusDownloading
+                ? "正在准备"
+                : string.IsNullOrWhiteSpace(item.durationText)
                 ? FormatItemStatus(item.status)
                 : item.durationText.Trim();
             return $"{author} · {detail}";
+        }
+
+        private static string FormatProgress(float progress)
+        {
+            return $"{Mathf.RoundToInt(Mathf.Clamp01(progress) * 100f)}%";
         }
 
         private static string NormalizeCatalogItemId(BilibiliCatalogItem item)
