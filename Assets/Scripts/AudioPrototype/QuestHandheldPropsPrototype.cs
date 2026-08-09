@@ -30,9 +30,18 @@ namespace TsukiVox.AudioPrototype
         public const float MinimumClearanceGap = 0.005f;
         public const float MinimumHapticStrength = 0.2f;
         public const float MaximumHapticStrength = 1f;
-        public const float DefaultWarningClearance = 0.0625f;
-        public const float DefaultCriticalClearance = 0.0175f;
+        public const float DefaultWarningClearance = 0.03f;
+        public const float DefaultCriticalClearance = 0.008f;
         public const float DefaultHapticStrength = 1f;
+        public const float DefaultMouthOffsetX = 0f;
+        public const float DefaultMouthOffsetY = -0.11f;
+        public const float DefaultMouthOffsetZ = 0.02f;
+        public const float MinimumMouthOffsetX = -0.05f;
+        public const float MaximumMouthOffsetX = 0.05f;
+        public const float MinimumMouthOffsetY = -0.18f;
+        public const float MaximumMouthOffsetY = -0.05f;
+        public const float MinimumMouthOffsetZ = 0f;
+        public const float MaximumMouthOffsetZ = 0.08f;
 
         // WebXR mounted props on the grip at (0, 0.02, +0.055) with geometry extending
         // toward grip -Z. Unity/OpenXR use the same grip pose but flip the Z axis, so
@@ -42,9 +51,12 @@ namespace TsukiVox.AudioPrototype
         private const float WarningHapticDuration = 0.035f;
         private const float CriticalHapticDuration = 0.075f;
         private const string MicFaceEnabledPrefsKey = "TsukiVox.MicFaceHaptics.Enabled.v1";
-        private const string MicFaceWarningClearancePrefsKey = "TsukiVox.MicFaceHaptics.WarningClearance.v1";
-        private const string MicFaceCriticalClearancePrefsKey = "TsukiVox.MicFaceHaptics.CriticalClearance.v1";
+        private const string MicFaceWarningClearancePrefsKey = "TsukiVox.MicFaceHaptics.WarningClearance.v2";
+        private const string MicFaceCriticalClearancePrefsKey = "TsukiVox.MicFaceHaptics.CriticalClearance.v2";
         private const string MicFaceStrengthPrefsKey = "TsukiVox.MicFaceHaptics.Strength.v1";
+        private const string MicFaceMouthOffsetXPrefsKey = "TsukiVox.MicFaceHaptics.MouthOffsetX.v1";
+        private const string MicFaceMouthOffsetYPrefsKey = "TsukiVox.MicFaceHaptics.MouthOffsetY.v1";
+        private const string MicFaceMouthOffsetZPrefsKey = "TsukiVox.MicFaceHaptics.MouthOffsetZ.v1";
 
         public readonly struct GlowstickColor
         {
@@ -92,9 +104,9 @@ namespace TsukiVox.AudioPrototype
 
         [Header("Microphone Face Proximity Haptics")]
         [SerializeField] private bool micFaceHapticsEnabled = true;
-        [SerializeField] private Vector3 mouthLocalOffset = new Vector3(0f, -0.11f, 0.06f);
-        [SerializeField, Range(MicrophoneGrilleRadius + MinimumWarningClearance, MicrophoneGrilleRadius + MaximumWarningClearance)] private float micFaceWarningDistance = 0.1f;
-        [SerializeField, Range(MicrophoneGrilleRadius + MinimumCriticalClearance, MicrophoneGrilleRadius + MaximumCriticalClearance)] private float micFaceCriticalDistance = 0.055f;
+        [SerializeField] private Vector3 mouthLocalOffset = new Vector3(DefaultMouthOffsetX, DefaultMouthOffsetY, DefaultMouthOffsetZ);
+        [SerializeField, Range(MicrophoneGrilleRadius + MinimumWarningClearance, MicrophoneGrilleRadius + MaximumWarningClearance)] private float micFaceWarningDistance = 0.0675f;
+        [SerializeField, Range(MicrophoneGrilleRadius + MinimumCriticalClearance, MicrophoneGrilleRadius + MaximumCriticalClearance)] private float micFaceCriticalDistance = 0.0455f;
         [SerializeField, Range(0.005f, 0.05f)] private float micFaceReleaseHysteresis = 0.005f;
         [SerializeField, Range(1f, 40f)] private float micFaceDistanceSmoothing = 18f;
         [SerializeField, Range(0.05f, 1f)] private float micFaceWarningAmplitude = 0.16f;
@@ -122,6 +134,8 @@ namespace TsukiVox.AudioPrototype
         private float nextMicFaceHapticTime;
         private Transform headTransform;
         private bool suppressMicFaceHaptics;
+        private Transform mouthPointMarker;
+        private bool mouthPointMarkerRequested;
 
         public float MicrophoneFaceDistance => hasSmoothedMicFaceDistance
             ? smoothedMicFaceDistance
@@ -139,6 +153,8 @@ namespace TsukiVox.AudioPrototype
         public float MicFaceWarningClearance => Mathf.Max(0f, micFaceWarningDistance - MicrophoneGrilleRadius);
         public float MicFaceCriticalClearance => Mathf.Max(0f, micFaceCriticalDistance - MicrophoneGrilleRadius);
         public float MicFaceHapticStrength => micFaceHapticStrength;
+        public Vector3 MicFaceMouthLocalOffset => mouthLocalOffset;
+        public bool IsMicFaceMouthMarkerVisible => mouthPointMarker != null && mouthPointMarker.gameObject.activeSelf;
 
         public static QuestHandheldPropsPrototype EnsureSceneProps()
         {
@@ -176,6 +192,7 @@ namespace TsukiVox.AudioPrototype
         {
             AssignRolesFromControllers();
             UpdateGlowstickColorControls();
+            UpdateMicFaceMouthMarker();
             UpdateMicrophoneFaceProximityHaptics();
 
             if (!driveFeedbackFromMic)
@@ -246,6 +263,30 @@ namespace TsukiVox.AudioPrototype
             SaveMicFacePreferences();
         }
 
+        public void SetMicFaceMouthLocalOffset(Vector3 localOffset)
+        {
+            mouthLocalOffset = ClampMouthLocalOffset(localOffset);
+            SaveMicFacePreferences();
+        }
+
+        public void SetMicFaceMouthMarkerVisible(bool visible)
+        {
+            mouthPointMarkerRequested = visible;
+            if (!visible && mouthPointMarker != null)
+            {
+                mouthPointMarker.gameObject.SetActive(false);
+            }
+        }
+
+        public void ResetMicFaceMouthLocalOffset()
+        {
+            PlayerPrefs.DeleteKey(MicFaceMouthOffsetXPrefsKey);
+            PlayerPrefs.DeleteKey(MicFaceMouthOffsetYPrefsKey);
+            PlayerPrefs.DeleteKey(MicFaceMouthOffsetZPrefsKey);
+            mouthLocalOffset = DefaultMouthLocalOffset();
+            SaveMicFacePreferences();
+        }
+
         public void SetMicFaceHapticsSuppressed(bool suppressed)
         {
             suppressMicFaceHaptics = suppressed;
@@ -261,12 +302,16 @@ namespace TsukiVox.AudioPrototype
             PlayerPrefs.DeleteKey(MicFaceWarningClearancePrefsKey);
             PlayerPrefs.DeleteKey(MicFaceCriticalClearancePrefsKey);
             PlayerPrefs.DeleteKey(MicFaceStrengthPrefsKey);
+            PlayerPrefs.DeleteKey(MicFaceMouthOffsetXPrefsKey);
+            PlayerPrefs.DeleteKey(MicFaceMouthOffsetYPrefsKey);
+            PlayerPrefs.DeleteKey(MicFaceMouthOffsetZPrefsKey);
             PlayerPrefs.Save();
 
             micFaceHapticsEnabled = true;
             micFaceWarningDistance = DefaultWarningClearance + MicrophoneGrilleRadius;
             micFaceCriticalDistance = DefaultCriticalClearance + MicrophoneGrilleRadius;
             micFaceHapticStrength = DefaultHapticStrength;
+            mouthLocalOffset = DefaultMouthLocalOffset();
             micFaceReleaseHysteresis = 0.005f;
             ClearMicrophoneFaceWarningState();
         }
@@ -274,8 +319,8 @@ namespace TsukiVox.AudioPrototype
         private void LoadMicFacePreferences()
         {
             micFaceHapticsEnabled = PlayerPrefs.GetInt(MicFaceEnabledPrefsKey, micFaceHapticsEnabled ? 1 : 0) != 0;
-            var warning = PlayerPrefs.GetFloat(MicFaceWarningClearancePrefsKey, MicFaceWarningClearance);
-            var critical = PlayerPrefs.GetFloat(MicFaceCriticalClearancePrefsKey, MicFaceCriticalClearance);
+            var warning = PlayerPrefs.GetFloat(MicFaceWarningClearancePrefsKey, DefaultWarningClearance);
+            var critical = PlayerPrefs.GetFloat(MicFaceCriticalClearancePrefsKey, DefaultCriticalClearance);
             warning = Mathf.Clamp(warning, MinimumWarningClearance, MaximumWarningClearance);
             critical = Mathf.Clamp(critical, MinimumCriticalClearance, Mathf.Min(MaximumCriticalClearance, warning - MinimumClearanceGap));
             micFaceWarningDistance = warning + MicrophoneGrilleRadius;
@@ -284,6 +329,10 @@ namespace TsukiVox.AudioPrototype
                 PlayerPrefs.GetFloat(MicFaceStrengthPrefsKey, micFaceHapticStrength),
                 MinimumHapticStrength,
                 MaximumHapticStrength);
+            mouthLocalOffset = ClampMouthLocalOffset(new Vector3(
+                PlayerPrefs.GetFloat(MicFaceMouthOffsetXPrefsKey, DefaultMouthOffsetX),
+                PlayerPrefs.GetFloat(MicFaceMouthOffsetYPrefsKey, DefaultMouthOffsetY),
+                PlayerPrefs.GetFloat(MicFaceMouthOffsetZPrefsKey, DefaultMouthOffsetZ)));
         }
 
         private void SaveMicFacePreferences()
@@ -292,6 +341,9 @@ namespace TsukiVox.AudioPrototype
             PlayerPrefs.SetFloat(MicFaceWarningClearancePrefsKey, MicFaceWarningClearance);
             PlayerPrefs.SetFloat(MicFaceCriticalClearancePrefsKey, MicFaceCriticalClearance);
             PlayerPrefs.SetFloat(MicFaceStrengthPrefsKey, micFaceHapticStrength);
+            PlayerPrefs.SetFloat(MicFaceMouthOffsetXPrefsKey, mouthLocalOffset.x);
+            PlayerPrefs.SetFloat(MicFaceMouthOffsetYPrefsKey, mouthLocalOffset.y);
+            PlayerPrefs.SetFloat(MicFaceMouthOffsetZPrefsKey, mouthLocalOffset.z);
             PlayerPrefs.Save();
         }
 
@@ -304,9 +356,77 @@ namespace TsukiVox.AudioPrototype
 
             micProp = MicProp.Build(transform, micLocalPosition, Quaternion.Euler(micLocalEuler));
             glowstickProp = GlowstickProp.Build(transform, glowstickLocalPosition, Quaternion.Euler(glowstickLocalEuler));
+            mouthPointMarker = BuildMouthPointMarker(transform);
 
             micProp.SetVisible(false);
             glowstickProp.SetVisible(false);
+            mouthPointMarker.gameObject.SetActive(false);
+        }
+
+        private static Transform BuildMouthPointMarker(Transform parent)
+        {
+            var markerRoot = new GameObject("mic mouth point marker").transform;
+            markerRoot.SetParent(parent, false);
+
+            var markerColor = new Color(0.15f, 1f, 0.72f, 1f);
+            var coreMaterial = PropMaterials.Emissive("mic mouth marker core", markerColor, 3.5f, 0.05f);
+            var guideMaterial = PropMaterials.AdditiveShell("mic mouth marker guide", markerColor, 0.38f);
+            MeshFactory.CreateSphere(markerRoot, "marker core", 0.005f, coreMaterial);
+
+            var frontRing = MeshFactory.CreateTorus(markerRoot, "marker front ring", 0.014f, 0.0014f, 8, 32, guideMaterial);
+            frontRing.transform.localRotation = Quaternion.identity;
+            var horizontalRing = MeshFactory.CreateTorus(markerRoot, "marker horizontal ring", 0.014f, 0.0012f, 8, 32, guideMaterial);
+            horizontalRing.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            var verticalRing = MeshFactory.CreateTorus(markerRoot, "marker vertical ring", 0.014f, 0.0012f, 8, 32, guideMaterial);
+            verticalRing.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+
+            var guide = MeshFactory.CreateTaperedCylinder(markerRoot, "marker forward guide", 0.0012f, 0.0012f, 0.07f, 10, guideMaterial);
+            guide.transform.localPosition = new Vector3(0f, 0f, 0.035f);
+            return markerRoot;
+        }
+
+        private void UpdateMicFaceMouthMarker()
+        {
+            if (mouthPointMarker == null)
+            {
+                return;
+            }
+
+            if (!mouthPointMarkerRequested)
+            {
+                mouthPointMarker.gameObject.SetActive(false);
+                return;
+            }
+
+            if (headTransform == null)
+            {
+                var mainCamera = Camera.main;
+                headTransform = mainCamera != null ? mainCamera.transform : null;
+            }
+
+            if (headTransform == null)
+            {
+                mouthPointMarker.gameObject.SetActive(false);
+                return;
+            }
+
+            mouthPointMarker.gameObject.SetActive(true);
+            mouthPointMarker.SetPositionAndRotation(headTransform.TransformPoint(mouthLocalOffset), headTransform.rotation);
+            var pulse = 1f + Mathf.Sin(Time.unscaledTime * 5f) * 0.06f;
+            mouthPointMarker.localScale = Vector3.one * pulse;
+        }
+
+        private static Vector3 DefaultMouthLocalOffset()
+        {
+            return new Vector3(DefaultMouthOffsetX, DefaultMouthOffsetY, DefaultMouthOffsetZ);
+        }
+
+        private static Vector3 ClampMouthLocalOffset(Vector3 localOffset)
+        {
+            return new Vector3(
+                Mathf.Clamp(localOffset.x, MinimumMouthOffsetX, MaximumMouthOffsetX),
+                Mathf.Clamp(localOffset.y, MinimumMouthOffsetY, MaximumMouthOffsetY),
+                Mathf.Clamp(localOffset.z, MinimumMouthOffsetZ, MaximumMouthOffsetZ));
         }
 
         private void AssignRolesFromControllers()
@@ -472,6 +592,7 @@ namespace TsukiVox.AudioPrototype
 
         private void OnDisable()
         {
+            SetMicFaceMouthMarkerVisible(false);
             ResetMicrophoneFaceProximity();
         }
 

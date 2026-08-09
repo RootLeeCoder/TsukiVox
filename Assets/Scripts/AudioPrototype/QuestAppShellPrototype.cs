@@ -269,7 +269,9 @@ namespace TsukiVox.AudioPrototype
                     $"strength {handheldProps.MicFaceHapticStrength:0.00} " +
                     $"enabled {handheldProps.MicFaceHapticsEnabled} " +
                     $"intensity {handheldProps.MicrophoneFaceProximity:0.00} " +
-                    $"warning {handheldProps.IsMicrophoneFaceWarningActive}");
+                    $"warning {handheldProps.IsMicrophoneFaceWarningActive} " +
+                    $"mouthLocal {handheldProps.MicFaceMouthLocalOffset:F3} " +
+                    $"marker {handheldProps.IsMicFaceMouthMarkerVisible}");
             }
 
             if (playlistPrototype != null)

@@ -29,6 +29,7 @@ namespace TsukiVox.AudioPrototype
         Trash,
         Stop,
         Power,
+        Crosshair,
     }
 
     /// <summary>
@@ -89,6 +90,14 @@ namespace TsukiVox.AudioPrototype
                 case QuestUiIconKind.Search:
                     AddCircle(vertexHelper, rect, 10.5f, 10.5f, 6.5f, thickness);
                     AddLine(vertexHelper, rect, 15.1f, 15.1f, 20f, 20f, thickness);
+                    break;
+                case QuestUiIconKind.Crosshair:
+                    AddCircle(vertexHelper, rect, 12f, 12f, 6f, thickness);
+                    AddCircle(vertexHelper, rect, 12f, 12f, 1.2f, thickness);
+                    AddLine(vertexHelper, rect, 12f, 2f, 12f, 6f, thickness);
+                    AddLine(vertexHelper, rect, 12f, 18f, 12f, 22f, thickness);
+                    AddLine(vertexHelper, rect, 2f, 12f, 6f, 12f, thickness);
+                    AddLine(vertexHelper, rect, 18f, 12f, 22f, 12f, thickness);
                     break;
                 case QuestUiIconKind.Sparkles:
                     AddPolyline(vertexHelper, rect, thickness, 12f, 3f, 13.5f, 9.2f, 19f, 12f, 13.5f, 14.8f, 12f, 21f, 10.5f, 14.8f, 5f, 12f, 10.5f, 9.2f, 12f, 3f);
