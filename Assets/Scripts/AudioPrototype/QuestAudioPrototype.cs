@@ -20,6 +20,15 @@ namespace TsukiVox.AudioPrototype
         private const float UnityOutputMeterGain = 24f;
         private const float NativeMeterGain = 22f;
         private const float MeterDisplayCurve = 0.62f;
+        private const float DefaultDistanceFullGainClearance = 0.06f;
+        private const float DefaultDistanceCutoffClearance = 0.30f;
+        private const float AudioPreferencesSaveDelay = 0.5f;
+        private const string PresetPrefsKey = "TsukiVox.Audio.Preset.v1";
+        private const string MonitorVolumePrefsKey = "TsukiVox.Audio.MonitorVolume.v1";
+        private const string AmbiencePrefsKey = "TsukiVox.Audio.Ambience.v1";
+        private const string EchoPrefsKey = "TsukiVox.Audio.Echo.v1";
+        private const string DynamicsPrefsKey = "TsukiVox.Audio.Dynamics.v1";
+        private const string DistanceMonitoringPrefsKey = "TsukiVox.Audio.DistanceMonitoring.v1";
 
         [Header("Signal Chain")]
         [SerializeField] private AudioSource monitorSource;
@@ -50,6 +59,18 @@ namespace TsukiVox.AudioPrototype
         [SerializeField] private bool requestLowLatencyAudio = true;
         [SerializeField] private PrototypePreset initialPreset = PrototypePreset.KtvRoom;
 
+        [Header("User Voice Settings")]
+        [SerializeField, Range(0f, 1f)] private float ambienceAmount = 0.55f;
+        [SerializeField, Range(0f, 1f)] private float echoAmount = 0.3f;
+        [SerializeField, Range(0f, 1f)] private float dynamicsAmount = 0.65f;
+
+        [Header("Distance Monitoring")]
+        [SerializeField] private bool distanceMonitoringEnabled = true;
+        [SerializeField, Range(0.02f, 0.15f)] private float distanceFullGainClearance = DefaultDistanceFullGainClearance;
+        [SerializeField, Range(0.15f, 0.6f)] private float distanceCutoffClearance = DefaultDistanceCutoffClearance;
+        [SerializeField, Range(1f, 30f)] private float distanceAttackSmoothing = 12f;
+        [SerializeField, Range(1f, 30f)] private float distanceReleaseSmoothing = 7f;
+
         private readonly float[] microphoneSamples = new float[SpectrumSize];
         private readonly float[] outputSamples = new float[SpectrumSize];
         private readonly StringBuilder metricsBuilder = new StringBuilder(512);
@@ -71,6 +92,14 @@ namespace TsukiVox.AudioPrototype
         private string backendNote = "Backend not started.";
         private double estimatedMicrophoneLagMs;
         private string audioConfigurationNote = "Audio configuration not requested yet.";
+        private QuestHandheldPropsPrototype handheldPropsPrototype;
+        private float microphoneSurfaceClearance = float.PositiveInfinity;
+        private float distanceMonitorGain;
+        private float safetyMonitorGain = 1f;
+        private float appliedMonitorGain = -1f;
+        private bool isMicrophoneDistanceTracked;
+        private bool audioPreferencesDirty;
+        private float audioPreferencesSaveAt;
 
         private bool vocalProcessorEnabled;
         private float processorInputDrive = 1f;
@@ -90,6 +119,22 @@ namespace TsukiVox.AudioPrototype
             SafeSmallRoom,
         }
 
+        private readonly struct PresetSettings
+        {
+            public PresetSettings(float volume, float ambience, float echo, float dynamics)
+            {
+                Volume = volume;
+                Ambience = ambience;
+                Echo = echo;
+                Dynamics = dynamics;
+            }
+
+            public float Volume { get; }
+            public float Ambience { get; }
+            public float Echo { get; }
+            public float Dynamics { get; }
+        }
+
         public bool IsMonitoring => isMonitoring;
 
         public bool IsWaitingForPermission => isWaitingForPermission;
@@ -107,6 +152,33 @@ namespace TsukiVox.AudioPrototype
         public float MonitorVolume => monitorVolume;
 
         public float MonitorVolumeMaximum => MaximumMonitorVolume;
+
+        public float AmbienceAmount => ambienceAmount;
+
+        public float EchoAmount => echoAmount;
+
+        public float DynamicsAmount => dynamicsAmount;
+
+        public bool IsDistanceMonitoringEnabled => distanceMonitoringEnabled;
+
+        public bool IsMicrophoneDistanceTracked => isMicrophoneDistanceTracked;
+
+        public float MicrophoneSurfaceClearance => microphoneSurfaceClearance;
+
+        public float DistanceMonitorGain => distanceMonitorGain;
+
+        public float EffectiveMonitorVolume => monitorVolume * distanceMonitorGain * safetyMonitorGain;
+
+        public bool HasCustomEffectSettings
+        {
+            get
+            {
+                var defaults = GetPresetSettings(currentPreset);
+                return !Mathf.Approximately(ambienceAmount, defaults.Ambience) ||
+                       !Mathf.Approximately(echoAmount, defaults.Echo) ||
+                       !Mathf.Approximately(dynamicsAmount, defaults.Dynamics);
+            }
+        }
 
         public float InputLevel => Mathf.Clamp01(smoothedInputLevel);
 
@@ -210,6 +282,11 @@ namespace TsukiVox.AudioPrototype
             EnsureSignalChain();
             EnsureAudioListener();
             ConfigureLowLatencyAudio();
+            currentPreset = initialPreset;
+            LoadAudioPreferences();
+            ApplyCurrentEffectSettings();
+            distanceMonitorGain = distanceMonitoringEnabled ? 0f : 1f;
+            ApplyEffectiveMonitorGain();
             WireUi();
             EnsureQuestUiInteraction();
             QuestXrBootstrap.EnsureSceneBootstrap();
@@ -218,9 +295,6 @@ namespace TsukiVox.AudioPrototype
             QuestAppShellPrototype.EnsureSceneShell();
             QuestKtvRoomPrototype.EnsureSceneRoom();
             QuestHandheldPropsPrototype.EnsureSceneProps();
-            currentPreset = initialPreset;
-            ApplyPreset(currentPreset);
-            ApplyMonitorVolume(monitorVolume);
             ApplySafetyState(safetyLimiterEnabled);
             ApplyNativePreference(preferNativeOboeBackend);
             RefreshUi();
@@ -239,15 +313,32 @@ namespace TsukiVox.AudioPrototype
 
         private void Update()
         {
+            UpdateDistanceMonitoring();
             UpdateLevels();
             UpdateEstimatedLag();
             ApplySafetyLimiter();
+            ApplyEffectiveMonitorGain();
+            SaveAudioPreferencesIfDue();
             RefreshMetrics();
         }
 
         private void OnDestroy()
         {
             StopMonitoring();
+            SavePendingAudioPreferences();
+        }
+
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused)
+            {
+                SavePendingAudioPreferences();
+            }
+        }
+
+        private void OnApplicationQuit()
+        {
+            SavePendingAudioPreferences();
         }
 
         private void OnAudioFilterRead(float[] data, int channels)
@@ -372,6 +463,39 @@ namespace TsukiVox.AudioPrototype
         public void SetMonitorVolume(float value)
         {
             ApplyMonitorVolume(value);
+        }
+
+        public void SetAmbienceAmount(float value)
+        {
+            ambienceAmount = Mathf.Clamp01(value);
+            ApplyCurrentEffectSettings();
+            QueueAudioPreferencesSave();
+        }
+
+        public void SetEchoAmount(float value)
+        {
+            echoAmount = Mathf.Clamp01(value);
+            ApplyCurrentEffectSettings();
+            QueueAudioPreferencesSave();
+        }
+
+        public void SetDynamicsAmount(float value)
+        {
+            dynamicsAmount = Mathf.Clamp01(value);
+            ApplyCurrentEffectSettings();
+            QueueAudioPreferencesSave();
+        }
+
+        public void SetDistanceMonitoringEnabled(bool enabled)
+        {
+            distanceMonitoringEnabled = enabled;
+            if (!enabled)
+            {
+                isMicrophoneDistanceTracked = false;
+                microphoneSurfaceClearance = float.PositiveInfinity;
+            }
+
+            QueueAudioPreferencesSave();
         }
 
         public void SetMonitorOutput(bool enabled)
@@ -599,7 +723,7 @@ namespace TsukiVox.AudioPrototype
                 return false;
             }
 
-            if (NativeOboeDryMonitor.TryStart(monitorVolume, !monitorOutputEnabled, out var error))
+            if (NativeOboeDryMonitor.TryStart(EffectiveMonitorVolume, !monitorOutputEnabled, out var error))
             {
                 if (monitorSource != null)
                 {
@@ -624,125 +748,72 @@ namespace TsukiVox.AudioPrototype
         private void ApplyPreset(PrototypePreset preset)
         {
             currentPreset = preset;
-
-            switch (preset)
-            {
-                case PrototypePreset.DryReference:
-                    ConfigureFilters(false, 80f, 18000f, AudioReverbPreset.Off, 0f, 1f);
-                    ApplyMonitorVolume(0.35f);
-                    break;
-                case PrototypePreset.KtvRoom:
-                    ConfigureFilters(true, 80f, 16000f, AudioReverbPreset.Hallway, 64f, 0.82f);
-                    ApplyMonitorVolume(1f);
-                    break;
-                case PrototypePreset.StrongKtv:
-                    ConfigureFilters(true, 75f, 15000f, AudioReverbPreset.Arena, 92f, 1.1f);
-                    ApplyMonitorVolume(1.15f);
-                    break;
-                case PrototypePreset.SafeSmallRoom:
-                    ConfigureFilters(true, 100f, 13500f, AudioReverbPreset.Room, 42f, 0.52f);
-                    ApplyMonitorVolume(0.75f);
-                    break;
-            }
-
+            var settings = GetPresetSettings(preset);
+            monitorVolume = settings.Volume;
+            ambienceAmount = settings.Ambience;
+            echoAmount = settings.Echo;
+            dynamicsAmount = settings.Dynamics;
+            ApplyCurrentEffectSettings();
+            ApplyEffectiveMonitorGain();
+            monitorVolumeSlider?.SetValueWithoutNotify(monitorVolume);
+            QueueAudioPreferencesSave();
             RefreshUi();
         }
 
-        private void ConfigureFilters(
-            bool effectsEnabled,
-            float highPassCutoff,
-            float lowPassCutoff,
-            AudioReverbPreset reverbPreset,
-            float echoDelayMs,
-            float echoWetMix)
+        private void ApplyCurrentEffectSettings()
         {
-            ConfigureVocalProcessor(effectsEnabled);
+            ConfigureVocalProcessor();
 
-            highPassFilter.enabled = effectsEnabled;
-            highPassFilter.cutoffFrequency = highPassCutoff;
+            var filtersEnabled = ambienceAmount > 0.001f || echoAmount > 0.001f || dynamicsAmount > 0.001f;
+            highPassFilter.enabled = filtersEnabled;
+            highPassFilter.cutoffFrequency = Mathf.Lerp(70f, 110f, dynamicsAmount);
             highPassFilter.highpassResonanceQ = 1.05f;
 
-            lowPassFilter.enabled = effectsEnabled;
-            lowPassFilter.cutoffFrequency = lowPassCutoff;
+            lowPassFilter.enabled = filtersEnabled;
+            lowPassFilter.cutoffFrequency = Mathf.Lerp(18000f, 14500f, ambienceAmount);
             lowPassFilter.lowpassResonanceQ = 1f;
 
-            reverbFilter.enabled = effectsEnabled && reverbPreset != AudioReverbPreset.Off;
-            reverbFilter.reverbPreset = reverbPreset;
+            reverbFilter.enabled = ambienceAmount > 0.001f;
+            reverbFilter.reverbPreset = ambienceAmount > 0.001f
+                ? AudioReverbPreset.User
+                : AudioReverbPreset.Off;
             reverbFilter.dryLevel = 0f;
-            reverbFilter.room = currentPreset == PrototypePreset.StrongKtv ? 1200 : 650;
-            reverbFilter.roomHF = currentPreset == PrototypePreset.StrongKtv ? -120 : -260;
-            reverbFilter.decayTime = currentPreset == PrototypePreset.StrongKtv ? 3.2f : 2.35f;
-            reverbFilter.decayHFRatio = 0.86f;
-            reverbFilter.reflectionsLevel = currentPreset == PrototypePreset.StrongKtv ? 350f : 120f;
-            reverbFilter.reflectionsDelay = 0.02f;
-            reverbFilter.reverbLevel = currentPreset == PrototypePreset.StrongKtv ? 1150f : 760f;
-            reverbFilter.reverbDelay = 0.045f;
-            reverbFilter.diffusion = 96f;
-            reverbFilter.density = 92f;
+            reverbFilter.room = Mathf.Lerp(-1800f, -280f, ambienceAmount);
+            reverbFilter.roomHF = Mathf.Lerp(-2200f, -340f, ambienceAmount);
+            reverbFilter.decayTime = Mathf.Lerp(0.75f, 3.6f, ambienceAmount);
+            reverbFilter.decayHFRatio = Mathf.Lerp(0.62f, 0.9f, ambienceAmount);
+            reverbFilter.reflectionsLevel = Mathf.Lerp(-1600f, 280f, ambienceAmount);
+            reverbFilter.reflectionsDelay = Mathf.Lerp(0.008f, 0.035f, ambienceAmount);
+            reverbFilter.reverbLevel = Mathf.Lerp(-1400f, 980f, ambienceAmount);
+            reverbFilter.reverbDelay = Mathf.Lerp(0.012f, 0.055f, ambienceAmount);
+            reverbFilter.diffusion = Mathf.Lerp(72f, 98f, ambienceAmount);
+            reverbFilter.density = Mathf.Lerp(68f, 96f, ambienceAmount);
             reverbFilter.hfReference = 7000f;
 
-            echoFilter.enabled = effectsEnabled && echoDelayMs > 0f;
-            echoFilter.delay = echoDelayMs;
-            echoFilter.decayRatio = currentPreset == PrototypePreset.StrongKtv ? 0.32f : 0.22f;
-            echoFilter.wetMix = echoWetMix;
+            echoFilter.enabled = echoAmount > 0.001f;
+            echoFilter.delay = Mathf.Lerp(48f, 125f, echoAmount);
+            echoFilter.decayRatio = Mathf.Lerp(0.12f, 0.38f, echoAmount);
+            echoFilter.wetMix = Mathf.Lerp(0.04f, 0.58f, echoAmount);
             echoFilter.dryMix = 1f;
         }
 
-        private void ConfigureVocalProcessor(bool effectsEnabled)
+        private void ConfigureVocalProcessor()
         {
-            vocalProcessorEnabled = effectsEnabled;
-
-            switch (currentPreset)
-            {
-                case PrototypePreset.DryReference:
-                    processorInputDrive = 1f;
-                    processorGateThreshold = 0f;
-                    processorCompressorThreshold = DbToLinear(-2f);
-                    processorCompressorRatio = 1f;
-                    processorMakeupGain = 1f;
-                    processorLimiterCeiling = 0.95f;
-                    break;
-                case PrototypePreset.KtvRoom:
-                    processorInputDrive = 5.8f;
-                    processorGateThreshold = DbToLinear(-60f);
-                    processorCompressorThreshold = DbToLinear(-28f);
-                    processorCompressorRatio = 4.2f;
-                    processorMakeupGain = 3.2f;
-                    processorLimiterCeiling = 0.94f;
-                    break;
-                case PrototypePreset.StrongKtv:
-                    processorInputDrive = 8.5f;
-                    processorGateThreshold = DbToLinear(-62f);
-                    processorCompressorThreshold = DbToLinear(-34f);
-                    processorCompressorRatio = 6.5f;
-                    processorMakeupGain = 4.4f;
-                    processorLimiterCeiling = 0.96f;
-                    break;
-                case PrototypePreset.SafeSmallRoom:
-                    processorInputDrive = 3.8f;
-                    processorGateThreshold = DbToLinear(-54f);
-                    processorCompressorThreshold = DbToLinear(-24f);
-                    processorCompressorRatio = 3f;
-                    processorMakeupGain = 2.2f;
-                    processorLimiterCeiling = 0.88f;
-                    break;
-            }
+            vocalProcessorEnabled = dynamicsAmount > 0.001f;
+            processorInputDrive = Mathf.Lerp(1f, 7.2f, dynamicsAmount);
+            processorGateThreshold = DbToLinear(Mathf.Lerp(-68f, -54f, dynamicsAmount));
+            processorCompressorThreshold = DbToLinear(Mathf.Lerp(-10f, -31f, dynamicsAmount));
+            processorCompressorRatio = Mathf.Lerp(1.1f, 6.2f, dynamicsAmount);
+            processorMakeupGain = Mathf.Lerp(1f, 3.8f, dynamicsAmount);
+            processorLimiterCeiling = Mathf.Lerp(0.96f, 0.9f, dynamicsAmount);
         }
 
         private void ApplyMonitorVolume(float value)
         {
             monitorVolume = Mathf.Clamp(value, MinimumMonitorVolume, MaximumMonitorVolume);
-            if (monitorSource != null)
-            {
-                monitorSource.volume = monitorVolume;
-            }
-
-            if (activeBackend == NativeAudioBackend.NativeOboeDryMonitor)
-            {
-                NativeOboeDryMonitor.SetGain(monitorVolume);
-            }
-
+            ApplyEffectiveMonitorGain();
             monitorVolumeSlider?.SetValueWithoutNotify(monitorVolume);
+            QueueAudioPreferencesSave();
         }
 
         private void SetMonitorOutputEnabled(bool enabled)
@@ -786,8 +857,150 @@ namespace TsukiVox.AudioPrototype
             safetyLimiterEnabled = enabled;
             if (!enabled)
             {
+                safetyMonitorGain = 1f;
                 isSafetyReducingGain = false;
+                ApplyEffectiveMonitorGain();
             }
+        }
+
+        private void UpdateDistanceMonitoring()
+        {
+            var targetGain = 1f;
+            isMicrophoneDistanceTracked = false;
+            microphoneSurfaceClearance = float.PositiveInfinity;
+
+            if (distanceMonitoringEnabled)
+            {
+                if (handheldPropsPrototype == null)
+                {
+                    handheldPropsPrototype = FindAnyObjectByType<QuestHandheldPropsPrototype>();
+                }
+
+                if (handheldPropsPrototype != null && handheldPropsPrototype.IsMicrophoneTracked)
+                {
+                    var clearance = handheldPropsPrototype.MicrophoneFaceSurfaceClearance;
+                    if (!float.IsNaN(clearance) && !float.IsInfinity(clearance))
+                    {
+                        microphoneSurfaceClearance = clearance;
+                        isMicrophoneDistanceTracked = true;
+                        targetGain = CalculateDistanceMonitorGain(
+                            clearance,
+                            distanceFullGainClearance,
+                            distanceCutoffClearance);
+                    }
+                    else
+                    {
+                        targetGain = 0f;
+                    }
+                }
+                else
+                {
+                    targetGain = 0f;
+                }
+            }
+
+            var smoothingRate = targetGain > distanceMonitorGain
+                ? distanceAttackSmoothing
+                : distanceReleaseSmoothing;
+            var smoothing = 1f - Mathf.Exp(-smoothingRate * Time.unscaledDeltaTime);
+            distanceMonitorGain = Mathf.Lerp(distanceMonitorGain, targetGain, smoothing);
+            if (distanceMonitorGain < 0.001f)
+            {
+                distanceMonitorGain = 0f;
+            }
+            else if (distanceMonitorGain > 0.999f)
+            {
+                distanceMonitorGain = 1f;
+            }
+        }
+
+        public static float CalculateDistanceMonitorGain(
+            float surfaceClearance,
+            float fullGainClearance = DefaultDistanceFullGainClearance,
+            float cutoffClearance = DefaultDistanceCutoffClearance)
+        {
+            if (float.IsNaN(surfaceClearance) || float.IsInfinity(surfaceClearance))
+            {
+                return 0f;
+            }
+
+            var near = Mathf.Max(0f, fullGainClearance);
+            var far = Mathf.Max(near + 0.001f, cutoffClearance);
+            var linearGain = Mathf.InverseLerp(far, near, Mathf.Max(0f, surfaceClearance));
+            return linearGain * linearGain * (3f - 2f * linearGain);
+        }
+
+        private void ApplyEffectiveMonitorGain()
+        {
+            var effectiveGain = Mathf.Clamp(
+                EffectiveMonitorVolume,
+                MinimumMonitorVolume,
+                MaximumMonitorVolume);
+            if (Mathf.Abs(effectiveGain - appliedMonitorGain) < 0.001f)
+            {
+                return;
+            }
+
+            appliedMonitorGain = effectiveGain;
+            if (monitorSource != null)
+            {
+                monitorSource.volume = effectiveGain;
+            }
+
+            if (activeBackend == NativeAudioBackend.NativeOboeDryMonitor)
+            {
+                NativeOboeDryMonitor.SetGain(effectiveGain);
+            }
+        }
+
+        private void LoadAudioPreferences()
+        {
+            var presetCount = Enum.GetValues(typeof(PrototypePreset)).Length;
+            var savedPreset = PlayerPrefs.GetInt(PresetPrefsKey, (int)initialPreset);
+            currentPreset = (PrototypePreset)Mathf.Clamp(savedPreset, 0, presetCount - 1);
+
+            var defaults = GetPresetSettings(currentPreset);
+            monitorVolume = Mathf.Clamp(
+                PlayerPrefs.GetFloat(MonitorVolumePrefsKey, defaults.Volume),
+                MinimumMonitorVolume,
+                MaximumMonitorVolume);
+            ambienceAmount = Mathf.Clamp01(PlayerPrefs.GetFloat(AmbiencePrefsKey, defaults.Ambience));
+            echoAmount = Mathf.Clamp01(PlayerPrefs.GetFloat(EchoPrefsKey, defaults.Echo));
+            dynamicsAmount = Mathf.Clamp01(PlayerPrefs.GetFloat(DynamicsPrefsKey, defaults.Dynamics));
+            distanceMonitoringEnabled = PlayerPrefs.GetInt(
+                DistanceMonitoringPrefsKey,
+                distanceMonitoringEnabled ? 1 : 0) != 0;
+        }
+
+        private void QueueAudioPreferencesSave()
+        {
+            PlayerPrefs.SetInt(PresetPrefsKey, (int)currentPreset);
+            PlayerPrefs.SetFloat(MonitorVolumePrefsKey, monitorVolume);
+            PlayerPrefs.SetFloat(AmbiencePrefsKey, ambienceAmount);
+            PlayerPrefs.SetFloat(EchoPrefsKey, echoAmount);
+            PlayerPrefs.SetFloat(DynamicsPrefsKey, dynamicsAmount);
+            PlayerPrefs.SetInt(DistanceMonitoringPrefsKey, distanceMonitoringEnabled ? 1 : 0);
+            audioPreferencesDirty = true;
+            audioPreferencesSaveAt = Time.unscaledTime + AudioPreferencesSaveDelay;
+        }
+
+        private void SaveAudioPreferencesIfDue()
+        {
+            if (audioPreferencesDirty && Time.unscaledTime >= audioPreferencesSaveAt)
+            {
+                SavePendingAudioPreferences();
+            }
+        }
+
+        private void SavePendingAudioPreferences()
+        {
+            if (!audioPreferencesDirty)
+            {
+                return;
+            }
+
+            PlayerPrefs.Save();
+            audioPreferencesDirty = false;
         }
 
         private void UpdateLevels()
@@ -877,48 +1090,28 @@ namespace TsukiVox.AudioPrototype
         {
             if (!safetyLimiterEnabled)
             {
-                return;
-            }
-
-            if (activeBackend == NativeAudioBackend.NativeOboeDryMonitor)
-            {
-                ApplyNativeSafetyLimiter();
-                return;
-            }
-
-            if (monitorSource == null)
-            {
+                safetyMonitorGain = 1f;
+                isSafetyReducingGain = false;
                 return;
             }
 
             var hot = safetyInputLevel > HotInputLevel || safetyOutputLevel > HotInputLevel;
             if (hot)
             {
-                isSafetyReducingGain = true;
-                ApplyMonitorVolume(Mathf.Max(0.04f, monitorSource.volume * 0.92f));
-                return;
+                safetyMonitorGain = Mathf.MoveTowards(
+                    safetyMonitorGain,
+                    0.12f,
+                    Time.unscaledDeltaTime * 2.8f);
+            }
+            else if (safetyInputLevel < 0.45f && safetyOutputLevel < 0.45f)
+            {
+                safetyMonitorGain = Mathf.MoveTowards(
+                    safetyMonitorGain,
+                    1f,
+                    Time.unscaledDeltaTime * 0.3f);
             }
 
-            if (isSafetyReducingGain && safetyInputLevel < 0.45f && safetyOutputLevel < 0.45f)
-            {
-                isSafetyReducingGain = false;
-            }
-        }
-
-        private void ApplyNativeSafetyLimiter()
-        {
-            var hot = safetyInputLevel > HotInputLevel || safetyOutputLevel > HotInputLevel;
-            if (hot)
-            {
-                isSafetyReducingGain = true;
-                ApplyMonitorVolume(Mathf.Max(0.04f, monitorVolume * 0.92f));
-                return;
-            }
-
-            if (isSafetyReducingGain && safetyInputLevel < 0.45f && safetyOutputLevel < 0.45f)
-            {
-                isSafetyReducingGain = false;
-            }
+            isSafetyReducingGain = safetyMonitorGain < 0.999f;
         }
 
         private void RefreshUi()
@@ -927,6 +1120,8 @@ namespace TsukiVox.AudioPrototype
             {
                 presetText.text = $"Preset: {FormatPresetName(currentPreset)}";
             }
+
+            monitorVolumeSlider?.SetValueWithoutNotify(monitorVolume);
 
             if (startButton != null)
             {
@@ -976,6 +1171,18 @@ namespace TsukiVox.AudioPrototype
             metricsBuilder.Append(activeBackend == NativeAudioBackend.NativeOboeDryMonitor
                 ? "native dry soft limiter"
                 : (vocalProcessorEnabled ? "gate/comp/limiter + reverb/echo" : "bypassed"));
+            metricsBuilder.Append("\nDistance monitor ");
+            metricsBuilder.Append(distanceMonitoringEnabled ? "enabled" : "disabled");
+            metricsBuilder.Append("  tracked ");
+            metricsBuilder.Append(isMicrophoneDistanceTracked);
+            metricsBuilder.Append("  gain ");
+            metricsBuilder.Append(distanceMonitorGain.ToString("0.00"));
+            if (isMicrophoneDistanceTracked)
+            {
+                metricsBuilder.Append("  clearance ");
+                metricsBuilder.Append((microphoneSurfaceClearance * 100f).ToString("0.0"));
+                metricsBuilder.Append(" cm");
+            }
             metricsBuilder.Append("\nBackend ");
             metricsBuilder.Append(activeBackend == NativeAudioBackend.NativeOboeDryMonitor ? "Native Oboe Dry" : "Unity Microphone");
 
@@ -1078,6 +1285,18 @@ namespace TsukiVox.AudioPrototype
         private static float DbToLinear(float decibels)
         {
             return (float)Math.Pow(10.0, decibels / 20.0);
+        }
+
+        private static PresetSettings GetPresetSettings(PrototypePreset preset)
+        {
+            return preset switch
+            {
+                PrototypePreset.DryReference => new PresetSettings(0.35f, 0f, 0f, 0f),
+                PrototypePreset.KtvRoom => new PresetSettings(1f, 0.55f, 0.3f, 0.65f),
+                PrototypePreset.StrongKtv => new PresetSettings(1.15f, 0.86f, 0.62f, 0.9f),
+                PrototypePreset.SafeSmallRoom => new PresetSettings(0.75f, 0.34f, 0.12f, 0.48f),
+                _ => new PresetSettings(1f, 0.55f, 0.3f, 0.65f),
+            };
         }
 
         private static string FormatPresetName(PrototypePreset preset)

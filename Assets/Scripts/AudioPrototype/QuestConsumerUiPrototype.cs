@@ -179,6 +179,17 @@ namespace TsukiVox.AudioPrototype
         private Toggle voiceMicrophoneToggle;
         private Slider inputMeterSlider;
         private Slider monitorVolumeSlider;
+        private Slider ambienceSlider;
+        private Slider echoSlider;
+        private Slider dynamicsSlider;
+        private Toggle distanceMonitoringToggle;
+        private TMP_Text distanceMonitoringStatusText;
+        private TMP_Text voicePresetStatusText;
+        private TMP_Text monitorVolumeValueText;
+        private TMP_Text ambienceValueText;
+        private TMP_Text echoValueText;
+        private TMP_Text dynamicsValueText;
+        private TMP_Text voiceMixerFooterText;
         private readonly Button[] presetButtons = new Button[4];
         private readonly QuestUiSurface[] presetSurfaces = new QuestUiSurface[4];
 
@@ -993,33 +1004,56 @@ namespace TsukiVox.AudioPrototype
         private void BuildVoicePage()
         {
             BuildSubpageHeader(voicePage, "人声", out voiceBackButton);
+            RetireLegacyVoiceMixerUi();
 
-            CreateText(voicePage, "Microphone Title", "麦克风", 21, FontStyle.Bold, new Vector2(-396f, 135f), new Vector2(200f, 36f), TextAnchor.MiddleLeft, TextPrimary);
-            CreateText(voicePage, "Microphone Hint", "开启后可听到实时返听", 16, FontStyle.Normal, new Vector2(-326f, 105f), new Vector2(340f, 26f), TextAnchor.MiddleLeft, TextSecondary);
-            inputMeterSlider = CreateSlider(voicePage, "Input Meter", new Vector2(120f, 124f), new Vector2(510f, 46f), false);
+            CreateText(voicePage, "Microphone Title", "实时返听", 21, FontStyle.Bold, new Vector2(-396f, 135f), new Vector2(200f, 36f), TextAnchor.MiddleLeft, TextPrimary);
+            distanceMonitoringStatusText = CreateText(voicePage, "Distance Status", "等待右手麦克风", 15, FontStyle.Bold, new Vector2(-286f, 105f), new Vector2(420f, 26f), TextAnchor.MiddleLeft, TextSecondary);
+            inputMeterSlider = CreateSlider(voicePage, "Input Meter", new Vector2(108f, 124f), new Vector2(430f, 46f), false);
             voiceMicrophoneToggle = CreateSwitch(voicePage, "Microphone Switch", new Vector2(460f, 124f));
 
-            CreateDivider(voicePage, "Microphone Divider", new Vector2(0f, 70f), new Vector2(ContentWidth, 1f));
-            CreateText(voicePage, "Volume Title", "返听音量", 21, FontStyle.Bold, new Vector2(-396f, 28f), new Vector2(200f, 36f), TextAnchor.MiddleLeft, TextPrimary);
-            CreateText(voicePage, "Volume Hint", "建议先低后高", 16, FontStyle.Normal, new Vector2(-356f, -2f), new Vector2(280f, 26f), TextAnchor.MiddleLeft, TextSecondary);
-            monitorVolumeSlider = CreateSlider(voicePage, "Monitor Volume", new Vector2(115f, 18f), new Vector2(510f, 50f), true);
-            EnsureIcon(voicePage, "Volume Icon", QuestUiIconKind.Volume, new Vector2(460f, 18f), new Vector2(30f, 30f), TextSecondary);
-
-            CreateDivider(voicePage, "Volume Divider", new Vector2(0f, -42f), new Vector2(ContentWidth, 1f));
-            CreateText(voicePage, "Preset Title", "人声效果", 21, FontStyle.Bold, new Vector2(-396f, -78f), new Vector2(200f, 36f), TextAnchor.MiddleLeft, TextPrimary);
-            CreateText(voicePage, "Preset Hint", "四档预设直接选择", 16, FontStyle.Normal, new Vector2(-326f, -105f), new Vector2(340f, 26f), TextAnchor.MiddleLeft, TextSecondary);
+            CreateDivider(voicePage, "Microphone Divider", new Vector2(0f, 88f), new Vector2(ContentWidth, 1f));
+            CreateText(voicePage, "Preset Title", "人声预设", 18, FontStyle.Bold, new Vector2(-414f, 66f), new Vector2(160f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            voicePresetStatusText = CreateText(voicePage, "Preset Status", "KTV · 预设值", 14, FontStyle.Normal, new Vector2(-244f, 66f), new Vector2(220f, 28f), TextAnchor.MiddleLeft, TextSecondary);
+            CreateText(voicePage, "Distance Link Label", "距离跟随", 16, FontStyle.Bold, new Vector2(350f, 66f), new Vector2(130f, 30f), TextAnchor.MiddleRight, TextPrimary);
+            distanceMonitoringToggle = CreateSwitch(voicePage, "Distance Monitoring Switch", new Vector2(460f, 66f));
 
             var labels = new[] { "原声", "KTV", "强效", "柔和" };
             for (var index = 0; index < presetButtons.Length; index += 1)
             {
-                presetButtons[index] = CreateTextButton(voicePage, $"Preset {index}", labels[index], new Vector2(-339f + index * 226f, -154f), new Vector2(210f, 60f), Surface, TextPrimary);
+                presetButtons[index] = CreateTextButton(voicePage, $"Preset {index}", labels[index], new Vector2(-369f + index * 246f, 25f), new Vector2(232f, 46f), Surface, TextPrimary);
                 presetButtons[index].transition = Selectable.Transition.None;
                 presetSurfaces[index] = presetButtons[index].targetGraphic as QuestUiSurface;
             }
 
-            var safetyNote = EnsureRect(voicePage, "Safety Note", new Vector2(0f, -225f), new Vector2(ContentWidth, 48f));
-            EnsureSurface(safetyNote, palette.SafetySurface, 6f, false);
-            CreateText(safetyNote, "Label", "安全保护会在返听过响时自动降低音量", 16, FontStyle.Normal, Vector2.zero, new Vector2(930f, 32f), TextAnchor.MiddleCenter, TextSecondary);
+            CreateDivider(voicePage, "Preset Divider", new Vector2(0f, -5f), new Vector2(ContentWidth, 1f));
+
+            CreateText(voicePage, "Volume Title", "返听音量", 17, FontStyle.Bold, new Vector2(-408f, -38f), new Vector2(170f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            monitorVolumeSlider = CreateSlider(voicePage, "Monitor Volume", new Vector2(86f, -38f), new Vector2(520f, 42f), true);
+            monitorVolumeValueText = CreateText(voicePage, "Monitor Volume Value", "100%", 16, FontStyle.Bold, new Vector2(430f, -38f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
+
+            CreateText(voicePage, "Ambience Title", "空间感", 17, FontStyle.Bold, new Vector2(-408f, -92f), new Vector2(170f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            ambienceSlider = CreateSlider(voicePage, "Ambience", new Vector2(86f, -92f), new Vector2(520f, 42f), true);
+            ambienceValueText = CreateText(voicePage, "Ambience Value", "55%", 16, FontStyle.Bold, new Vector2(430f, -92f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
+
+            CreateText(voicePage, "Echo Title", "回声", 17, FontStyle.Bold, new Vector2(-408f, -146f), new Vector2(170f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            echoSlider = CreateSlider(voicePage, "Echo", new Vector2(86f, -146f), new Vector2(520f, 42f), true);
+            echoValueText = CreateText(voicePage, "Echo Value", "30%", 16, FontStyle.Bold, new Vector2(430f, -146f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
+
+            CreateText(voicePage, "Dynamics Title", "人声稳定", 17, FontStyle.Bold, new Vector2(-408f, -200f), new Vector2(170f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            dynamicsSlider = CreateSlider(voicePage, "Dynamics", new Vector2(86f, -200f), new Vector2(520f, 42f), true);
+            dynamicsValueText = CreateText(voicePage, "Dynamics Value", "65%", 16, FontStyle.Bold, new Vector2(430f, -200f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
+
+            voiceMixerFooterText = CreateText(voicePage, "Mixer Footer", "距离跟随只调整返听，不影响语音找歌", 14, FontStyle.Normal, new Vector2(0f, -252f), new Vector2(ContentWidth, 28f), TextAnchor.MiddleCenter, TextSecondary);
+        }
+
+        private void RetireLegacyVoiceMixerUi()
+        {
+            SetChildActive(voicePage, "Microphone Hint", false);
+            SetChildActive(voicePage, "Volume Hint", false);
+            SetChildActive(voicePage, "Volume Icon", false);
+            SetChildActive(voicePage, "Volume Divider", false);
+            SetChildActive(voicePage, "Preset Hint", false);
+            SetChildActive(voicePage, "Safety Note", false);
         }
 
         private void BuildQueueDrawer()
@@ -1565,7 +1599,35 @@ namespace TsukiVox.AudioPrototype
             voiceMicrophoneToggle.onValueChanged.RemoveAllListeners();
             voiceMicrophoneToggle.onValueChanged.AddListener(HandleMicrophoneToggle);
             monitorVolumeSlider.onValueChanged.RemoveAllListeners();
-            monitorVolumeSlider.onValueChanged.AddListener(value => audioPrototype?.SetMonitorVolume(value));
+            monitorVolumeSlider.onValueChanged.AddListener(value =>
+            {
+                audioPrototype?.SetMonitorVolume(value);
+                RefreshVoice();
+            });
+            ambienceSlider.onValueChanged.RemoveAllListeners();
+            ambienceSlider.onValueChanged.AddListener(value =>
+            {
+                audioPrototype?.SetAmbienceAmount(value);
+                RefreshVoice();
+            });
+            echoSlider.onValueChanged.RemoveAllListeners();
+            echoSlider.onValueChanged.AddListener(value =>
+            {
+                audioPrototype?.SetEchoAmount(value);
+                RefreshVoice();
+            });
+            dynamicsSlider.onValueChanged.RemoveAllListeners();
+            dynamicsSlider.onValueChanged.AddListener(value =>
+            {
+                audioPrototype?.SetDynamicsAmount(value);
+                RefreshVoice();
+            });
+            distanceMonitoringToggle.onValueChanged.RemoveAllListeners();
+            distanceMonitoringToggle.onValueChanged.AddListener(value =>
+            {
+                audioPrototype?.SetDistanceMonitoringEnabled(value);
+                RefreshVoice();
+            });
             for (var index = 0; index < presetButtons.Length; index += 1)
             {
                 var presetIndex = index;
@@ -1833,6 +1895,47 @@ namespace TsukiVox.AudioPrototype
             inputMeterSlider.SetValueWithoutNotify(audioPrototype.InputLevel);
             monitorVolumeSlider.maxValue = audioPrototype.MonitorVolumeMaximum;
             monitorVolumeSlider.SetValueWithoutNotify(audioPrototype.MonitorVolume);
+            ambienceSlider.SetValueWithoutNotify(audioPrototype.AmbienceAmount);
+            echoSlider.SetValueWithoutNotify(audioPrototype.EchoAmount);
+            dynamicsSlider.SetValueWithoutNotify(audioPrototype.DynamicsAmount);
+            distanceMonitoringToggle.SetIsOnWithoutNotify(audioPrototype.IsDistanceMonitoringEnabled);
+            RefreshSwitchVisual(distanceMonitoringToggle, AccentStrong);
+
+            monitorVolumeValueText.text = $"{Mathf.RoundToInt(audioPrototype.MonitorVolume * 100f)}%";
+            ambienceValueText.text = $"{Mathf.RoundToInt(audioPrototype.AmbienceAmount * 100f)}%";
+            echoValueText.text = $"{Mathf.RoundToInt(audioPrototype.EchoAmount * 100f)}%";
+            dynamicsValueText.text = $"{Mathf.RoundToInt(audioPrototype.DynamicsAmount * 100f)}%";
+            voicePresetStatusText.text = $"{FormatPreset(audioPrototype.CurrentPresetIndex)} · " +
+                                         (audioPrototype.HasCustomEffectSettings ? "已微调" : "预设值");
+
+            if (!audioPrototype.IsMonitoring)
+            {
+                distanceMonitoringStatusText.text = "麦克风已关闭 · 距离跟随待机";
+                distanceMonitoringStatusText.color = TextSecondary;
+            }
+            else if (!audioPrototype.IsDistanceMonitoringEnabled)
+            {
+                distanceMonitoringStatusText.text = "固定返听 · 不随距离变化";
+                distanceMonitoringStatusText.color = TextSecondary;
+            }
+            else if (!audioPrototype.IsMicrophoneDistanceTracked)
+            {
+                distanceMonitoringStatusText.text = "等待右手麦克风 · 返听已静音";
+                distanceMonitoringStatusText.color = Warm;
+            }
+            else
+            {
+                distanceMonitoringStatusText.text =
+                    $"距离 {audioPrototype.MicrophoneSurfaceClearance * 100f:0.0} cm · 返听 {audioPrototype.DistanceMonitorGain:P0}";
+                distanceMonitoringStatusText.color = AccentStrong;
+            }
+
+            voiceMixerFooterText.text = audioPrototype.PrefersNativeOboeBackend
+                ? "Native 低延迟仅提供原声；距离跟随仍然生效"
+                : audioPrototype.IsSafetyReducingGain
+                    ? "安全保护正在降低返听增益"
+                    : "距离跟随只调整返听，不影响语音找歌";
+            voiceMixerFooterText.color = audioPrototype.IsSafetyReducingGain ? Warm : TextSecondary;
 
             for (var index = 0; index < presetButtons.Length; index += 1)
             {
@@ -2278,6 +2381,8 @@ namespace TsukiVox.AudioPrototype
                 $"音频后端  {audioPrototype?.ActiveBackendName ?? "missing"}\n" +
                 $"人声预设  {audioPrototype?.CurrentPresetName ?? "missing"}\n" +
                 $"输入/输出  {(audioPrototype?.InputLevel ?? 0f):P0} / {(audioPrototype?.OutputLevel ?? 0f):P0}\n" +
+                $"人声参数  音量 {(audioPrototype?.MonitorVolume ?? 0f):0.00} · 空间 {(audioPrototype?.AmbienceAmount ?? 0f):P0} · 回声 {(audioPrototype?.EchoAmount ?? 0f):P0} · 稳定 {(audioPrototype?.DynamicsAmount ?? 0f):P0}\n" +
+                $"距离返听  {(audioPrototype == null ? "missing" : $"{(audioPrototype.IsDistanceMonitoringEnabled ? "on" : "off")} · {(audioPrototype.IsMicrophoneDistanceTracked ? $"{audioPrototype.MicrophoneSurfaceClearance * 100f:0.0}cm" : "untracked")} · {audioPrototype.DistanceMonitorGain:P0}")}\n" +
                 $"防碰撞  {(handheldPropsPrototype == null ? "missing" : $"{handheldPropsPrototype.MicFaceWarningClearance * 100f:0.0}/{handheldPropsPrototype.MicFaceCriticalClearance * 100f:0.0}cm {handheldPropsPrototype.MicFaceHapticStrength:P0}")}\n" +
                 $"嘴部定位  {(handheldPropsPrototype == null ? "missing" : handheldPropsPrototype.MicFaceMouthLocalOffset.ToString("F3"))}\n" +
                 $"播放服务  {playlistPrototype?.PlaylistOrigin ?? "missing"}\n" +
