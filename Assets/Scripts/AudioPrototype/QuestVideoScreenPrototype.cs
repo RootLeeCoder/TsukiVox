@@ -18,6 +18,9 @@ namespace TsukiVox.AudioPrototype
         private const int ScreenLayer = 0;
         private const string MainTextureProperty = "_MainTex";
         private const string FullCacheOnlineMediaPrefsKey = "TsukiVox.OnlineFullMediaCache";
+        private const string BuiltInDefaultVideoResourcePath = "DefaultMedia/BV1Kx4y1h7vR-p1-off-vocal";
+        private const string BuiltInDefaultItemId = "builtin-default-BV1Kx4y1h7vR-p1";
+        private const string BuiltInDefaultTitle = "BV1Kx4y1h7vR P1 (off vocal)";
         private const float StallDetectionSeconds = 1.75f;
         private const float StallWindowSeconds = 30f;
         private const float StallFallbackSeconds = 3f;
@@ -104,6 +107,10 @@ namespace TsukiVox.AudioPrototype
         private float lastStatusRefreshAt;
         private Coroutine sendNextRoutine;
         private Coroutine loadRoutine;
+        private VideoClip builtInDefaultVideoClip;
+        private bool isPlayingBuiltInDefault;
+        private bool builtInDefaultPlaybackFailed;
+        private string builtInDefaultPlaylistItemId = string.Empty;
 
         public static QuestVideoScreenPrototype EnsureScenePrototype()
         {
@@ -200,6 +207,17 @@ namespace TsukiVox.AudioPrototype
         public bool IsPreparing => isPreparingVideo;
 
         public bool IsPlaying => videoPlayer != null && videoPlayer.isPlaying;
+
+        public bool IsPlayingBuiltInDefault => isPlayingBuiltInDefault;
+
+        public bool IsBuiltInDefaultPreparing => isPlayingBuiltInDefault && isPreparingVideo;
+
+        public bool IsBuiltInDefaultPaused =>
+            isPlayingBuiltInDefault &&
+            !isPreparingVideo &&
+            videoPlayer != null &&
+            videoPlayer.isPrepared &&
+            !videoPlayer.isPlaying;
 
         public bool FullCacheOnlineMedia => fullCacheOnlineMedia;
 
@@ -684,6 +702,23 @@ namespace TsukiVox.AudioPrototype
 
         private void ApplyPlaylistState(PlaylistState state)
         {
+            if (isPlayingBuiltInDefault)
+            {
+                if (state == null)
+                {
+                    return;
+                }
+
+                var incomingItemId = state.CurrentItem?.id ?? string.Empty;
+                if (string.Equals(incomingItemId, builtInDefaultPlaylistItemId, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                isPlayingBuiltInDefault = false;
+                builtInDefaultPlaylistItemId = string.Empty;
+            }
+
             if (state == null)
             {
                 SetStatus("Video: waiting for playlist sync.");
@@ -806,6 +841,11 @@ namespace TsukiVox.AudioPrototype
             suppressNextOnStop = true;
             videoPlayer.Stop();
             suppressNextOnStop = false;
+            isPlayingBuiltInDefault = false;
+            builtInDefaultPlaylistItemId = string.Empty;
+            videoPlayer.isLooping = false;
+            videoPlayer.clip = null;
+            videoPlayer.source = VideoSource.Url;
 
             var shouldCache = forceCache || ShouldCacheRemoteVideos();
             var playbackUrl = shouldCache
@@ -970,6 +1010,14 @@ namespace TsukiVox.AudioPrototype
             ResetStallObservation();
             Debug.Log($"[TsukiVox Video] Prepared {SanitizeMediaUrl(activePlayableUrl)} via {activeTransport} ({source.width}x{source.height}, {source.length:0.0}s)");
 
+            if (isPlayingBuiltInDefault)
+            {
+                pendingPlayAfterPrepare = false;
+                source.Play();
+                SetStatus($"Video: playing built-in default {BuiltInDefaultTitle}.");
+                return;
+            }
+
             if (pendingPlayAfterPrepare && autoPlayWhenPlaylistIsPlaying)
             {
                 pendingPlayAfterPrepare = false;
@@ -990,6 +1038,11 @@ namespace TsukiVox.AudioPrototype
         private void HandleVideoError(VideoPlayer source, string message)
         {
             isPreparingVideo = false;
+            if (isPlayingBuiltInDefault)
+            {
+                HandleBuiltInDefaultFailure(message);
+                return;
+            }
             HandlePlaybackFailure(message, IsAuthenticationFailure(message));
         }
 
@@ -1012,6 +1065,22 @@ namespace TsukiVox.AudioPrototype
         {
             if (suppressNextOnStop || !hasPreparedFirstFrame)
             {
+                return;
+            }
+
+            if (isPlayingBuiltInDefault)
+            {
+                isPlayingBuiltInDefault = false;
+                builtInDefaultPlaylistItemId = string.Empty;
+                var state = playlistPrototype != null ? playlistPrototype.CurrentState : null;
+                if (state?.CurrentItem != null)
+                {
+                    ApplyPlaylistState(state);
+                }
+                else
+                {
+                    StopCurrentVideo("Video: built-in demo ended.");
+                }
                 return;
             }
 
@@ -1042,6 +1111,12 @@ namespace TsukiVox.AudioPrototype
         private void HandlePlaybackFailure(string message, bool authenticationFailure)
         {
             var safeMessage = SanitizeDiagnosticText(message);
+            if (isPlayingBuiltInDefault)
+            {
+                HandleBuiltInDefaultFailure(safeMessage);
+                return;
+            }
+
             Debug.LogWarning(
                 $"[TsukiVox Video] {activeTransport} failure for {SanitizeMediaUrl(activePlaybackUrl)}: {safeMessage}");
 
@@ -1081,6 +1156,17 @@ namespace TsukiVox.AudioPrototype
             }
 
             SetStatus($"Video error: {safeMessage}\n{GetUrlDiagnostics(activePlaybackUrl)}");
+        }
+
+        private void HandleBuiltInDefaultFailure(string message)
+        {
+            var safeMessage = SanitizeDiagnosticText(message);
+            builtInDefaultPlaybackFailed = true;
+            isPlayingBuiltInDefault = false;
+            builtInDefaultPlaylistItemId = string.Empty;
+            pendingPlayAfterPrepare = false;
+            SetStatus($"Video error: built-in default failed: {safeMessage}");
+            Debug.LogWarning($"[TsukiVox Video] Built-in default failed: {safeMessage}");
         }
 
         private void ReloadActiveMedia(bool forceCache, bool forceMp4, double resumeTime, string reason)
@@ -1245,6 +1331,8 @@ namespace TsukiVox.AudioPrototype
             latestStreamUrl = string.Empty;
             latestCacheUrl = string.Empty;
             activeTransport = "idle";
+            isPlayingBuiltInDefault = false;
+            builtInDefaultPlaylistItemId = string.Empty;
             lastVideoProbeSummary = "probe pending";
             sentNextForCurrentClip = false;
             recentStalls.Clear();
@@ -1254,9 +1342,124 @@ namespace TsukiVox.AudioPrototype
                 suppressNextOnStop = true;
                 videoPlayer.Stop();
                 suppressNextOnStop = false;
+                videoPlayer.isLooping = false;
+                videoPlayer.clip = null;
+                videoPlayer.source = VideoSource.Url;
             }
 
             SetStatus(status);
+        }
+
+        public bool PlayBuiltInDefault()
+        {
+            if (videoPlayer == null)
+            {
+                return false;
+            }
+
+            if (isPlayingBuiltInDefault && videoPlayer.isPrepared)
+            {
+                if (videoPlayer.canSetTime)
+                {
+                    videoPlayer.time = 0d;
+                }
+
+                videoPlayer.Play();
+                suppressStallDetectionUntil = Time.unscaledTime + StallSuppressionSeconds;
+                ResetStallObservation();
+                SetStatus($"Video: playing built-in default {BuiltInDefaultTitle}.");
+                return true;
+            }
+
+            builtInDefaultVideoClip ??= Resources.Load<VideoClip>(BuiltInDefaultVideoResourcePath);
+            if (builtInDefaultVideoClip == null)
+            {
+                builtInDefaultPlaybackFailed = true;
+                Debug.LogWarning($"[TsukiVox Video] Missing built-in default at Resources/{BuiltInDefaultVideoResourcePath}.");
+                return false;
+            }
+
+            builtInDefaultPlaybackFailed = false;
+
+            if (loadRoutine != null)
+            {
+                StopCoroutine(loadRoutine);
+                loadRoutine = null;
+            }
+
+            suppressNextOnStop = true;
+            videoPlayer.Stop();
+            suppressNextOnStop = false;
+            videoPlayer.source = VideoSource.VideoClip;
+            videoPlayer.clip = builtInDefaultVideoClip;
+            videoPlayer.isLooping = false;
+
+            activeMediaIdentity = BuiltInDefaultItemId;
+            activeItemId = BuiltInDefaultItemId;
+            activePlayableUrl = $"resource://{BuiltInDefaultVideoResourcePath}";
+            activeRawPlayableUrl = activePlayableUrl;
+            activePlaybackUrl = activePlayableUrl;
+            latestStreamUrl = string.Empty;
+            latestCacheUrl = string.Empty;
+            activeTransport = "built-in";
+            cachePhase = "not needed";
+            cacheProgress = 1f;
+            lastVideoProbeSummary = "probe not needed";
+            lastVideoCacheSummary = "built into APK";
+            sentNextForCurrentClip = false;
+            hasPreparedFirstFrame = false;
+            isCachingVideo = false;
+            isPreparingVideo = true;
+            pendingPlayAfterPrepare = true;
+            resumeTimeAfterPrepare = 0d;
+            prepareStartedAt = Time.unscaledTime;
+            lastStatusRefreshAt = 0f;
+            isPlayingBuiltInDefault = true;
+            builtInDefaultPlaylistItemId = playlistPrototype?.CurrentState?.CurrentItem?.id ?? string.Empty;
+            suppressStallDetectionUntil = Time.unscaledTime + StallSuppressionSeconds;
+            ResetStallObservation();
+
+            SetStatus($"Video: preparing built-in default {BuiltInDefaultTitle}...");
+            Debug.Log($"[TsukiVox Video] Preparing built-in default {BuiltInDefaultTitle}.");
+            videoPlayer.Prepare();
+            return true;
+        }
+
+        public bool ToggleBuiltInDefaultPlayback()
+        {
+            if (!isPlayingBuiltInDefault)
+            {
+                return PlayBuiltInDefault();
+            }
+
+            if (videoPlayer == null || isPreparingVideo || !videoPlayer.isPrepared)
+            {
+                return false;
+            }
+
+            if (videoPlayer.isPlaying)
+            {
+                videoPlayer.Pause();
+                SetStatus($"Video: built-in default {BuiltInDefaultTitle} paused.");
+                return true;
+            }
+
+            videoPlayer.Play();
+            suppressStallDetectionUntil = Time.unscaledTime + StallSuppressionSeconds;
+            ResetStallObservation();
+            SetStatus($"Video: playing built-in default {BuiltInDefaultTitle}.");
+            return true;
+        }
+
+        public bool StopBuiltInDefault()
+        {
+            if (!isPlayingBuiltInDefault)
+            {
+                return false;
+            }
+
+            StopCurrentVideo("Video: built-in demo stopped.");
+            return true;
         }
 
         private void SynchronizeVideoSurface()
@@ -1441,6 +1644,7 @@ namespace TsukiVox.AudioPrototype
             debugBuilder.AppendLine($"activeResolvedUrl {SanitizeMediaUrl(activePlayableUrl)}");
             debugBuilder.AppendLine($"activePlaybackUrl {SanitizeMediaUrl(activePlaybackUrl)}");
             debugBuilder.AppendLine($"transport {activeTransport}");
+            debugBuilder.AppendLine($"builtInDefault {isPlayingBuiltInDefault} loaded {builtInDefaultVideoClip != null} failed {builtInDefaultPlaybackFailed}");
             debugBuilder.AppendLine($"fullCacheOnlineMedia {fullCacheOnlineMedia}");
             debugBuilder.AppendLine($"cacheState {isCachingVideo} {cachePhase} {cacheProgress:P0}");
             debugBuilder.AppendLine($"fallback {lastFallbackReason}");

@@ -40,6 +40,7 @@ namespace TsukiVox.AudioPrototype
         private const float QueueDrawerContentWidth = 590f;
         private const float QueueRowWidth = 580f;
         private const float EnqueueConfirmationSeconds = 6.5f;
+        private const float ExitConfirmationSeconds = 4f;
 
         private Color ScreenBackground => palette.ScreenBackground;
         private Color Surface => palette.Surface;
@@ -250,6 +251,11 @@ namespace TsukiVox.AudioPrototype
         private bool searchResultSkeletonVisible;
 
         private Button settingsBackButton;
+        private Button playBuiltInDefaultButton;
+        private QuestUiIcon playBuiltInDefaultIcon;
+        private TMP_Text playBuiltInDefaultText;
+        private Button stopBuiltInDefaultButton;
+        private QuestUiIcon stopBuiltInDefaultIcon;
         private Button openServiceSettingsButton;
         private Button openMicProtectionButton;
         private QuestUiSurface openMicProtectionSurface;
@@ -274,6 +280,9 @@ namespace TsukiVox.AudioPrototype
         private Toggle nativeToggle;
         private Button openDiagnosticsButton;
         private TMP_Text settingsBuildText;
+        private Button exitApplicationButton;
+        private QuestUiIcon exitApplicationIcon;
+        private TMP_Text exitApplicationText;
 
         private Button micProtectionBackButton;
         private Toggle micProtectionToggle;
@@ -311,6 +320,7 @@ namespace TsukiVox.AudioPrototype
         private bool rawDetailsVisible;
         private bool queueDrawerVisible;
         private float nextRefreshAt;
+        private float exitConfirmationExpiresAt;
         private Coroutine pageTransition;
         private Coroutine debugDrawerTransition;
         private Coroutine queueDrawerTransition;
@@ -410,6 +420,7 @@ namespace TsukiVox.AudioPrototype
             CancelSuggestionDebounce();
             CancelSearchResultCoverRequests();
             CancelQueueCoverRequests();
+            exitConfirmationExpiresAt = 0f;
             UnsubscribePlaylist();
             UnsubscribeRoom();
         }
@@ -1262,6 +1273,10 @@ namespace TsukiVox.AudioPrototype
             SetChildActive(settingsPage, "Helper Host", false);
             SetChildActive(settingsPage, "Apply Host", false);
             SetChildActive(settingsPage, "Default Host", false);
+            playBuiltInDefaultButton = CreateSurfaceButton(settingsPage, "Play Built-in Default", new Vector2(118f, 232f), new Vector2(196f, 52f), Surface, Line);
+            playBuiltInDefaultIcon = EnsureIcon(playBuiltInDefaultButton.transform, "Icon", QuestUiIconKind.Play, new Vector2(-72f, 0f), new Vector2(24f, 24f), Accent);
+            playBuiltInDefaultText = CreateText(playBuiltInDefaultButton.transform, "Label", "播放内置视频", 16, FontStyle.Bold, new Vector2(18f, 0f), new Vector2(124f, 34f), TextAnchor.MiddleCenter, TextPrimary);
+            stopBuiltInDefaultButton = CreateIconButton(settingsPage, "Stop Built-in Default", QuestUiIconKind.Stop, new Vector2(256f, 232f), new Vector2(56f, 52f), Surface, TextSecondary, out stopBuiltInDefaultIcon);
             openMicProtectionButton = CreateSurfaceButton(settingsPage, "Open Mic Protection", new Vector2(396f, 232f), new Vector2(200f, 52f), Surface, Line);
             openMicProtectionSurface = openMicProtectionButton.targetGraphic as QuestUiSurface;
             openMicProtectionIcon = EnsureIcon(openMicProtectionButton.transform, "Icon", QuestUiIconKind.Microphone, new Vector2(-70f, 0f), new Vector2(24f, 24f), Accent);
@@ -1280,10 +1295,14 @@ namespace TsukiVox.AudioPrototype
             CreateSettingToggle(settingsPage, "Native Backend", "Native 低延迟", "原声路径，不包含 KTV 效果", -124f, out nativeToggle);
 
             CreateDivider(settingsPage, "Audio Divider", new Vector2(0f, -184f), new Vector2(ContentWidth, 1f));
-            openDiagnosticsButton = CreateSurfaceButton(settingsPage, "Open Diagnostics", new Vector2(0f, -228f), new Vector2(ContentWidth, 72f), Surface, Line);
-            CreateText(openDiagnosticsButton.transform, "Title", "诊断与支持", 19, FontStyle.Bold, new Vector2(-340f, 11f), new Vector2(300f, 32f), TextAnchor.MiddleLeft, TextPrimary);
-            settingsBuildText = CreateText(openDiagnosticsButton.transform, "Hint", QuestBuildInfo.SettingsSummary, 15, FontStyle.Normal, new Vector2(-20f, -17f), new Vector2(840f, 26f), TextAnchor.MiddleLeft, TextSecondary);
-            EnsureIcon(openDiagnosticsButton.transform, "Chevron", QuestUiIconKind.ChevronRight, new Vector2(458f, 0f), new Vector2(24f, 24f), TextSecondary);
+            openDiagnosticsButton = CreateSurfaceButton(settingsPage, "Open Diagnostics", new Vector2(-116f, -228f), new Vector2(760f, 72f), Surface, Line);
+            CreateText(openDiagnosticsButton.transform, "Title", "诊断与支持", 19, FontStyle.Bold, new Vector2(-230f, 11f), new Vector2(260f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            settingsBuildText = CreateText(openDiagnosticsButton.transform, "Hint", QuestBuildInfo.SettingsSummary, 15, FontStyle.Normal, new Vector2(-65f, -17f), new Vector2(520f, 26f), TextAnchor.MiddleLeft, TextSecondary);
+            EnsureIcon(openDiagnosticsButton.transform, "Chevron", QuestUiIconKind.ChevronRight, new Vector2(340f, 0f), new Vector2(24f, 24f), TextSecondary);
+
+            exitApplicationButton = CreateSurfaceButton(settingsPage, "Exit Application", new Vector2(388f, -228f), new Vector2(216f, 72f), Surface, Line);
+            exitApplicationIcon = EnsureIcon(exitApplicationButton.transform, "Icon", QuestUiIconKind.Power, new Vector2(-72f, 0f), new Vector2(24f, 24f), Warm);
+            exitApplicationText = CreateText(exitApplicationButton.transform, "Label", "退出应用", 17, FontStyle.Bold, new Vector2(30f, 0f), new Vector2(132f, 34f), TextAnchor.MiddleCenter, TextPrimary);
         }
 
         private void BuildServicePage()
@@ -1422,6 +1441,8 @@ namespace TsukiVox.AudioPrototype
             WireButton(voiceBackButton, () => ShowPage(UiPage.Home));
             WireButton(songSearchBackButton, () => ShowPage(UiPage.Home));
             WireButton(settingsBackButton, () => ShowPage(UiPage.Home));
+            WireButton(playBuiltInDefaultButton, () => videoScreenPrototype?.ToggleBuiltInDefaultPlayback());
+            WireButton(stopBuiltInDefaultButton, () => videoScreenPrototype?.StopBuiltInDefault());
             WireButton(openServiceSettingsButton, () => ShowPage(UiPage.Service));
             WireButton(serviceBackButton, () => ShowPage(UiPage.Settings));
             WireButton(openMicProtectionButton, () => ShowPage(UiPage.MicProtection));
@@ -1531,6 +1552,7 @@ namespace TsukiVox.AudioPrototype
                 SetQueueDrawerVisible(false);
                 SetDebugDrawerVisible(true);
             });
+            WireButton(exitApplicationButton, HandleExitApplication);
             WireButton(closeDiagnosticsButton, () => SetDebugDrawerVisible(false));
             WireButton(debugScrimButton, () => SetDebugDrawerVisible(false));
             WireButton(rawDetailsButton, ToggleRawDetails);
@@ -1872,7 +1894,51 @@ namespace TsukiVox.AudioPrototype
             }
 
             settingsBuildText.text = QuestBuildInfo.SettingsSummary;
-            if (helperHostInput != null && !helperHostInput.isFocused && playlistPrototype != null)
+            if (playBuiltInDefaultButton != null)
+            {
+                var isBuiltInDefaultActive = videoScreenPrototype != null && videoScreenPrototype.IsPlayingBuiltInDefault;
+                var isBuiltInDefaultPreparing = videoScreenPrototype != null && videoScreenPrototype.IsBuiltInDefaultPreparing;
+                var isBuiltInDefaultPaused = videoScreenPrototype != null && videoScreenPrototype.IsBuiltInDefaultPaused;
+                playBuiltInDefaultButton.interactable = videoScreenPrototype != null && !isBuiltInDefaultPreparing;
+                playBuiltInDefaultText.text = isBuiltInDefaultPreparing
+                    ? "正在准备视频"
+                    : isBuiltInDefaultPaused
+                        ? "继续内置视频"
+                        : isBuiltInDefaultActive
+                            ? "暂停内置视频"
+                            : "播放内置视频";
+                playBuiltInDefaultIcon.SetIcon(isBuiltInDefaultActive && !isBuiltInDefaultPaused && !isBuiltInDefaultPreparing
+                    ? QuestUiIconKind.Pause
+                    : QuestUiIconKind.Play);
+                playBuiltInDefaultIcon.color = isBuiltInDefaultActive ? AccentStrong : Accent;
+                if (playBuiltInDefaultButton.targetGraphic is QuestUiSurface builtInDefaultSurface)
+                {
+                    builtInDefaultSurface.color = isBuiltInDefaultActive ? palette.EnabledSurface : Surface;
+                }
+
+                stopBuiltInDefaultButton.interactable = isBuiltInDefaultActive;
+                stopBuiltInDefaultIcon.color = isBuiltInDefaultActive ? Warm : TextFaint;
+                if (stopBuiltInDefaultButton.targetGraphic is QuestUiSurface stopBuiltInDefaultSurface)
+                {
+                    stopBuiltInDefaultSurface.color = isBuiltInDefaultActive ? WarmSurface : Surface;
+                }
+            }
+
+            var exitConfirmationActive = exitConfirmationExpiresAt > Time.unscaledTime;
+            exitApplicationText.text = exitConfirmationActive ? "再次点击退出" : "退出应用";
+            exitApplicationText.color = exitConfirmationActive ? Warm : TextPrimary;
+            exitApplicationIcon.color = Warm;
+            if (exitApplicationButton.targetGraphic is QuestUiSurface exitSurface)
+            {
+                exitSurface.color = exitConfirmationActive ? WarmSurface : Surface;
+            }
+
+            var hostKeyboard = helperHostInput != null
+                ? helperHostInput.GetComponent<QuestAndroidKeyboardInput>()
+                : null;
+            if (helperHostInput != null &&
+                playlistPrototype != null &&
+                (hostKeyboard != null ? !hostKeyboard.IsEditing : !helperHostInput.isFocused))
             {
                 helperHostInput.SetTextWithoutNotify(playlistPrototype.ServiceAddress);
             }
@@ -2103,6 +2169,25 @@ namespace TsukiVox.AudioPrototype
         {
             playlistPrototype?.ApplyServiceAddress(helperHostInput != null ? helperHostInput.text : string.Empty);
             RefreshSettings();
+        }
+
+        private void HandleExitApplication()
+        {
+            if (exitConfirmationExpiresAt <= 0f || Time.unscaledTime > exitConfirmationExpiresAt)
+            {
+                exitConfirmationExpiresAt = Time.unscaledTime + ExitConfirmationSeconds;
+                RefreshSettings();
+                return;
+            }
+
+            exitApplicationButton.interactable = false;
+            PlayerPrefs.Save();
+            Debug.Log("[TsukiVox UI] Exiting application after user confirmation.");
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
         }
 
         private void OpenSongSearchPage()
@@ -3273,6 +3358,12 @@ namespace TsukiVox.AudioPrototype
                 songSearchInput?.GetComponent<QuestAndroidKeyboardInput>()?.HideKeyboard();
                 HideSuggestions();
             }
+            if (currentPage == UiPage.Settings && page != UiPage.Settings)
+            {
+                exitConfirmationExpiresAt = 0f;
+            }
+
+            SetQueueButtonVisibleForPage(page);
 
             if (pageTransition != null)
             {
@@ -3346,6 +3437,23 @@ namespace TsukiVox.AudioPrototype
             SetPageGroupImmediate(settingsGroup, page == UiPage.Settings);
             SetPageGroupImmediate(serviceGroup, page == UiPage.Service);
             SetPageGroupImmediate(micProtectionGroup, page == UiPage.MicProtection);
+            SetQueueButtonVisibleForPage(page);
+        }
+
+        private void SetQueueButtonVisibleForPage(UiPage page)
+        {
+            if (queueDrawerButton == null)
+            {
+                return;
+            }
+
+            var visible = page == UiPage.Home || page == UiPage.SongSearch || page == UiPage.Voice;
+            if (!visible && queueDrawerVisible)
+            {
+                SetQueueDrawerImmediate(false);
+            }
+
+            queueDrawerButton.gameObject.SetActive(visible);
         }
 
         private void ToggleQueueDrawer()

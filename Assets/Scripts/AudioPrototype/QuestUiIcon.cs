@@ -27,6 +27,8 @@ namespace TsukiVox.AudioPrototype
         Sparkles,
         Check,
         Trash,
+        Stop,
+        Power,
     }
 
     /// <summary>
@@ -108,6 +110,13 @@ namespace TsukiVox.AudioPrototype
                     AddRoundedRect(vertexHelper, rect, 6f, 6f, 12f, 16f, 2f, thickness);
                     AddLine(vertexHelper, rect, 10f, 10f, 10f, 18f, thickness);
                     AddLine(vertexHelper, rect, 14f, 10f, 14f, 18f, thickness);
+                    break;
+                case QuestUiIconKind.Stop:
+                    AddRoundedRect(vertexHelper, rect, 5f, 5f, 14f, 14f, 2f, thickness);
+                    break;
+                case QuestUiIconKind.Power:
+                    AddLine(vertexHelper, rect, 12f, 3f, 12f, 12f, thickness);
+                    AddArc(vertexHelper, rect, 12f, 12f, 8.5f, -48f, 276f, thickness);
                     break;
                 case QuestUiIconKind.Queue:
                     AddLine(vertexHelper, rect, 3f, 5f, 13f, 5f, thickness);

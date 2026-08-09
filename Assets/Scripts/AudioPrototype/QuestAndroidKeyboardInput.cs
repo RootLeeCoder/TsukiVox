@@ -40,6 +40,8 @@ namespace TsukiVox.AudioPrototype
 
         public bool IsKeyboardOpen => keyboardRoot != null && keyboardRoot.gameObject.activeInHierarchy;
 
+        public bool IsEditing => inputField != null && (inputField.isFocused || IsKeyboardOpen);
+
         public static bool IsKeyboardTarget(GameObject target)
         {
             return target != null &&
@@ -302,7 +304,7 @@ namespace TsukiVox.AudioPrototype
                 LetterKey('N'),
                 LetterKey('M'),
                 new KeyDefinition("退格", 132f, Backspace, true));
-            CreateBottomRow(alphabetLayout, "符号", () => SetSymbolMode(true));
+            CreateBottomRow(alphabetLayout, "数字/符号", () => SetSymbolMode(true));
         }
 
         private void BuildSymbolLayout()
