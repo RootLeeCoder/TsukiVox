@@ -281,6 +281,7 @@ namespace TsukiVox.AudioPrototype
         private Button applyHostButton;
         private Button defaultHostButton;
         private Button serviceBackButton;
+        private Button directModeButton;
         private Button companionModeButton;
         private Button onlineModeButton;
         private Button localDevelopmentModeButton;
@@ -1366,9 +1367,10 @@ namespace TsukiVox.AudioPrototype
         private void BuildServicePage()
         {
             BuildSubpageHeader(servicePage, "点歌服务", out serviceBackButton);
-            companionModeButton = CreateTextButton(servicePage, "Companion Mode", "局域网 Companion", new Vector2(-332f, 132f), new Vector2(314f, 60f), Surface, TextPrimary);
-            onlineModeButton = CreateTextButton(servicePage, "Online Mode", "公网服务", new Vector2(0f, 132f), new Vector2(314f, 60f), Surface, TextPrimary);
-            localDevelopmentModeButton = CreateTextButton(servicePage, "Local Development Mode", "本地开发", new Vector2(332f, 132f), new Vector2(314f, 60f), Surface, TextPrimary);
+            directModeButton = CreateTextButton(servicePage, "Direct Mode", "直接请求", new Vector2(-372f, 132f), new Vector2(232f, 60f), Surface, TextPrimary);
+            companionModeButton = CreateTextButton(servicePage, "Companion Mode", "局域网 Companion", new Vector2(-124f, 132f), new Vector2(232f, 60f), Surface, TextPrimary);
+            onlineModeButton = CreateTextButton(servicePage, "Online Mode", "公网服务", new Vector2(124f, 132f), new Vector2(232f, 60f), Surface, TextPrimary);
+            localDevelopmentModeButton = CreateTextButton(servicePage, "Local Development Mode", "本地开发", new Vector2(372f, 132f), new Vector2(232f, 60f), Surface, TextPrimary);
 
             CreateText(servicePage, "Address Label", "服务地址", 17, FontStyle.Bold, new Vector2(-402f, 75f), new Vector2(180f, 32f), TextAnchor.MiddleLeft, TextSecondary);
             serviceConnectionText = CreateText(servicePage, "Connection Status", "正在连接", 17, FontStyle.Bold, new Vector2(330f, 75f), new Vector2(320f, 32f), TextAnchor.MiddleRight, Accent);
@@ -1638,6 +1640,7 @@ namespace TsukiVox.AudioPrototype
                 });
             }
 
+            WireButton(directModeButton, SelectDirectService);
             WireButton(companionModeButton, SelectCompanionService);
             WireButton(onlineModeButton, SelectOnlineService);
             WireButton(localDevelopmentModeButton, SelectLocalDevelopmentService);
@@ -1717,7 +1720,9 @@ namespace TsukiVox.AudioPrototype
         private void RefreshHome()
         {
             var connected = playlistPrototype != null && playlistPrototype.IsConnected;
-            connectionText.text = connected ? "点歌服务已连接" : "点歌服务离线";
+            connectionText.text = connected && playlistPrototype != null && playlistPrototype.IsDirectService
+                ? "直接请求已就绪"
+                : connected ? "点歌服务已连接" : "点歌服务离线";
             connectionText.color = connected ? TextPrimary : Warm;
             connectionDot.color = connected ? Accent : Warm;
 
@@ -1992,7 +1997,8 @@ namespace TsukiVox.AudioPrototype
                                  playlistPrototype.CanSendControl &&
                                  !string.IsNullOrWhiteSpace(queueRowItemIds[rowIndex]);
                 var canPlay = canControl &&
-                              !string.Equals(item.status, PlaylistClient.StatusError, StringComparison.OrdinalIgnoreCase);
+                              !string.Equals(item.status, PlaylistClient.StatusError, StringComparison.OrdinalIgnoreCase) &&
+                              (!playlistPrototype.IsDirectService || item.IsReady);
 
                 queueRowGroups[rowIndex].alpha = isPast ? 0.48f : 1f;
                 queueRowSurfaces[rowIndex].color = isCurrent ? palette.PendingSurface : Color.clear;
@@ -2063,18 +2069,23 @@ namespace TsukiVox.AudioPrototype
         {
             var connected = playlistPrototype != null && playlistPrototype.IsConnected;
             var serviceName = playlistPrototype?.ServiceDisplayName ?? "未配置";
-            settingsConnectionText.text = connected ? "已连接" : "未连接";
+            var directReady = connected && playlistPrototype != null && playlistPrototype.IsDirectService;
+            settingsConnectionText.text = directReady ? "已就绪" : connected ? "已连接" : "未连接";
             settingsConnectionText.color = connected ? Accent : Warm;
             if (serviceConnectionText != null)
             {
-                serviceConnectionText.text = connected ? $"已连接 · {serviceName}" : $"未连接 · {serviceName}";
+                serviceConnectionText.text = directReady
+                    ? $"已就绪 · {serviceName}"
+                    : connected ? $"已连接 · {serviceName}" : $"未连接 · {serviceName}";
                 serviceConnectionText.color = connected ? Accent : Warm;
             }
 
             var settingsHint = openServiceSettingsButton?.transform.Find("Hint")?.GetComponent<TMP_Text>();
             if (settingsHint != null)
             {
-                settingsHint.text = SingleLine($"{serviceName} · {playlistPrototype?.ServiceAddress ?? "未配置"}");
+                settingsHint.text = playlistPrototype != null && playlistPrototype.IsDirectService
+                    ? "直接请求 · 匿名低清视频直存头显"
+                    : SingleLine($"{serviceName} · {playlistPrototype?.ServiceAddress ?? "未配置"}");
             }
 
             settingsBuildText.text = QuestBuildInfo.SettingsSummary;
@@ -2129,12 +2140,33 @@ namespace TsukiVox.AudioPrototype
 
             if (helperHostInput?.placeholder is TMP_Text placeholder)
             {
-                placeholder.text = playlistPrototype != null && playlistPrototype.IsOnlineService
-                    ? QuestPlaylistPrototype.DefaultOnlineServiceOrigin
-                    : QuestPlaylistPrototype.DefaultHelperHostAddress;
+                placeholder.text = playlistPrototype != null && playlistPrototype.IsDirectService
+                    ? "无需服务地址"
+                    : playlistPrototype != null && playlistPrototype.IsOnlineService
+                        ? QuestPlaylistPrototype.DefaultOnlineServiceOrigin
+                        : QuestPlaylistPrototype.DefaultHelperHostAddress;
             }
 
-            SetServiceModeButtonVisual(companionModeButton, playlistPrototype != null && !playlistPrototype.IsOnlineService);
+            var supportsServiceAddress = playlistPrototype != null && playlistPrototype.SupportsServiceAddress;
+            if (helperHostInput != null)
+            {
+                helperHostInput.interactable = supportsServiceAddress;
+            }
+            if (applyHostButton != null)
+            {
+                applyHostButton.interactable = supportsServiceAddress;
+            }
+            if (defaultHostButton != null)
+            {
+                defaultHostButton.interactable = supportsServiceAddress;
+            }
+
+            SetServiceModeButtonVisual(
+                directModeButton,
+                playlistPrototype != null && playlistPrototype.IsDirectService);
+            SetServiceModeButtonVisual(
+                companionModeButton,
+                playlistPrototype != null && playlistPrototype.IsCompanionService);
             SetServiceModeButtonVisual(
                 onlineModeButton,
                 playlistPrototype != null &&
@@ -2147,6 +2179,7 @@ namespace TsukiVox.AudioPrototype
             if (onlineFullCacheToggle != null)
             {
                 onlineFullCacheToggle.SetIsOnWithoutNotify(
+                    playlistPrototype != null && playlistPrototype.IsDirectService ||
                     videoScreenPrototype != null && videoScreenPrototype.FullCacheOnlineMedia);
                 onlineFullCacheToggle.interactable = playlistPrototype != null && playlistPrototype.IsOnlineService;
                 RefreshSwitchVisual(onlineFullCacheToggle, Accent);
@@ -2155,12 +2188,16 @@ namespace TsukiVox.AudioPrototype
             if (voiceSearchEnabledToggle != null && playlistPrototype != null)
             {
                 voiceSearchEnabledToggle.SetIsOnWithoutNotify(playlistPrototype.IsVoiceSearchEnabled);
+                voiceSearchEnabledToggle.interactable = playlistPrototype.SupportsVoiceSearch;
                 RefreshSwitchVisual(voiceSearchEnabledToggle, Accent);
-                SetVoiceFeatureVisible(playlistPrototype.IsVoiceSearchEnabled);
+                SetVoiceFeatureVisible(
+                    playlistPrototype.SupportsVoiceSearch && playlistPrototype.IsVoiceSearchEnabled);
                 RefreshVoiceProviderButtons();
                 if (voiceSearchHintText != null)
                 {
-                    voiceSearchHintText.text = !playlistPrototype.IsVoiceSearchEnabled
+                    voiceSearchHintText.text = !playlistPrototype.SupportsVoiceSearch
+                        ? "直接请求不采集或上传语音，请切换到点歌服务"
+                        : !playlistPrototype.IsVoiceSearchEnabled
                         ? "已关闭：入口已隐藏，不再采集或上传语音"
                         : audioPrototype != null && audioPrototype.PrefersNativeOboeBackend
                             ? "Native 低延迟后端下无法采集语音，请先关闭它"
@@ -2365,7 +2402,9 @@ namespace TsukiVox.AudioPrototype
             diagnosticsHealthText.color = audioPrototype == null || videoScreenPrototype == null ? Warm : TextPrimary;
 
             diagnosticsServiceText.text = playlistPrototype != null && playlistPrototype.IsConnected
-                ? $"点歌服务：已连接 · {playlistPrototype.ServiceDisplayName}"
+                ? playlistPrototype.IsDirectService
+                    ? "播放方式：已就绪 · 直接请求"
+                    : $"点歌服务：已连接 · {playlistPrototype.ServiceDisplayName}"
                 : $"点歌服务：未连接 · {playlistPrototype?.ServiceDisplayName ?? "未配置"}";
 
             var videoSummary = videoScreenPrototype == null
@@ -2807,7 +2846,7 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
-            var visible = playlistPrototype.IsVoiceSearchEnabled;
+            var visible = playlistPrototype.IsVoiceSearchEnabled && playlistPrototype.SupportsVoiceSearch;
             SetVoiceFeatureVisible(visible);
             if (!visible)
             {
@@ -3209,6 +3248,11 @@ namespace TsukiVox.AudioPrototype
 
         private void ApplyDefaultServiceAddress()
         {
+            if (playlistPrototype != null && playlistPrototype.IsDirectService)
+            {
+                return;
+            }
+
             if (helperHostInput != null)
             {
                 helperHostInput.SetTextWithoutNotify(playlistPrototype != null && playlistPrototype.IsOnlineService
@@ -3217,6 +3261,13 @@ namespace TsukiVox.AudioPrototype
             }
 
             playlistPrototype?.ApplyDefaultServiceAddress();
+            RefreshSettings();
+        }
+
+        private void SelectDirectService()
+        {
+            playlistPrototype?.UseDirectService();
+            helperHostInput?.SetTextWithoutNotify("无需服务地址");
             RefreshSettings();
         }
 

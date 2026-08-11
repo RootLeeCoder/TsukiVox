@@ -4,6 +4,7 @@ using UnityEngine.UI;
 
 namespace TsukiVox.AudioPrototype
 {
+    [RequireComponent(typeof(CanvasRenderer))]
     public sealed class QuestUiSurface : MaskableGraphic
     {
         [SerializeField, Min(0f)] private float cornerRadius = 8f;

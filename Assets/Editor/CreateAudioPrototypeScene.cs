@@ -199,7 +199,7 @@ namespace TsukiVox.AudioPrototype.Editor
             playlistSo.FindProperty("nextButton").objectReferenceValue = playlistNext;
             playlistSo.FindProperty("replayButton").objectReferenceValue = replay;
             playlistSo.FindProperty("helperHost").stringValue = QuestPlaylistPrototype.DefaultHelperHostAddress;
-            playlistSo.FindProperty("serviceMode").enumValueIndex = (int)TsukiVoxServiceMode.Online;
+            playlistSo.FindProperty("serviceMode").enumValueIndex = (int)TsukiVoxServiceMode.Direct;
             playlistSo.FindProperty("onlineServiceOrigin").stringValue = QuestPlaylistPrototype.DefaultOnlineServiceOrigin;
             playlistSo.FindProperty("playlistOrigin").stringValue = $"http://{QuestPlaylistPrototype.DefaultHelperHostAddress}:5175";
             playlistSo.FindProperty("downloadOrigin").stringValue = $"http://{QuestPlaylistPrototype.DefaultHelperHostAddress}:5174";

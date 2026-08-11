@@ -15,7 +15,7 @@ namespace TsukiVox.AudioPrototype
 
     public static class QuestBuildInfo
     {
-        public const string ProductVersion = "0.77";
+        public const string ProductVersion = "0.78";
         public const string ResourceName = "TsukiVoxBuildInfo";
 
         private static readonly QuestBuildInfoData Data = Load();

@@ -36,6 +36,7 @@ namespace TsukiVox.AudioPrototype
     /// Small runtime vector icon set following Lucide's 24-unit line geometry.
     /// This avoids platform-dependent symbol glyphs on Quest.
     /// </summary>
+    [RequireComponent(typeof(CanvasRenderer))]
     public sealed class QuestUiIcon : MaskableGraphic
     {
         private const float CoordinateSize = 24f;

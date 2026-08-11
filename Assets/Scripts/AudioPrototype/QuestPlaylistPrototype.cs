@@ -1,5 +1,7 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,8 +10,9 @@ namespace TsukiVox.AudioPrototype
 {
     public enum TsukiVoxServiceMode
     {
-        Companion,
-        Online,
+        Companion = 0,
+        Online = 1,
+        Direct = 2,
     }
 
     /// <summary>
@@ -52,7 +55,7 @@ namespace TsukiVox.AudioPrototype
         private const string VoiceSearchEnabledPrefsKey = "TsukiVox.VoiceSearchEnabled";
 
         [Header("Service Origins")]
-        [SerializeField] private TsukiVoxServiceMode serviceMode = TsukiVoxServiceMode.Online;
+        [SerializeField] private TsukiVoxServiceMode serviceMode = TsukiVoxServiceMode.Direct;
         [SerializeField] private string helperHost = DefaultHelperHostAddress;
         [SerializeField] private string onlineServiceOrigin = DefaultOnlineServiceOrigin;
         [SerializeField] private string playlistOrigin = "http://192.168.50.191:5175";
@@ -83,6 +86,11 @@ namespace TsukiVox.AudioPrototype
         private readonly StringBuilder queueBuilder = new StringBuilder(256);
 
         private PlaylistClient client;
+        private BilibiliDirectClient directClient;
+        private readonly Queue<string> directDownloadQueue = new Queue<string>();
+        private Coroutine directDownloadRoutine;
+        private string activeDirectDownloadItemId = string.Empty;
+        private long directStateClock;
         private string deviceToken;
         private bool hasValidatedDeviceCredential;
         private PlaylistState state;
@@ -173,17 +181,29 @@ namespace TsukiVox.AudioPrototype
 
         public bool IsOnlineService => serviceMode == TsukiVoxServiceMode.Online;
 
+        public bool IsDirectService => serviceMode == TsukiVoxServiceMode.Direct;
+
+        public bool IsCompanionService => serviceMode == TsukiVoxServiceMode.Companion;
+
+        public bool SupportsServiceAddress => !IsDirectService;
+
+        public bool SupportsVoiceSearch => !IsDirectService;
+
         public bool IsLocalDevelopmentService => IsOnlineService &&
                                                  string.Equals(
                                                      onlineServiceOrigin,
                                                      LocalDevelopmentServiceOrigin,
                                                      StringComparison.OrdinalIgnoreCase);
 
-        public string ServiceAddress => IsOnlineService ? onlineServiceOrigin : helperHost;
+        public string ServiceAddress => IsDirectService
+            ? "无需服务地址"
+            : IsOnlineService ? onlineServiceOrigin : helperHost;
 
-        public string ServiceDisplayName => IsLocalDevelopmentService
-            ? "本地开发"
-            : IsOnlineService ? "公网服务" : "局域网 Companion";
+        public string ServiceDisplayName => IsDirectService
+            ? "直接请求"
+            : IsLocalDevelopmentService
+                ? "本地开发"
+                : IsOnlineService ? "公网服务" : "局域网 Companion";
 
         public VoiceSearchUiState VoiceState => voiceState;
 
@@ -216,6 +236,7 @@ namespace TsukiVox.AudioPrototype
         /// so it cannot feed voice capture.
         /// </summary>
         public bool CanStartVoiceSearch =>
+            SupportsVoiceSearch &&
             voiceSearchEnabled &&
             isConnected &&
             !IsVoiceBusy &&
@@ -227,9 +248,13 @@ namespace TsukiVox.AudioPrototype
 
         public string ConnectionStatusMessage => pendingStatus;
 
-        public string PlaylistOrigin => client != null ? client.PlaylistOrigin : playlistOrigin;
+        public string PlaylistOrigin => IsDirectService
+            ? BilibiliDirectClient.ApiOrigin
+            : client != null ? client.PlaylistOrigin : playlistOrigin;
 
-        public string DownloadOrigin => client != null ? client.DownloadOrigin : downloadOrigin;
+        public string DownloadOrigin => IsDirectService
+            ? BilibiliDirectClient.ApiOrigin
+            : client != null ? client.DownloadOrigin : downloadOrigin;
 
         public static QuestPlaylistPrototype EnsureScenePrototype()
         {
@@ -280,6 +305,7 @@ namespace TsukiVox.AudioPrototype
         {
             StopPolling();
             CancelCatalogRequests();
+            CancelDirectDownloads();
             if (IsVoiceBusy)
             {
                 CancelVoiceSearch();
@@ -288,6 +314,18 @@ namespace TsukiVox.AudioPrototype
 
         public void StartPolling()
         {
+            if (IsDirectService)
+            {
+                EnsureDirectState();
+                if (directDownloadRoutine == null &&
+                    directDownloadQueue.Count == 0 &&
+                    HasPendingDirectDownloads())
+                {
+                    RestartDirectDownloadWorker();
+                }
+                return;
+            }
+
             if (pollRoutine != null)
             {
                 return;
@@ -331,6 +369,11 @@ namespace TsukiVox.AudioPrototype
             ApplyServiceMode(TsukiVoxServiceMode.Companion, true);
         }
 
+        public void UseDirectService()
+        {
+            ApplyServiceMode(TsukiVoxServiceMode.Direct, true);
+        }
+
         public void UseOnlineService()
         {
             ApplyOnlineServiceOrigin(DefaultOnlineServiceOrigin, true);
@@ -343,6 +386,11 @@ namespace TsukiVox.AudioPrototype
 
         public void ApplyServiceAddress(string nextAddress)
         {
+            if (IsDirectService)
+            {
+                return;
+            }
+
             if (IsOnlineService)
             {
                 onlineServiceOrigin = NormalizeOnlineOrigin(nextAddress, DefaultOnlineServiceOrigin);
@@ -357,6 +405,11 @@ namespace TsukiVox.AudioPrototype
 
         public void ApplyDefaultServiceAddress()
         {
+            if (IsDirectService)
+            {
+                return;
+            }
+
             ApplyServiceAddress(IsOnlineService ? DefaultOnlineServiceOrigin : DefaultHelperHostAddress);
         }
 
@@ -540,6 +593,11 @@ namespace TsukiVox.AudioPrototype
                 SetVoiceFailure("VOICE_DISABLED", "语音找歌已在设置中关闭。");
                 return;
             }
+            if (!SupportsVoiceSearch)
+            {
+                SetVoiceFailure("VOICE_UNAVAILABLE", "直接请求不上传语音，请切换到点歌服务后再试。");
+                return;
+            }
             if (!isConnected)
             {
                 SetVoiceFailure("NETWORK_UNREACHABLE", $"{ServiceDisplayName}未连接，请检查服务设置。");
@@ -613,7 +671,7 @@ namespace TsukiVox.AudioPrototype
         /// </summary>
         public void RefreshVoiceProvider()
         {
-            if (voiceProviderRoutine != null)
+            if (!SupportsVoiceSearch || voiceProviderRoutine != null)
             {
                 return;
             }
@@ -624,7 +682,8 @@ namespace TsukiVox.AudioPrototype
         /// <summary>Switches the service to another speech provider.</summary>
         public void SelectVoiceProvider(string provider)
         {
-            if (isSwitchingVoiceProvider ||
+            if (!SupportsVoiceSearch ||
+                isSwitchingVoiceProvider ||
                 string.IsNullOrWhiteSpace(provider) ||
                 string.Equals(provider, voiceProviderSelection, StringComparison.OrdinalIgnoreCase))
             {
@@ -937,6 +996,12 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
+            if (IsDirectService)
+            {
+                AddDirectItem(item, playNow);
+                return;
+            }
+
             EnsureClient();
             pendingAddItem = item;
             lastAddItemError = string.Empty;
@@ -955,12 +1020,25 @@ namespace TsukiVox.AudioPrototype
         {
             BilibiliSearchResponse response = null;
             string error = null;
-            yield return client.SearchBilibili(
-                query,
-                page,
-                pageSize,
-                value => response = value,
-                value => error = value);
+            if (IsDirectService)
+            {
+                EnsureDirectClient();
+                yield return directClient.Search(
+                    query,
+                    page,
+                    pageSize,
+                    value => response = value,
+                    value => error = value);
+            }
+            else
+            {
+                yield return client.SearchBilibili(
+                    query,
+                    page,
+                    pageSize,
+                    value => response = value,
+                    value => error = value);
+            }
 
             if (sequence != searchSequence)
             {
@@ -977,8 +1055,10 @@ namespace TsukiVox.AudioPrototype
             else
             {
                 var diagnosticError = string.IsNullOrWhiteSpace(error) ? "Unknown search failure." : error.Trim();
-                Debug.LogWarning($"[TsukiVox Search] Request failed after server retries: {diagnosticError}");
-                lastSearchError = "服务器端暂时繁忙，请稍后再试";
+                Debug.LogWarning($"[TsukiVox Search] Request failed: {diagnosticError}");
+                lastSearchError = IsDirectService
+                    ? diagnosticError
+                    : "服务器端暂时繁忙，请稍后再试";
             }
 
             SearchStateChanged?.Invoke(this);
@@ -988,10 +1068,22 @@ namespace TsukiVox.AudioPrototype
         {
             BilibiliSuggestResponse response = null;
             string error = null;
-            yield return client.FetchBilibiliSuggestions(
-                term,
-                value => response = value,
-                value => error = value);
+            if (IsDirectService)
+            {
+                EnsureDirectClient();
+                yield return directClient.FetchSuggestions(
+                    term,
+                    9,
+                    value => response = value,
+                    value => error = value);
+            }
+            else
+            {
+                yield return client.FetchBilibiliSuggestions(
+                    term,
+                    value => response = value,
+                    value => error = value);
+            }
 
             if (sequence != suggestSequence)
             {
@@ -1051,6 +1143,502 @@ namespace TsukiVox.AudioPrototype
             AddItemStateChanged?.Invoke(this);
         }
 
+        private void EnsureDirectClient()
+        {
+            directClient ??= new BilibiliDirectClient();
+        }
+
+        private void EnsureDirectState()
+        {
+            if (!IsDirectService)
+            {
+                return;
+            }
+
+            EnsureDirectClient();
+            var created = state == null;
+            if (created)
+            {
+                state = new PlaylistState
+                {
+                    queue = Array.Empty<PlaylistItem>(),
+                    currentIndex = -1,
+                    playback = "paused",
+                };
+            }
+
+            isConnected = true;
+            lastRequestFailed = false;
+            lastError = string.Empty;
+            pendingStatus = "Direct request is ready.";
+            hasClearedQueueOnStartup = true;
+            if (created)
+            {
+                PublishDirectState();
+            }
+        }
+
+        private void AddDirectItem(BilibiliCatalogItem item, bool playNow)
+        {
+            EnsureDirectState();
+            item.Normalize();
+
+            var queue = new List<PlaylistItem>(state.queue ?? Array.Empty<PlaylistItem>());
+            var playlistItem = new PlaylistItem
+            {
+                id = $"direct-{Guid.NewGuid():N}",
+                title = item.title,
+                author = item.author,
+                coverUrl = item.coverUrl,
+                durationSeconds = item.durationSeconds,
+                durationText = item.durationText,
+                sourceType = "bilibili",
+                sourceInput = string.IsNullOrWhiteSpace(item.pageUrl) ? item.bvid : item.pageUrl,
+                status = PlaylistClient.StatusDownloading,
+                message = "正在解析匿名 480P / 360P 视频",
+                progress = 0f,
+            };
+            queue.Add(playlistItem);
+            state.queue = queue.ToArray();
+            if (state.currentIndex < 0 || playNow)
+            {
+                state.currentIndex = queue.Count - 1;
+            }
+            if (playNow)
+            {
+                state.playback = "playing";
+            }
+
+            pendingAddItem = null;
+            lastAddedItem = item;
+            lastAddItemError = string.Empty;
+            isAddingItem = false;
+            directDownloadQueue.Enqueue(playlistItem.id);
+            PublishDirectState();
+            AddItemStateChanged?.Invoke(this);
+            EnsureDirectDownloadWorker();
+        }
+
+        private void EnsureDirectDownloadWorker()
+        {
+            if (!IsDirectService || directDownloadRoutine != null || directDownloadQueue.Count == 0)
+            {
+                return;
+            }
+
+            directDownloadRoutine = StartCoroutine(DirectDownloadWorker());
+        }
+
+        private IEnumerator DirectDownloadWorker()
+        {
+            EnsureDirectClient();
+            try
+            {
+                while (IsDirectService && directDownloadQueue.Count > 0)
+                {
+                    var itemId = directDownloadQueue.Dequeue();
+                    var queueItem = FindDirectQueueItem(itemId);
+                    if (queueItem == null ||
+                        !string.Equals(queueItem.status, PlaylistClient.StatusDownloading, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    activeDirectDownloadItemId = itemId;
+                    var catalogItem = new BilibiliCatalogItem
+                    {
+                        bvid = ExtractBvid(queueItem.sourceInput),
+                        title = queueItem.title,
+                        author = queueItem.author,
+                        coverUrl = queueItem.coverUrl,
+                        durationSeconds = queueItem.durationSeconds,
+                        durationText = queueItem.durationText,
+                        pageUrl = queueItem.sourceInput,
+                    };
+                    DirectBilibiliMedia completedMedia = null;
+                    string failure = null;
+                    var lastProgress = -1f;
+                    var lastProgressPublishedAt = -1f;
+                    yield return directClient.ResolveAndCache(
+                        catalogItem,
+                        Path.Combine(Application.persistentDataPath, "DirectMediaCache"),
+                        media => ApplyDirectResolvedMetadata(itemId, media),
+                        progress =>
+                        {
+                            var now = Time.unscaledTime;
+                            if (progress >= 1f ||
+                                lastProgress < 0f ||
+                                progress - lastProgress >= 0.01f ||
+                                now - lastProgressPublishedAt >= 0.1f)
+                            {
+                                lastProgress = progress;
+                                lastProgressPublishedAt = now;
+                                UpdateDirectDownloadProgress(itemId, progress);
+                            }
+                        },
+                        media => completedMedia = media,
+                        error => failure = error);
+
+                    if (!IsDirectService)
+                    {
+                        yield break;
+                    }
+
+                    queueItem = FindDirectQueueItem(itemId);
+                    if (queueItem != null)
+                    {
+                        if (completedMedia != null)
+                        {
+                            CompleteDirectDownload(queueItem, completedMedia);
+                        }
+                        else if (!string.IsNullOrWhiteSpace(failure))
+                        {
+                            queueItem.status = PlaylistClient.StatusError;
+                            queueItem.message = failure.Trim();
+                            queueItem.progress = 0f;
+                            PublishDirectState();
+                        }
+                    }
+
+                    activeDirectDownloadItemId = string.Empty;
+                    yield return null;
+                }
+            }
+            finally
+            {
+                activeDirectDownloadItemId = string.Empty;
+                directDownloadRoutine = null;
+            }
+        }
+
+        private void ApplyDirectResolvedMetadata(string itemId, DirectBilibiliMedia media)
+        {
+            var item = FindDirectQueueItem(itemId);
+            if (!IsDirectService || item == null || media == null)
+            {
+                return;
+            }
+
+            item.title = string.IsNullOrWhiteSpace(media.title) ? item.title : media.title;
+            item.author = string.IsNullOrWhiteSpace(media.author) ? item.author : media.author;
+            item.coverUrl = string.IsNullOrWhiteSpace(media.coverUrl) ? item.coverUrl : media.coverUrl;
+            item.durationSeconds = Math.Max(0, media.durationSeconds);
+            item.durationText = FormatDirectDuration(item.durationSeconds);
+            item.message = $"{media.qualityLabel} · 正在下载到头显";
+            PublishDirectState();
+        }
+
+        private void UpdateDirectDownloadProgress(string itemId, float progress)
+        {
+            var item = FindDirectQueueItem(itemId);
+            if (!IsDirectService || item == null)
+            {
+                return;
+            }
+
+            item.progress = Mathf.Clamp01(progress);
+            PublishDirectState();
+        }
+
+        private void CompleteDirectDownload(PlaylistItem item, DirectBilibiliMedia media)
+        {
+            item.title = string.IsNullOrWhiteSpace(media.title) ? item.title : media.title;
+            item.author = string.IsNullOrWhiteSpace(media.author) ? item.author : media.author;
+            item.coverUrl = string.IsNullOrWhiteSpace(media.coverUrl) ? item.coverUrl : media.coverUrl;
+            item.durationSeconds = Math.Max(0, media.durationSeconds);
+            item.durationText = FormatDirectDuration(item.durationSeconds);
+            item.playableUrl = media.fileUrl;
+            item.cacheUrl = media.fileUrl;
+            item.streamUrl = string.Empty;
+            item.status = PlaylistClient.StatusReady;
+            item.message = $"{media.qualityLabel} · 已缓存到头显";
+            item.progress = 1f;
+            PublishDirectState();
+        }
+
+        private PlaylistItem FindDirectQueueItem(string itemId)
+        {
+            var queue = state?.queue;
+            if (queue == null || string.IsNullOrWhiteSpace(itemId))
+            {
+                return null;
+            }
+
+            for (var index = 0; index < queue.Length; index += 1)
+            {
+                if (queue[index] != null && string.Equals(queue[index].id, itemId, StringComparison.Ordinal))
+                {
+                    return queue[index];
+                }
+            }
+            return null;
+        }
+
+        private void CancelDirectDownloads()
+        {
+            directClient?.CancelDownload();
+            if (directDownloadRoutine != null)
+            {
+                StopCoroutine(directDownloadRoutine);
+                directDownloadRoutine = null;
+            }
+            directDownloadQueue.Clear();
+            activeDirectDownloadItemId = string.Empty;
+        }
+
+        private void RestartDirectDownloadWorker()
+        {
+            CancelDirectDownloads();
+            if (!IsDirectService || state?.queue == null)
+            {
+                return;
+            }
+
+            for (var index = 0; index < state.queue.Length; index += 1)
+            {
+                var item = state.queue[index];
+                if (item != null &&
+                    string.Equals(item.status, PlaylistClient.StatusDownloading, StringComparison.OrdinalIgnoreCase))
+                {
+                    item.progress = 0f;
+                    directDownloadQueue.Enqueue(item.id);
+                }
+            }
+            EnsureDirectDownloadWorker();
+        }
+
+        private bool HasPendingDirectDownloads()
+        {
+            var queue = state?.queue;
+            if (queue == null)
+            {
+                return false;
+            }
+
+            for (var index = 0; index < queue.Length; index += 1)
+            {
+                if (queue[index] != null &&
+                    string.Equals(queue[index].status, PlaylistClient.StatusDownloading, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private void ApplyDirectControl(string action, string itemId)
+        {
+            EnsureDirectState();
+            var queue = new List<PlaylistItem>(state.queue ?? Array.Empty<PlaylistItem>());
+            var activeDownloadWasRemoved = false;
+
+            switch (action)
+            {
+                case PlaylistClient.ControlPlay:
+                    if (!string.IsNullOrWhiteSpace(itemId))
+                    {
+                        var selectedIndex = queue.FindIndex(item => item != null &&
+                            string.Equals(item.id, itemId, StringComparison.Ordinal));
+                        if (selectedIndex >= 0)
+                        {
+                            state.currentIndex = selectedIndex;
+                        }
+                    }
+                    else if (state.currentIndex < 0 && queue.Count > 0)
+                    {
+                        state.currentIndex = 0;
+                    }
+                    state.playback = state.currentIndex >= 0 ? "playing" : "paused";
+                    break;
+                case PlaylistClient.ControlPause:
+                    state.playback = "paused";
+                    break;
+                case PlaylistClient.ControlPrevious:
+                    if (queue.Count > 0)
+                    {
+                        state.currentIndex = state.currentIndex <= 0 ? 0 : state.currentIndex - 1;
+                    }
+                    break;
+                case PlaylistClient.ControlNext:
+                    if (state.currentIndex >= 0 && state.currentIndex + 1 < queue.Count)
+                    {
+                        state.currentIndex += 1;
+                    }
+                    else if (state.currentIndex < 0 && queue.Count > 0)
+                    {
+                        state.currentIndex = 0;
+                    }
+                    else
+                    {
+                        state.playback = "paused";
+                    }
+                    break;
+                case PlaylistClient.ControlClear:
+                    if (state.currentIndex >= 0 && state.currentIndex + 1 < queue.Count)
+                    {
+                        activeDownloadWasRemoved = ContainsItemId(
+                            queue,
+                            state.currentIndex + 1,
+                            queue.Count - state.currentIndex - 1,
+                            activeDirectDownloadItemId);
+                        queue.RemoveRange(state.currentIndex + 1, queue.Count - state.currentIndex - 1);
+                    }
+                    else if (state.currentIndex < 0)
+                    {
+                        activeDownloadWasRemoved = queue.Exists(item => item != null &&
+                            string.Equals(item.id, activeDirectDownloadItemId, StringComparison.Ordinal));
+                        queue.Clear();
+                    }
+                    break;
+                case PlaylistClient.ControlClearPlayed:
+                    if (state.currentIndex > 0)
+                    {
+                        activeDownloadWasRemoved = ContainsItemId(queue, 0, state.currentIndex, activeDirectDownloadItemId);
+                        queue.RemoveRange(0, state.currentIndex);
+                        state.currentIndex = 0;
+                    }
+                    break;
+                case PlaylistClient.ControlClearExceptCurrent:
+                    if (state.currentIndex >= 0 && state.currentIndex < queue.Count)
+                    {
+                        var current = queue[state.currentIndex];
+                        activeDownloadWasRemoved = !string.IsNullOrEmpty(activeDirectDownloadItemId) &&
+                                                   !string.Equals(current?.id, activeDirectDownloadItemId, StringComparison.Ordinal);
+                        queue.Clear();
+                        queue.Add(current);
+                        state.currentIndex = 0;
+                    }
+                    else
+                    {
+                        activeDownloadWasRemoved = !string.IsNullOrEmpty(activeDirectDownloadItemId);
+                        queue.Clear();
+                        state.currentIndex = -1;
+                        state.playback = "paused";
+                    }
+                    break;
+                case PlaylistClient.ControlClearAll:
+                    activeDownloadWasRemoved = !string.IsNullOrEmpty(activeDirectDownloadItemId);
+                    queue.Clear();
+                    state.currentIndex = -1;
+                    state.playback = "paused";
+                    break;
+                case PlaylistClient.ControlRemove:
+                    var removeIndex = queue.FindIndex(item => item != null &&
+                        string.Equals(item.id, itemId, StringComparison.Ordinal));
+                    if (removeIndex >= 0)
+                    {
+                        activeDownloadWasRemoved = string.Equals(
+                            queue[removeIndex]?.id,
+                            activeDirectDownloadItemId,
+                            StringComparison.Ordinal);
+                        queue.RemoveAt(removeIndex);
+                        if (queue.Count == 0)
+                        {
+                            state.currentIndex = -1;
+                            state.playback = "paused";
+                        }
+                        else if (removeIndex < state.currentIndex)
+                        {
+                            state.currentIndex -= 1;
+                        }
+                        else if (removeIndex == state.currentIndex)
+                        {
+                            state.currentIndex = Math.Min(removeIndex, queue.Count - 1);
+                        }
+                    }
+                    break;
+            }
+
+            state.queue = queue.ToArray();
+            state.currentIndex = queue.Count == 0 ? -1 : Mathf.Clamp(state.currentIndex, 0, queue.Count - 1);
+            state.command = new PlaylistCommand
+            {
+                action = action,
+                id = string.IsNullOrWhiteSpace(itemId) ? string.Empty : itemId,
+                issuedAt = NextDirectTimestamp(),
+            };
+            PublishDirectState();
+            if (activeDownloadWasRemoved)
+            {
+                RestartDirectDownloadWorker();
+            }
+        }
+
+        private void PublishDirectState()
+        {
+            if (!IsDirectService || state == null)
+            {
+                return;
+            }
+
+            state.Normalize();
+            state.updatedAt = NextDirectTimestamp();
+            isConnected = true;
+            lastRequestFailed = false;
+            lastError = string.Empty;
+            pendingStatus = "Direct request is ready.";
+            StateChanged?.Invoke(this, state);
+            RefreshUi();
+        }
+
+        private long NextDirectTimestamp()
+        {
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            directStateClock = Math.Max(now, directStateClock + 1L);
+            return directStateClock;
+        }
+
+        private static bool ContainsItemId(List<PlaylistItem> queue, int index, int count, string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId))
+            {
+                return false;
+            }
+
+            var end = Math.Min(queue.Count, index + count);
+            for (var itemIndex = Math.Max(0, index); itemIndex < end; itemIndex += 1)
+            {
+                if (queue[itemIndex] != null &&
+                    string.Equals(queue[itemIndex].id, itemId, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static string ExtractBvid(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var marker = value.IndexOf("BV", StringComparison.OrdinalIgnoreCase);
+            if (marker < 0)
+            {
+                return string.Empty;
+            }
+
+            var end = marker + 2;
+            while (end < value.Length && char.IsLetterOrDigit(value[end]))
+            {
+                end += 1;
+            }
+            return value.Substring(marker, end - marker);
+        }
+
+        private static string FormatDirectDuration(int seconds)
+        {
+            var safeSeconds = Math.Max(0, seconds);
+            var hours = safeSeconds / 3600;
+            var minutes = safeSeconds % 3600 / 60;
+            var remainingSeconds = safeSeconds % 60;
+            return hours > 0
+                ? $"{hours}:{minutes:00}:{remainingSeconds:00}"
+                : $"{minutes}:{remainingSeconds:00}";
+        }
+
         private IEnumerator PollLoop()
         {
             while (enabled)
@@ -1099,6 +1687,12 @@ namespace TsukiVox.AudioPrototype
 
         private void SendControl(string action, string itemId)
         {
+            if (IsDirectService)
+            {
+                ApplyDirectControl(action, itemId);
+                return;
+            }
+
             if (IsRequestInFlight)
             {
                 pendingStatus = "Playlist request already in progress.";
@@ -1447,6 +2041,7 @@ namespace TsukiVox.AudioPrototype
         private void CancelSearch()
         {
             searchSequence += 1;
+            directClient?.CancelSearch();
             if (searchRoutine != null)
             {
                 StopCoroutine(searchRoutine);
@@ -1459,6 +2054,7 @@ namespace TsukiVox.AudioPrototype
         private void CancelSuggestions()
         {
             suggestSequence += 1;
+            directClient?.CancelSuggestions();
             if (suggestRoutine != null)
             {
                 StopCoroutine(suggestRoutine);
@@ -1491,7 +2087,7 @@ namespace TsukiVox.AudioPrototype
             var storedMode = PlayerPrefs.GetInt(ServiceModePrefsKey, (int)serviceMode);
             serviceMode = Enum.IsDefined(typeof(TsukiVoxServiceMode), storedMode)
                 ? (TsukiVoxServiceMode)storedMode
-                : TsukiVoxServiceMode.Online;
+                : TsukiVoxServiceMode.Direct;
             deviceId = PlayerPrefs.GetString(DeviceIdPrefsKey, string.Empty).Trim();
             if (string.IsNullOrEmpty(deviceId))
             {
@@ -1532,7 +2128,24 @@ namespace TsukiVox.AudioPrototype
 
         private void ApplyServiceConfiguration(bool restartPolling)
         {
+            if (restartPolling)
+            {
+                StopPolling();
+            }
+
             CancelCatalogRequests();
+            CancelDirectDownloads();
+            if (IsVoiceBusy)
+            {
+                CancelVoiceSearch();
+            }
+            ResetVoiceSearchState();
+            if (voiceProviderRoutine != null)
+            {
+                StopCoroutine(voiceProviderRoutine);
+                voiceProviderRoutine = null;
+                isSwitchingVoiceProvider = false;
+            }
             ApplyOriginsFromService();
             LoadDeviceCredential();
             SyncHostInput();
@@ -1549,6 +2162,7 @@ namespace TsukiVox.AudioPrototype
             }
 
             state = null;
+            StateChanged?.Invoke(this, null);
             isConnected = false;
             lastRequestFailed = false;
             lastError = string.Empty;
@@ -1565,7 +2179,6 @@ namespace TsukiVox.AudioPrototype
 
             if (restartPolling)
             {
-                StopPolling();
                 StartPolling();
             }
 
@@ -1573,6 +2186,7 @@ namespace TsukiVox.AudioPrototype
             SearchStateChanged?.Invoke(this);
             AddItemStateChanged?.Invoke(this);
             SuggestStateChanged?.Invoke(this);
+            VoiceSearchStateChanged?.Invoke(this);
         }
 
         private void ApplyOnlineServiceOrigin(string origin, bool restartPolling)
@@ -1610,6 +2224,13 @@ namespace TsukiVox.AudioPrototype
 
         private void ApplyOriginsFromService()
         {
+            if (IsDirectService)
+            {
+                playlistOrigin = BilibiliDirectClient.ApiOrigin;
+                downloadOrigin = BilibiliDirectClient.ApiOrigin;
+                return;
+            }
+
             if (IsOnlineService)
             {
                 playlistOrigin = onlineServiceOrigin;

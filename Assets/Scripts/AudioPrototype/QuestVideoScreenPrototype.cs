@@ -721,7 +721,7 @@ namespace TsukiVox.AudioPrototype
 
             if (state == null)
             {
-                SetStatus("Video: waiting for playlist sync.");
+                StopCurrentVideo("Video: waiting for playlist sync.");
                 return;
             }
 
