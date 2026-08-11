@@ -16,7 +16,7 @@ namespace TsukiVox.AudioPrototype.Editor
             " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789" +
             "-+_.,:;!?%/\\()[]<>·…°" +
             "TsukiVoxKTVPCIPBilibiliYouTubeNativewaitingmissing" +
-            "月读声域点歌服务已连接离线播放队列为空等待歌曲未命名正在准备失败暂停中本地视频" +
+            "月读声域点歌方式直接请求已就绪离线播放队列为空等待歌曲未命名正在准备失败暂停中本地视频" +
             "从添加后即可开始请在设置检查麦克风开启权限调整人声返听音量建议先低后高效果" +
             "四档预设直接选择原声强效柔和安全保护会在过响时自动降低上一首下一首重播" +
             "应用默认高级输出关闭仍保留输入始终保持延迟路径不包含诊断与支持状态原始信息" +

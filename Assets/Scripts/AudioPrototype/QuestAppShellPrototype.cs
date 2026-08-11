@@ -280,8 +280,8 @@ namespace TsukiVox.AudioPrototype
                 var item = state?.CurrentItem;
                 debugBuilder.AppendLine($"playlistConnected {playlistPrototype.IsConnected}");
                 debugBuilder.AppendLine($"playlistCanSendControl {playlistPrototype.CanSendControl}");
-                debugBuilder.AppendLine($"playlistOrigin {playlistPrototype.PlaylistOrigin}");
-                debugBuilder.AppendLine($"downloadOrigin {playlistPrototype.DownloadOrigin}");
+                debugBuilder.AppendLine($"directApiOrigin {BilibiliDirectClient.ApiOrigin}");
+                debugBuilder.AppendLine($"directSuggestOrigin {BilibiliDirectClient.SuggestOrigin}");
                 debugBuilder.AppendLine($"playbackState {state?.playback}");
                 debugBuilder.AppendLine($"queueCount {state?.QueueCount}");
                 debugBuilder.AppendLine($"currentIndex {state?.currentIndex}");
@@ -463,21 +463,17 @@ namespace TsukiVox.AudioPrototype
             MoveRect(panelRect, "Safety", new Vector2(-190f, -184f), new Vector2(150f, 36f));
 
             var helperRoot = ResolveHelperRoot(panelRect);
-            MoveText(helperRoot, "Helper Title", "PC Helper", new Vector2(40f, 276f), new Vector2(180f, 32f), 18, TextAnchor.MiddleLeft);
-            MoveText(panelRect, "V0.2 PC Helper", "PC Helper", new Vector2(72f, 276f), new Vector2(180f, 32f), 18, TextAnchor.MiddleLeft);
-            MoveText(helperRoot, new[] { "Helper Connection", "Helper: Connecting..." }, null, new Vector2(310f, 226f), new Vector2(480f, 58f), 13, TextAnchor.UpperLeft);
-            MoveText(helperRoot, new[] { "Helper Host Label", "PC IP" }, "PC IP", new Vector2(74f, 170f), new Vector2(62f, 34f), 12, TextAnchor.MiddleLeft);
-            MoveRect(helperRoot, new[] { "Helper Host Input" }, new Vector2(238f, 170f), new Vector2(258f, 36f));
-            MoveRect(helperRoot, new[] { "Helper Apply Host", "Apply" }, new Vector2(410f, 170f), new Vector2(82f, 36f));
-            MoveRect(helperRoot, new[] { "Helper Default Host", "Use PC" }, new Vector2(500f, 170f), new Vector2(82f, 36f));
+            MoveText(helperRoot, "Helper Title", "Direct Request", new Vector2(40f, 276f), new Vector2(220f, 32f), 18, TextAnchor.MiddleLeft);
+            MoveText(panelRect, "Direct Request", "Direct Request", new Vector2(92f, 276f), new Vector2(220f, 32f), 18, TextAnchor.MiddleLeft);
+            MoveText(helperRoot, new[] { "Helper Connection", "Direct request ready" }, null, new Vector2(310f, 226f), new Vector2(480f, 58f), 13, TextAnchor.UpperLeft);
 
             MoveText(helperRoot, new[] { "Helper Current Song", "Current: no song selected." }, null, new Vector2(310f, 42f), new Vector2(480f, 86f), 14, TextAnchor.UpperLeft);
             MoveText(helperRoot, new[] { "Helper Queue", "Queue 0 item(s)" }, null, new Vector2(310f, -54f), new Vector2(480f, 64f), 13, TextAnchor.UpperLeft);
             MoveText(helperRoot, new[] { "Helper Playable URL", "Playable URL: none" }, null, new Vector2(310f, -128f), new Vector2(480f, 58f), 11, TextAnchor.UpperLeft);
-            MoveRect(helperRoot, new[] { "Helper Play", "Play" }, new Vector2(92f, -210f), new Vector2(112f, 46f));
-            MoveRect(helperRoot, new[] { "Helper Previous" }, new Vector2(216f, -210f), new Vector2(104f, 46f));
-            MoveRect(helperRoot, new[] { "Helper Next" }, new Vector2(332f, -210f), new Vector2(104f, 46f));
-            MoveRect(helperRoot, new[] { "Helper Replay", "Replay" }, new Vector2(452f, -210f), new Vector2(104f, 46f));
+            MoveRect(helperRoot, new[] { "Direct Play", "Play" }, new Vector2(92f, -210f), new Vector2(112f, 46f));
+            MoveRect(helperRoot, new[] { "Direct Previous" }, new Vector2(216f, -210f), new Vector2(104f, 46f));
+            MoveRect(helperRoot, new[] { "Direct Next" }, new Vector2(332f, -210f), new Vector2(104f, 46f));
+            MoveRect(helperRoot, new[] { "Direct Replay", "Replay" }, new Vector2(452f, -210f), new Vector2(104f, 46f));
 
             MoveRect(panelRect, "Copy Debug", new Vector2(-420f, -300f), new Vector2(154f, 42f));
             MoveRect(panelRect, "Video Debug", new Vector2(-240f, -300f), new Vector2(176f, 38f));

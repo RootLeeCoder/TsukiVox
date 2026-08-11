@@ -91,7 +91,7 @@ namespace TsukiVox.AudioPrototype.Editor
             audioTitle.rectTransform.sizeDelta = new Vector2(500f, 34f);
             audioTitle.rectTransform.anchoredPosition = new Vector2(-300f, 244f);
 
-            var playlistTitle = CreateText(panel.transform, "V0.2 PC Helper", 20, FontStyle.Bold);
+            var playlistTitle = CreateText(panel.transform, "Direct Request", 20, FontStyle.Bold);
             playlistTitle.rectTransform.sizeDelta = new Vector2(500f, 34f);
             playlistTitle.rectTransform.anchoredPosition = new Vector2(300f, 244f);
 
@@ -125,7 +125,7 @@ namespace TsukiVox.AudioPrototype.Editor
 
             var playlistObject = new GameObject("Quest Playlist Prototype");
             var playlistPrototype = playlistObject.AddComponent<QuestPlaylistPrototype>();
-            var connection = CreateText(panel.transform, "Helper: Connecting...", 14, FontStyle.Normal);
+            var connection = CreateText(panel.transform, "Direct request ready", 14, FontStyle.Normal);
             connection.alignment = TextAnchor.UpperLeft;
             connection.rectTransform.sizeDelta = new Vector2(520f, 58f);
             connection.rectTransform.anchoredPosition = new Vector2(300f, 200f);
@@ -145,17 +145,10 @@ namespace TsukiVox.AudioPrototype.Editor
             playableUrl.rectTransform.sizeDelta = new Vector2(520f, 62f);
             playableUrl.rectTransform.anchoredPosition = new Vector2(300f, -54f);
 
-            var helperHostLabel = CreateText(panel.transform, "PC IP", 12, FontStyle.Bold);
-            helperHostLabel.alignment = TextAnchor.MiddleLeft;
-            helperHostLabel.rectTransform.sizeDelta = new Vector2(64f, 32f);
-            helperHostLabel.rectTransform.anchoredPosition = new Vector2(86f, -166f);
-            var helperHostInput = CreateInputField(panel.transform, QuestPlaylistPrototype.DefaultHelperHostAddress, new Vector2(258f, -166f), new Vector2(260f, 34f));
-            var applyHost = CreateButton(panel.transform, "Apply", new Vector2(432f, -166f), new Vector2(86f, 34f), 13);
-            var defaultHost = CreateButton(panel.transform, "Use PC", new Vector2(528f, -166f), new Vector2(86f, 34f), 13);
-            var playPause = CreateButton(panel.transform, "Helper Play", "Play", new Vector2(95f, -230f));
-            var playlistPrevious = CreateButton(panel.transform, "Helper Previous", "Prev", new Vector2(225f, -230f));
-            var playlistNext = CreateButton(panel.transform, "Helper Next", "Next", new Vector2(355f, -230f));
-            var replay = CreateButton(panel.transform, "Helper Replay", "Replay", new Vector2(485f, -230f));
+            var playPause = CreateButton(panel.transform, "Direct Play", "Play", new Vector2(95f, -166f));
+            var playlistPrevious = CreateButton(panel.transform, "Direct Previous", "Prev", new Vector2(225f, -166f));
+            var playlistNext = CreateButton(panel.transform, "Direct Next", "Next", new Vector2(355f, -166f));
+            var replay = CreateButton(panel.transform, "Direct Replay", "Replay", new Vector2(485f, -166f));
             var copyVideoDebug = CreateButton(panel.transform, "Copy Debug", new Vector2(300f, -292f), new Vector2(150f, 38f), 13);
             var copyAppDebug = CreateButton(panel.transform, "Copy App Debug", new Vector2(522f, -300f), new Vector2(176f, 42f), 13);
             var videoDebugToggle = CreateToggle(panel.transform, "Video Debug", new Vector2(-240f, -300f), false);
@@ -198,14 +191,6 @@ namespace TsukiVox.AudioPrototype.Editor
             playlistSo.FindProperty("previousButton").objectReferenceValue = playlistPrevious;
             playlistSo.FindProperty("nextButton").objectReferenceValue = playlistNext;
             playlistSo.FindProperty("replayButton").objectReferenceValue = replay;
-            playlistSo.FindProperty("helperHost").stringValue = QuestPlaylistPrototype.DefaultHelperHostAddress;
-            playlistSo.FindProperty("serviceMode").enumValueIndex = (int)TsukiVoxServiceMode.Direct;
-            playlistSo.FindProperty("onlineServiceOrigin").stringValue = QuestPlaylistPrototype.DefaultOnlineServiceOrigin;
-            playlistSo.FindProperty("playlistOrigin").stringValue = $"http://{QuestPlaylistPrototype.DefaultHelperHostAddress}:5175";
-            playlistSo.FindProperty("downloadOrigin").stringValue = $"http://{QuestPlaylistPrototype.DefaultHelperHostAddress}:5174";
-            playlistSo.FindProperty("helperHostInput").objectReferenceValue = helperHostInput;
-            playlistSo.FindProperty("applyHostButton").objectReferenceValue = applyHost;
-            playlistSo.FindProperty("defaultHostButton").objectReferenceValue = defaultHost;
             playlistSo.ApplyModifiedPropertiesWithoutUndo();
 
             QuestAppShellPrototype.EnsureSceneShell();
@@ -340,40 +325,6 @@ namespace TsukiVox.AudioPrototype.Editor
             text.rectTransform.sizeDelta = rect.sizeDelta;
             text.rectTransform.anchoredPosition = Vector2.zero;
             return button;
-        }
-
-        private static InputField CreateInputField(Transform parent, string value, Vector2 position, Vector2 size)
-        {
-            var inputObject = new GameObject("Helper Host Input");
-            inputObject.transform.SetParent(parent, false);
-            var rect = inputObject.AddComponent<RectTransform>();
-            rect.sizeDelta = size;
-            rect.anchoredPosition = position;
-            var image = inputObject.AddComponent<Image>();
-            image.color = new Color(0.08f, 0.12f, 0.14f, 0.96f);
-
-            var text = CreateText(inputObject.transform, "Text", 14, FontStyle.Normal);
-            text.alignment = TextAnchor.MiddleLeft;
-            text.supportRichText = false;
-            text.rectTransform.sizeDelta = new Vector2(size.x - 20f, size.y);
-            text.rectTransform.anchoredPosition = Vector2.zero;
-
-            var placeholder = CreateText(inputObject.transform, "Placeholder", 14, FontStyle.Italic);
-            placeholder.text = QuestPlaylistPrototype.DefaultHelperHostAddress;
-            placeholder.alignment = TextAnchor.MiddleLeft;
-            placeholder.color = new Color(0.5f, 0.6f, 0.62f, 0.8f);
-            placeholder.rectTransform.sizeDelta = new Vector2(size.x - 20f, size.y);
-            placeholder.rectTransform.anchoredPosition = Vector2.zero;
-
-            var input = inputObject.AddComponent<InputField>();
-            input.targetGraphic = image;
-            input.textComponent = text;
-            input.placeholder = placeholder;
-            input.lineType = InputField.LineType.SingleLine;
-            input.contentType = InputField.ContentType.Standard;
-            input.characterLimit = 80;
-            input.SetTextWithoutNotify(value);
-            return input;
         }
 
         private static Toggle CreateToggle(Transform parent, string label, Vector2 position, bool value)
@@ -526,14 +477,6 @@ namespace TsukiVox.AudioPrototype.Editor
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        [MenuItem("TsukiVox/Apply Current Helper Host To Scene")]
-        public static void ApplyCurrentHelperHostToScene()
-        {
-            var playlistPrototype = EnsurePlaylistPrototypeInCurrentScene();
-            ApplyCurrentHelperHost(playlistPrototype);
-            EditorSceneManager.SaveScene(playlistPrototype.gameObject.scene);
-        }
-
         public static QuestPlaylistPrototype EnsurePlaylistPrototypeInCurrentScene()
         {
             var playlistPrototype = Object.FindAnyObjectByType<QuestPlaylistPrototype>();
@@ -611,23 +554,6 @@ namespace TsukiVox.AudioPrototype.Editor
             }
 
             return null;
-        }
-
-        public static void ApplyCurrentHelperHost(QuestPlaylistPrototype playlistPrototype)
-        {
-            if (playlistPrototype == null)
-            {
-                return;
-            }
-
-            var so = new SerializedObject(playlistPrototype);
-            so.FindProperty("helperHost").stringValue = QuestPlaylistPrototype.DefaultHelperHostAddress;
-            so.FindProperty("playlistOrigin").stringValue = $"http://{QuestPlaylistPrototype.DefaultHelperHostAddress}:5175";
-            so.FindProperty("downloadOrigin").stringValue = $"http://{QuestPlaylistPrototype.DefaultHelperHostAddress}:5174";
-            so.ApplyModifiedPropertiesWithoutUndo();
-            EditorUtility.SetDirty(playlistPrototype);
-            EditorSceneManager.MarkSceneDirty(playlistPrototype.gameObject.scene);
-            Debug.Log($"Applied helper host {QuestPlaylistPrototype.DefaultHelperHostAddress} to the current scene.");
         }
 
         private static ColorBlock CreateSelectableColors()

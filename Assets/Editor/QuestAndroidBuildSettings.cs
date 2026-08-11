@@ -31,11 +31,11 @@ namespace TsukiVox.AudioPrototype.Editor
             PlayerSettings.Android.applicationEntry = AndroidApplicationEntry.GameActivity;
             ForceAndroidGameActivity();
             PlayerSettings.Android.forceInternetPermission = true;
-            PlayerSettings.insecureHttpOption = InsecureHttpOption.AlwaysAllowed;
+            PlayerSettings.insecureHttpOption = InsecureHttpOption.NotAllowed;
             ForceNewInputSystem();
             TryEnableOpenXrLoader();
             TryConfigureOpenXrQuestFeatures();
-            TryApplyHelperHostToBuildScenes();
+            TryPrepareBuildScenes();
         }
 
         private static void ForceNewInputSystem()
@@ -51,7 +51,7 @@ namespace TsukiVox.AudioPrototype.Editor
             RewriteProjectSettingsValue("androidApplicationEntry", gameActivity);
         }
 
-        private static void TryApplyHelperHostToBuildScenes()
+        private static void TryPrepareBuildScenes()
         {
             try
             {
@@ -65,7 +65,6 @@ namespace TsukiVox.AudioPrototype.Editor
 
                     var openedScene = EditorSceneManager.OpenScene(scene.path, OpenSceneMode.Single);
                     var prototype = CreateAudioPrototypeScene.EnsurePlaylistPrototypeInCurrentScene();
-                    CreateAudioPrototypeScene.ApplyCurrentHelperHost(prototype);
                     var videoScreen = CreateAudioPrototypeScene.EnsureVideoScreenPrototypeInCurrentScene(prototype);
                     CreateAudioPrototypeScene.EnsureAppShellInCurrentScene(prototype, videoScreen);
                     CreateAudioPrototypeScene.EnsureKtvRoomInCurrentScene(videoScreen);
@@ -81,7 +80,7 @@ namespace TsukiVox.AudioPrototype.Editor
             }
             catch (Exception exception)
             {
-                UnityEngine.Debug.LogWarning($"[TsukiVox Build] Could not apply helper host to build scenes: {exception.Message}");
+                UnityEngine.Debug.LogWarning($"[TsukiVox Build] Could not prepare build scenes: {exception.Message}");
             }
         }
 

@@ -17,7 +17,6 @@ namespace TsukiVox.AudioPrototype
         private const int DefaultTextureHeight = 1080;
         private const int ScreenLayer = 0;
         private const string MainTextureProperty = "_MainTex";
-        private const string FullCacheOnlineMediaPrefsKey = "TsukiVox.OnlineFullMediaCache";
         private const string BuiltInDefaultVideoResourcePath = "DefaultMedia/BV1Kx4y1h7vR-p1-off-vocal";
         private const string BuiltInDefaultItemId = "builtin-default-BV1Kx4y1h7vR-p1";
         private const string BuiltInDefaultTitle = "BV1Kx4y1h7vR P1 (off vocal)";
@@ -89,8 +88,6 @@ namespace TsukiVox.AudioPrototype
         private bool hasPreparedFirstFrame;
         private bool isPreparingVideo;
         private bool pendingPlayAfterPrepare;
-        private bool fullCacheOnlineMedia;
-        private bool cachePreferenceLoaded;
         private bool isCachingVideo;
         private bool cacheAuthenticationFailure;
         private bool hlsFallbackAttempted;
@@ -129,7 +126,6 @@ namespace TsukiVox.AudioPrototype
 
         private void Awake()
         {
-            LoadCachePreference();
             ConfigureSceneReferences();
         }
 
@@ -187,7 +183,6 @@ namespace TsukiVox.AudioPrototype
 
         private void ConfigureSceneReferences()
         {
-            LoadCachePreference();
             showStatusOverlay = showStatusOverlay && allowWorldStatusOverlay;
             playlistPrototype = playlistPrototype != null ? playlistPrototype : QuestPlaylistPrototype.EnsureScenePrototype();
             EnsureVideoPlayer();
@@ -219,8 +214,6 @@ namespace TsukiVox.AudioPrototype
             videoPlayer.isPrepared &&
             !videoPlayer.isPlaying;
 
-        public bool FullCacheOnlineMedia => fullCacheOnlineMedia;
-
         public bool IsCachingVideo => isCachingVideo;
 
         public float CacheProgress => cacheProgress;
@@ -228,37 +221,6 @@ namespace TsukiVox.AudioPrototype
         public string CachePhase => cachePhase;
 
         public string ActiveItemId => activeItemId;
-
-        public void SetFullCacheOnlineMedia(bool enabled)
-        {
-            LoadCachePreference();
-            if (fullCacheOnlineMedia == enabled)
-            {
-                return;
-            }
-
-            fullCacheOnlineMedia = enabled;
-            PlayerPrefs.SetInt(FullCacheOnlineMediaPrefsKey, enabled ? 1 : 0);
-            PlayerPrefs.Save();
-            Debug.Log($"[TsukiVox Video] Online full-cache preference {(enabled ? "enabled" : "disabled")}.");
-
-            if (enabled && playlistPrototype != null && playlistPrototype.IsOnlineService &&
-                IsHttpUrl(activePlaybackUrl) && !isCachingVideo)
-            {
-                StartFullCacheFallback("User enabled online full caching.");
-            }
-        }
-
-        private void LoadCachePreference()
-        {
-            if (cachePreferenceLoaded)
-            {
-                return;
-            }
-
-            fullCacheOnlineMedia = PlayerPrefs.GetInt(FullCacheOnlineMediaPrefsKey, 0) != 0;
-            cachePreferenceLoaded = true;
-        }
 
         public void SetStatusOverlayVisible(bool visible)
         {
@@ -712,13 +674,13 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
-            if (string.Equals(item.status, PlaylistClient.StatusDownloading, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(item.status, DirectPlaylist.StatusDownloading, StringComparison.OrdinalIgnoreCase))
             {
                 StopCurrentVideo($"Video: waiting for {SafeTitle(item)} to finish downloading.");
                 return;
             }
 
-            if (string.Equals(item.status, PlaylistClient.StatusError, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(item.status, DirectPlaylist.StatusError, StringComparison.OrdinalIgnoreCase))
             {
                 StopCurrentVideo(string.IsNullOrWhiteSpace(item.message)
                     ? $"Video: {SafeTitle(item)} failed."
@@ -915,11 +877,6 @@ namespace TsukiVox.AudioPrototype
 
         private bool ShouldCacheRemoteVideos()
         {
-            if (playlistPrototype != null && playlistPrototype.IsOnlineService)
-            {
-                return fullCacheOnlineMedia;
-            }
-
             return cacheRemoteVideosBeforePlayback || Application.platform == RuntimePlatform.Android;
         }
 
@@ -960,7 +917,7 @@ namespace TsukiVox.AudioPrototype
             }
 
             lastAppliedCommandAt = command.issuedAt;
-            if (string.Equals(command.action, PlaylistClient.ControlReplay, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(command.action, DirectPlaylist.ControlReplay, StringComparison.OrdinalIgnoreCase))
             {
                 if (IsVideoUsable())
                 {
@@ -1129,12 +1086,6 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
-            if (playlistPrototype != null && playlistPrototype.IsOnlineService && IsHttpUrl(activePlaybackUrl))
-            {
-                StartFullCacheFallback($"Streaming failed: {safeMessage}");
-                return;
-            }
-
             SetStatus($"Video error: {safeMessage}\n{GetUrlDiagnostics(activePlaybackUrl)}");
         }
 
@@ -1246,7 +1197,7 @@ namespace TsukiVox.AudioPrototype
 
         private bool ShouldMonitorPlaybackStalls()
         {
-            if (videoPlayer == null || playlistPrototype == null || !playlistPrototype.IsOnlineService ||
+            if (videoPlayer == null || playlistPrototype == null ||
                 !Application.isFocused || isPreparingVideo || isCachingVideo || loadRoutine != null ||
                 !IsHttpUrl(activePlaybackUrl) || !videoPlayer.isPrepared || !hasPreparedFirstFrame ||
                 Time.unscaledTime < suppressStallDetectionUntil)
@@ -1544,7 +1495,7 @@ namespace TsukiVox.AudioPrototype
             var videoTextureInfo = videoTexture == null ? "vpTex none" : $"vpTex {videoTexture.width}x{videoTexture.height}";
             var renderTextureInfo = renderTexture == null ? "rt none" : $"rt {renderTexture.width}x{renderTexture.height}";
             var prepareElapsed = isPreparingVideo ? $"{Time.unscaledTime - prepareStartedAt:0.0}s" : "idle";
-            return $"{GetUrlDiagnostics(activePlaybackUrl)}\ntransport {activeTransport} fullCache {fullCacheOnlineMedia} cache {cachePhase} {cacheProgress:P0} fallback {lastFallbackReason}\nprepared {videoPlayer.isPrepared} preparing {isPreparingVideo} prep {prepareElapsed} pendingPlay {pendingPlayAfterPrepare} playing {videoPlayer.isPlaying} frame {videoPlayer.frame} time {videoPlayer.time:0.0}s {videoTextureInfo} {renderTextureInfo}\n{lastVideoProbeSummary}\n{lastVideoCacheSummary}";
+            return $"{GetUrlDiagnostics(activePlaybackUrl)}\ntransport {activeTransport} cache {cachePhase} {cacheProgress:P0} fallback {lastFallbackReason}\nprepared {videoPlayer.isPrepared} preparing {isPreparingVideo} prep {prepareElapsed} pendingPlay {pendingPlayAfterPrepare} playing {videoPlayer.isPlaying} frame {videoPlayer.frame} time {videoPlayer.time:0.0}s {videoTextureInfo} {renderTextureInfo}\n{lastVideoProbeSummary}\n{lastVideoCacheSummary}";
         }
 
         private void FitScreenToVideo(ulong width, ulong height)
@@ -1608,8 +1559,8 @@ namespace TsukiVox.AudioPrototype
             var state = playlistPrototype != null ? playlistPrototype.CurrentState : null;
             var item = state?.CurrentItem;
             debugBuilder.AppendLine($"playlistConnected {playlistPrototype?.IsConnected}");
-            debugBuilder.AppendLine($"playlistOrigin {playlistPrototype?.PlaylistOrigin}");
-            debugBuilder.AppendLine($"downloadOrigin {playlistPrototype?.DownloadOrigin}");
+            debugBuilder.AppendLine($"directApiOrigin {BilibiliDirectClient.ApiOrigin}");
+            debugBuilder.AppendLine($"directSuggestOrigin {BilibiliDirectClient.SuggestOrigin}");
             debugBuilder.AppendLine($"playbackState {state?.playback}");
             debugBuilder.AppendLine($"currentIndex {state?.currentIndex}");
             debugBuilder.AppendLine($"itemId {item?.id}");
@@ -1625,7 +1576,6 @@ namespace TsukiVox.AudioPrototype
             debugBuilder.AppendLine($"activePlaybackUrl {SanitizeMediaUrl(activePlaybackUrl)}");
             debugBuilder.AppendLine($"transport {activeTransport}");
             debugBuilder.AppendLine($"builtInDefault {isPlayingBuiltInDefault} loaded {builtInDefaultVideoClip != null} failed {builtInDefaultPlaybackFailed}");
-            debugBuilder.AppendLine($"fullCacheOnlineMedia {fullCacheOnlineMedia}");
             debugBuilder.AppendLine($"cacheState {isCachingVideo} {cachePhase} {cacheProgress:P0}");
             debugBuilder.AppendLine($"fallback {lastFallbackReason}");
             debugBuilder.AppendLine($"recentStalls {recentStalls.Count}");
@@ -1676,16 +1626,7 @@ namespace TsukiVox.AudioPrototype
                 return string.Empty;
             }
 
-            var resolvedUrl = playlistPrototype != null ? playlistPrototype.ResolvePlayableUrl(playableUrl) : playableUrl.Trim();
-            if (!string.IsNullOrWhiteSpace(resolvedUrl) &&
-                resolvedUrl.TrimStart().StartsWith("/", StringComparison.Ordinal) &&
-                playlistPrototype != null &&
-                !string.IsNullOrWhiteSpace(playlistPrototype.DownloadOrigin))
-            {
-                resolvedUrl = CombineUrl(playlistPrototype.DownloadOrigin, resolvedUrl.Trim());
-            }
-
-            return resolvedUrl;
+            return playlistPrototype != null ? playlistPrototype.ResolvePlayableUrl(playableUrl) : playableUrl.Trim();
         }
 
         private string GetUrlDiagnostics(string playbackUrl)
@@ -1749,10 +1690,7 @@ namespace TsukiVox.AudioPrototype
             SetStatus($"Video: caching {SafeTitle(item)}...\n{GetVideoDiagnostics()}");
             using (var request = UnityWebRequest.Get(sourceUrl))
             {
-                request.timeout = Mathf.CeilToInt(
-                    playlistPrototype != null && playlistPrototype.IsOnlineService
-                        ? Mathf.Max(downloadTimeoutSeconds, 900f)
-                        : downloadTimeoutSeconds);
+                request.timeout = Mathf.CeilToInt(downloadTimeoutSeconds);
                 request.downloadHandler = new DownloadHandlerFile(temporaryPath)
                 {
                     removeFileOnAbort = true,
@@ -1837,25 +1775,6 @@ namespace TsukiVox.AudioPrototype
             return request.result == UnityWebRequest.Result.Success &&
                    request.responseCode >= 200 &&
                    request.responseCode < 300;
-        }
-
-        private static string CombineUrl(string origin, string path)
-        {
-            if (string.IsNullOrWhiteSpace(origin))
-            {
-                return path;
-            }
-
-            var normalizedOrigin = origin.Trim().TrimEnd('/');
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                return normalizedOrigin;
-            }
-
-            var normalizedPath = path.Trim();
-            return normalizedPath.StartsWith("/", StringComparison.Ordinal)
-                ? $"{normalizedOrigin}{normalizedPath}"
-                : $"{normalizedOrigin}/{normalizedPath}";
         }
 
         private static bool IsHttpUrl(string url)
