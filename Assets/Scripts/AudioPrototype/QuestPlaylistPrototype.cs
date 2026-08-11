@@ -15,24 +15,6 @@ namespace TsukiVox.AudioPrototype
         Direct = 2,
     }
 
-    /// <summary>
-    /// Voice search states. Every state must map to visible copy on the tablet,
-    /// and failures must stay distinguishable on device.
-    /// </summary>
-    public enum VoiceSearchUiState
-    {
-        Idle,
-        Listening,
-        Uploading,
-        Searching,
-        Results,
-        /// <summary>Nothing was said. Kept separate so it costs no billable request.</summary>
-        NoSpeech,
-        /// <summary>Recognition worked but no video matched.</summary>
-        Empty,
-        Failed,
-    }
-
     public sealed class QuestPlaylistPrototype : MonoBehaviour
     {
         public const string DefaultHelperHostAddress = "192.168.50.191";
@@ -52,7 +34,6 @@ namespace TsukiVox.AudioPrototype
         private const string ServiceSettingsVersionPrefsKey = "TsukiVox.ServiceSettingsVersion";
         private const string DeviceTokenPrefsPrefix = "TsukiVox.DeviceToken.";
         private const string DeviceIdPrefsKey = "TsukiVox.DeviceId";
-        private const string VoiceSearchEnabledPrefsKey = "TsukiVox.VoiceSearchEnabled";
 
         [Header("Service Origins")]
         [SerializeField] private TsukiVoxServiceMode serviceMode = TsukiVoxServiceMode.Direct;
@@ -117,22 +98,7 @@ namespace TsukiVox.AudioPrototype
         private string lastAddItemError = string.Empty;
         private string deviceId = string.Empty;
 
-        private Coroutine voiceSearchRoutine;
-        private VoiceSearchRecorder voiceRecorder;
-        private VoiceSearchUiState voiceState = VoiceSearchUiState.Idle;
-        private string voiceTranscript = string.Empty;
-        private string voiceErrorMessage = string.Empty;
-        private string voiceErrorCode = string.Empty;
-        private string voiceProvider = string.Empty;
-        private bool voiceSearchEnabled;
-        private int voiceSequence;
-        private float duckedVideoVolume = -1f;
         private bool hasClearedQueueOnStartup;
-        private string voiceProviderSelection = string.Empty;
-        private string[] voiceProviderOptions = Array.Empty<string>();
-        private bool isSwitchingVoiceProvider;
-        private bool isVoiceProviderDeviceSelected;
-        private Coroutine voiceProviderRoutine;
 
         public event Action<QuestPlaylistPrototype, PlaylistState> StateChanged;
 
@@ -141,9 +107,6 @@ namespace TsukiVox.AudioPrototype
         public event Action<QuestPlaylistPrototype> AddItemStateChanged;
 
         public event Action<QuestPlaylistPrototype> SuggestStateChanged;
-
-        /// <summary>Raised whenever the voice search state machine advances.</summary>
-        public event Action<QuestPlaylistPrototype> VoiceSearchStateChanged;
 
         public PlaylistState CurrentState => state;
 
@@ -187,8 +150,6 @@ namespace TsukiVox.AudioPrototype
 
         public bool SupportsServiceAddress => !IsDirectService;
 
-        public bool SupportsVoiceSearch => !IsDirectService;
-
         public bool IsLocalDevelopmentService => IsOnlineService &&
                                                  string.Equals(
                                                      onlineServiceOrigin,
@@ -204,45 +165,6 @@ namespace TsukiVox.AudioPrototype
             : IsLocalDevelopmentService
                 ? "本地开发"
                 : IsOnlineService ? "公网服务" : "局域网 Companion";
-
-        public VoiceSearchUiState VoiceState => voiceState;
-
-        /// <summary>Transcript of the last successful recognition, for the "听到：" receipt.</summary>
-        public string VoiceTranscript => voiceTranscript;
-
-        public string VoiceErrorMessage => voiceErrorMessage;
-
-        /// <summary>Server error code, so the UI can classify failures.</summary>
-        public string VoiceErrorCode => voiceErrorCode;
-
-        /// <summary>Recognition provider, shown in diagnostics only.</summary>
-        public string VoiceProvider => voiceProvider;
-
-        public bool IsVoiceSearchEnabled => voiceSearchEnabled;
-
-        public bool IsVoiceBusy =>
-            voiceState == VoiceSearchUiState.Listening ||
-            voiceState == VoiceSearchUiState.Uploading ||
-            voiceState == VoiceSearchUiState.Searching;
-
-        /// <summary>Input level while recording, for the level meter.</summary>
-        public float VoiceLevel => voiceRecorder?.Level ?? 0f;
-
-        public float VoiceElapsedSeconds => voiceRecorder?.ElapsedSeconds ?? 0f;
-
-        /// <summary>
-        /// True when voice search can be started: enabled, connected, idle, and a dry
-        /// microphone tap is available. The native Oboe backend exposes levels only,
-        /// so it cannot feed voice capture.
-        /// </summary>
-        public bool CanStartVoiceSearch =>
-            SupportsVoiceSearch &&
-            voiceSearchEnabled &&
-            isConnected &&
-            !IsVoiceBusy &&
-            !isAddingItem &&
-            EnsureVoiceRecorder() != null &&
-            voiceRecorder.CanRecord;
 
         public string LastConnectionError => lastError;
 
@@ -296,20 +218,11 @@ namespace TsukiVox.AudioPrototype
             }
         }
 
-        private void Update()
-        {
-            UpdateVoiceSearch();
-        }
-
         private void OnDisable()
         {
             StopPolling();
             CancelCatalogRequests();
             CancelDirectDownloads();
-            if (IsVoiceBusy)
-            {
-                CancelVoiceSearch();
-            }
         }
 
         public void StartPolling()
@@ -489,32 +402,17 @@ namespace TsukiVox.AudioPrototype
             lastAddedItem = null;
             lastAddItemError = string.Empty;
             pendingAddItem = null;
-            ResetVoiceSearchState();
             SearchStateChanged?.Invoke(this);
             AddItemStateChanged?.Invoke(this);
-            VoiceSearchStateChanged?.Invoke(this);
         }
 
         /// <summary>True when there is anything to clear from the search page.</summary>
         public bool HasSearchResults =>
             (searchResults != null && searchResults.ItemCount > 0) ||
-            !string.IsNullOrEmpty(lastSearchError) ||
-            !string.IsNullOrEmpty(voiceTranscript);
+            !string.IsNullOrEmpty(lastSearchError);
 
         /// <summary>True when the queue holds at least one item.</summary>
         public bool HasQueueItems => state != null && state.queue != null && state.queue.Length > 0;
-
-        private void ResetVoiceSearchState()
-        {
-            voiceTranscript = string.Empty;
-            voiceErrorMessage = string.Empty;
-            voiceErrorCode = string.Empty;
-            voiceProvider = string.Empty;
-            if (!IsVoiceBusy)
-            {
-                voiceState = VoiceSearchUiState.Idle;
-            }
-        }
 
         public void SearchBilibili(string query, int page = 1, int pageSize = 4)
         {
@@ -574,409 +472,6 @@ namespace TsukiVox.AudioPrototype
             suggestResults = null;
             lastSuggestError = string.Empty;
             SuggestStateChanged?.Invoke(this);
-        }
-
-        /// <summary>
-        /// Starts or cancels voice search. Pressing once begins recording; pressing
-        /// again while recording cancels it. Recording stops automatically when the
-        /// user finishes speaking, so there is no press-and-hold gesture.
-        /// </summary>
-        public void ToggleVoiceSearch()
-        {
-            if (IsVoiceBusy)
-            {
-                CancelVoiceSearch();
-                return;
-            }
-            if (!voiceSearchEnabled)
-            {
-                SetVoiceFailure("VOICE_DISABLED", "语音找歌已在设置中关闭。");
-                return;
-            }
-            if (!SupportsVoiceSearch)
-            {
-                SetVoiceFailure("VOICE_UNAVAILABLE", "直接请求不上传语音，请切换到点歌服务后再试。");
-                return;
-            }
-            if (!isConnected)
-            {
-                SetVoiceFailure("NETWORK_UNREACHABLE", $"{ServiceDisplayName}未连接，请检查服务设置。");
-                return;
-            }
-
-            EnsureVoiceRecorder();
-            if (!voiceRecorder.TryBegin())
-            {
-                // Only the default Unity microphone backend exposes dry PCM today.
-                SetVoiceFailure(
-                    "VOICE_CAPTURE_UNAVAILABLE",
-                    "当前音频后端无法采集语音，请在设置中关闭低延迟 Oboe 后端。");
-                return;
-            }
-
-            voiceSequence += 1;
-            voiceState = VoiceSearchUiState.Listening;
-            voiceTranscript = string.Empty;
-            voiceErrorMessage = string.Empty;
-            voiceErrorCode = string.Empty;
-            DuckVideoForRecording(true);
-            VoiceSearchStateChanged?.Invoke(this);
-        }
-
-        public void CancelVoiceSearch()
-        {
-            voiceSequence += 1;
-            if (voiceSearchRoutine != null)
-            {
-                StopCoroutine(voiceSearchRoutine);
-                voiceSearchRoutine = null;
-            }
-
-            voiceRecorder?.Cancel();
-            voiceRecorder?.ClearCapturedAudio();
-            DuckVideoForRecording(false);
-            voiceState = VoiceSearchUiState.Idle;
-            VoiceSearchStateChanged?.Invoke(this);
-        }
-
-        /// <summary>Speech provider the service is currently using.</summary>
-        public string VoiceProviderSelection => voiceProviderSelection;
-
-        /// <summary>Providers the service has credentials for; only these can be selected.</summary>
-        public string[] VoiceProviderOptions => voiceProviderOptions;
-
-        public bool IsSwitchingVoiceProvider => isSwitchingVoiceProvider;
-
-        /// <summary>
-        /// True when this headset picked the provider itself; false means it is
-        /// following the server default. The preference is stored per device, so
-        /// switching here never affects other headsets on the same service.
-        /// </summary>
-        public bool IsVoiceProviderDeviceSelected => isVoiceProviderDeviceSelected;
-
-        /// <summary>Human readable provider name for the settings UI.</summary>
-        public static string DescribeVoiceProvider(string provider)
-        {
-            return provider switch
-            {
-                "tencent" => "腾讯云",
-                "mimo" => "小米 MiMo",
-                _ => string.IsNullOrEmpty(provider) ? "未知" : provider,
-            };
-        }
-
-        /// <summary>
-        /// Reads the current provider from the service. The client does not assume a
-        /// default: which providers exist depends entirely on server credentials.
-        /// </summary>
-        public void RefreshVoiceProvider()
-        {
-            if (!SupportsVoiceSearch || voiceProviderRoutine != null)
-            {
-                return;
-            }
-            EnsureClient();
-            voiceProviderRoutine = StartCoroutine(RefreshVoiceProviderRoutine());
-        }
-
-        /// <summary>Switches the service to another speech provider.</summary>
-        public void SelectVoiceProvider(string provider)
-        {
-            if (!SupportsVoiceSearch ||
-                isSwitchingVoiceProvider ||
-                string.IsNullOrWhiteSpace(provider) ||
-                string.Equals(provider, voiceProviderSelection, StringComparison.OrdinalIgnoreCase))
-            {
-                return;
-            }
-
-            EnsureClient();
-            if (voiceProviderRoutine != null)
-            {
-                StopCoroutine(voiceProviderRoutine);
-            }
-            voiceProviderRoutine = StartCoroutine(SelectVoiceProviderRoutine(provider));
-        }
-
-        private IEnumerator RefreshVoiceProviderRoutine()
-        {
-            yield return client.FetchVoiceProvider(ApplyVoiceProviderResponse, _ => { });
-            voiceProviderRoutine = null;
-        }
-
-        private IEnumerator SelectVoiceProviderRoutine(string provider)
-        {
-            isSwitchingVoiceProvider = true;
-            VoiceSearchStateChanged?.Invoke(this);
-
-            yield return client.SetVoiceProvider(
-                provider,
-                ApplyVoiceProviderResponse,
-                failure =>
-                {
-                    // 服务端拒绝切换通常意味着那个通道没有配置密钥，明确告知而不是静默失败。
-                    voiceErrorCode = failure?.code ?? "SERVER_ERROR";
-                    voiceErrorMessage = failure != null && failure.Is("SPEECH_PROVIDER_UNCONFIGURED")
-                        ? $"服务端未配置{DescribeVoiceProvider(provider)}的密钥。"
-                        : DescribeVoiceFailure(failure?.code, failure?.message);
-                });
-
-            isSwitchingVoiceProvider = false;
-            voiceProviderRoutine = null;
-            VoiceSearchStateChanged?.Invoke(this);
-        }
-
-        private void ApplyVoiceProviderResponse(VoiceProviderResponse response)
-        {
-            if (response == null)
-            {
-                return;
-            }
-
-            voiceProviderSelection = response.provider ?? string.Empty;
-            voiceProviderOptions = response.configuredProviders ?? Array.Empty<string>();
-            isVoiceProviderDeviceSelected = response.deviceSelected;
-            VoiceSearchStateChanged?.Invoke(this);
-        }
-
-        public void SetVoiceSearchEnabled(bool enabled)
-        {
-            if (voiceSearchEnabled == enabled)
-            {
-                return;
-            }
-
-            voiceSearchEnabled = enabled;
-            PlayerPrefs.SetInt(VoiceSearchEnabledPrefsKey, enabled ? 1 : 0);
-            PlayerPrefs.Save();
-            if (!enabled && IsVoiceBusy)
-            {
-                CancelVoiceSearch();
-                return;
-            }
-            VoiceSearchStateChanged?.Invoke(this);
-        }
-
-        /// <summary>
-        /// Pumps the recorder while listening. Called from Update so capture keeps
-        /// following the microphone ring buffer.
-        /// </summary>
-        private void UpdateVoiceSearch()
-        {
-            if (voiceState != VoiceSearchUiState.Listening || voiceRecorder == null)
-            {
-                return;
-            }
-
-            switch (voiceRecorder.Tick(Time.deltaTime))
-            {
-                case VoiceSearchRecorderState.Completed:
-                    SubmitVoiceSearch();
-                    break;
-                case VoiceSearchRecorderState.NoSpeech:
-                    // Nothing was said, so no billable request is made.
-                    voiceRecorder.ClearCapturedAudio();
-                    DuckVideoForRecording(false);
-                    voiceState = VoiceSearchUiState.NoSpeech;
-                    voiceErrorCode = "AUDIO_TOO_SHORT";
-                    voiceErrorMessage = "没听到声音，再试一次。";
-                    VoiceSearchStateChanged?.Invoke(this);
-                    break;
-                case VoiceSearchRecorderState.Unavailable:
-                    DuckVideoForRecording(false);
-                    SetVoiceFailure("VOICE_CAPTURE_UNAVAILABLE", "麦克风采集中断，语音找歌已取消。");
-                    break;
-                default:
-                    VoiceSearchStateChanged?.Invoke(this);
-                    break;
-            }
-        }
-
-        private void SubmitVoiceSearch()
-        {
-            var payload = voiceRecorder.BuildWav();
-            var audioMs = voiceRecorder.CapturedMilliseconds;
-            // Release the captured audio as soon as it is packed for upload.
-            voiceRecorder.ClearCapturedAudio();
-            DuckVideoForRecording(false);
-
-            if (payload == null || payload.Length == 0)
-            {
-                voiceState = VoiceSearchUiState.NoSpeech;
-                voiceErrorCode = "AUDIO_TOO_SHORT";
-                voiceErrorMessage = "没听到声音，再试一次。";
-                VoiceSearchStateChanged?.Invoke(this);
-                return;
-            }
-
-            EnsureClient();
-            voiceState = VoiceSearchUiState.Uploading;
-            VoiceSearchStateChanged?.Invoke(this);
-            voiceSearchRoutine = StartCoroutine(VoiceSearchRoutine(payload, audioMs, voiceSequence));
-        }
-
-        /// <summary>
-        /// Marks the request as having moved past upload. Recognition and catalog
-        /// search happen inside a single server request, so the client cannot observe
-        /// the exact boundary; it switches after the upload has plausibly completed so
-        /// the user sees progress rather than a frozen "识别中".
-        /// </summary>
-        private IEnumerator AdvanceToSearchingAfterUpload(int sequence)
-        {
-            yield return new WaitForSeconds(1.2f);
-            if (sequence == voiceSequence && voiceState == VoiceSearchUiState.Uploading)
-            {
-                voiceState = VoiceSearchUiState.Searching;
-                VoiceSearchStateChanged?.Invoke(this);
-            }
-        }
-
-        private IEnumerator VoiceSearchRoutine(byte[] payload, int audioMs, int sequence)
-        {
-            VoiceSearchResponse response = null;
-            PlaylistRequestError failure = null;
-            StartCoroutine(AdvanceToSearchingAfterUpload(sequence));
-
-            yield return client.VoiceSearch(
-                payload,
-                audioMs,
-                value => response = value,
-                value => failure = value);
-
-            if (sequence != voiceSequence)
-            {
-                yield break;
-            }
-
-            voiceSearchRoutine = null;
-            if (response != null)
-            {
-                voiceTranscript = response.transcript;
-                voiceProvider = response.provider;
-                voiceErrorCode = string.Empty;
-                voiceErrorMessage = string.Empty;
-
-                // Reuse the existing search result model so the result rows and the
-                // enqueue path need no second code path.
-                searchResults = response.ToSearchResponse();
-                voiceState = response.ItemCount > 0
-                    ? VoiceSearchUiState.Results
-                    : VoiceSearchUiState.Empty;
-                lastSearchError = string.Empty;
-                SearchStateChanged?.Invoke(this);
-                VoiceSearchStateChanged?.Invoke(this);
-                yield break;
-            }
-
-            ApplyVoiceFailure(failure);
-        }
-
-        private void ApplyVoiceFailure(PlaylistRequestError failure)
-        {
-            var code = failure?.code ?? "SERVER_ERROR";
-            voiceErrorCode = code;
-            voiceState = code == "AUDIO_TOO_SHORT" || code == "SPEECH_NO_RESULT"
-                ? VoiceSearchUiState.NoSpeech
-                : VoiceSearchUiState.Failed;
-            voiceErrorMessage = DescribeVoiceFailure(code, failure?.message);
-            VoiceSearchStateChanged?.Invoke(this);
-        }
-
-        /// <summary>
-        /// Maps server error codes to user facing text. Failures must be
-        /// distinguishable on device: network, service, upstream throttling and quota
-        /// all look the same otherwise.
-        /// </summary>
-        private static string DescribeVoiceFailure(string code, string serverMessage)
-        {
-            switch (code)
-            {
-                case "NETWORK_UNREACHABLE":
-                    return "网络不通，无法连接点歌服务。";
-                case "SPEECH_TIMEOUT":
-                    return "语音识别超时，请再说一次。";
-                case "SPEECH_NO_RESULT":
-                    return "没听清，再说一次。";
-                case "SPEECH_PROVIDER_FAILED":
-                case "SPEECH_PROVIDER_REJECTED":
-                    return "语音服务暂时不可用，可改用文字搜索。";
-                case "SPEECH_PROVIDER_UNCONFIGURED":
-                    return "服务端未配置语音识别。";
-                case "VOICE_QUOTA_EXCEEDED":
-                    return "今天语音找歌次数已用完。";
-                case "VOICE_RATE_LIMITED":
-                    return "语音找歌太频繁，请稍等一下。";
-                case "VOICE_BUSY":
-                    return "上一次语音找歌还在进行中。";
-                case "BILIBILI_RATE_LIMITED":
-                    return "点歌服务繁忙，可改用文字搜索。";
-                case "AUDIO_TOO_SHORT":
-                    return "没听到声音，再试一次。";
-                case "AUDIO_TOO_LARGE":
-                case "AUDIO_FORMAT_UNSUPPORTED":
-                    return "录音格式不被支持，请重试。";
-                default:
-                    return string.IsNullOrWhiteSpace(serverMessage)
-                        ? "语音找歌失败，请稍后重试。"
-                        : serverMessage.Trim();
-            }
-        }
-
-        private void SetVoiceFailure(string code, string message)
-        {
-            voiceRecorder?.Cancel();
-            voiceRecorder?.ClearCapturedAudio();
-            voiceState = VoiceSearchUiState.Failed;
-            voiceErrorCode = code;
-            voiceErrorMessage = message;
-            VoiceSearchStateChanged?.Invoke(this);
-        }
-
-        private VoiceSearchRecorder EnsureVoiceRecorder()
-        {
-            if (voiceRecorder != null)
-            {
-                return voiceRecorder;
-            }
-
-            var audio = FindAnyObjectByType<QuestAudioPrototype>();
-            if (audio == null)
-            {
-                return null;
-            }
-
-            voiceRecorder = new VoiceSearchRecorder(audio);
-            return voiceRecorder;
-        }
-
-        /// <summary>
-        /// Lowers the video volume while recording so the backing track is not fed
-        /// into recognition. The video keeps playing, and the vocal monitoring chain
-        /// is untouched: this only changes the video player's own volume.
-        /// </summary>
-        private void DuckVideoForRecording(bool ducked)
-        {
-            var screen = FindAnyObjectByType<QuestVideoScreenPrototype>();
-            if (screen == null)
-            {
-                return;
-            }
-
-            if (ducked)
-            {
-                if (duckedVideoVolume < 0f)
-                {
-                    duckedVideoVolume = screen.PlaybackVolume;
-                }
-                screen.SetPlaybackVolume(duckedVideoVolume * 0.15f);
-                return;
-            }
-
-            if (duckedVideoVolume >= 0f)
-            {
-                screen.SetPlaybackVolume(duckedVideoVolume);
-                duckedVideoVolume = -1f;
-            }
         }
 
         public void AddItem(BilibiliCatalogItem item, bool playNow = false)
@@ -1742,8 +1237,6 @@ namespace TsukiVox.AudioPrototype
             if (!hasClearedQueueOnStartup)
             {
                 hasClearedQueueOnStartup = true;
-                // 连上后读一次服务端的语音供应商，设置页才能显示可选项。
-                RefreshVoiceProvider();
                 if (clearQueueOnStartup)
                 {
                     // 搜索结果是本地状态，直接清掉；搜索框启动时保持为空。
@@ -2095,8 +1588,6 @@ namespace TsukiVox.AudioPrototype
                 PlayerPrefs.SetString(DeviceIdPrefsKey, deviceId);
             }
 
-            voiceSearchEnabled = PlayerPrefs.GetInt(VoiceSearchEnabledPrefsKey, 0) != 0;
-
             PlayerPrefs.SetString(OnlineServiceOriginPrefsKey, onlineServiceOrigin);
             PlayerPrefs.SetInt(ServiceModePrefsKey, (int)serviceMode);
             PlayerPrefs.SetInt(ServiceSettingsVersionPrefsKey, CurrentServiceSettingsVersion);
@@ -2135,17 +1626,6 @@ namespace TsukiVox.AudioPrototype
 
             CancelCatalogRequests();
             CancelDirectDownloads();
-            if (IsVoiceBusy)
-            {
-                CancelVoiceSearch();
-            }
-            ResetVoiceSearchState();
-            if (voiceProviderRoutine != null)
-            {
-                StopCoroutine(voiceProviderRoutine);
-                voiceProviderRoutine = null;
-                isSwitchingVoiceProvider = false;
-            }
             ApplyOriginsFromService();
             LoadDeviceCredential();
             SyncHostInput();
@@ -2172,9 +1652,6 @@ namespace TsukiVox.AudioPrototype
             lastSuggestError = string.Empty;
             lastAddItemError = string.Empty;
             lastAddedItem = null;
-            // 换了服务就要重新读它自己的供应商配置，并允许再执行一次启动清空。
-            voiceProviderSelection = string.Empty;
-            voiceProviderOptions = Array.Empty<string>();
             hasClearedQueueOnStartup = false;
 
             if (restartPolling)
@@ -2186,7 +1663,6 @@ namespace TsukiVox.AudioPrototype
             SearchStateChanged?.Invoke(this);
             AddItemStateChanged?.Invoke(this);
             SuggestStateChanged?.Invoke(this);
-            VoiceSearchStateChanged?.Invoke(this);
         }
 
         private void ApplyOnlineServiceOrigin(string origin, bool restartPolling)

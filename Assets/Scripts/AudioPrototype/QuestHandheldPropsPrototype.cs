@@ -571,16 +571,6 @@ namespace TsukiVox.AudioPrototype
             nextMicFaceHapticTime = 0f;
         }
 
-        /// <summary>
-        /// Light confirmation pulse on the right controller, used by voice search when
-        /// recording starts and when the clip is submitted. This reuses the existing
-        /// haptic channel and does not change the mic proximity warning behaviour.
-        /// </summary>
-        public void PulseVoiceFeedback()
-        {
-            SendRightControllerHaptic(0.35f, 0.05f);
-        }
-
         private static void SendRightControllerHaptic(float amplitude, float duration)
         {
             var device = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.RightHand);

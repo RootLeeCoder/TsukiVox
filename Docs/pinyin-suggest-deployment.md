@@ -22,7 +22,6 @@
 - ✅ 版本: release-20260729-223815
 - ✅ 健康检查通过: `"ok": true`
 - ✅ 建议API测试通过: `/api/bilibili/suggest?term=chunriy` 返回 10 条建议
-- ✅ 语音搜索可用: `"available": true`
 
 ## 🔧 技术实现
 

@@ -39,16 +39,10 @@ namespace TsukiVox.AudioPrototype
         private const string ItemsPath = "/api/playlist/items";
         private const string BilibiliSearchPath = "/api/bilibili/search";
         private const string BilibiliSuggestPath = "/api/bilibili/suggest";
-        private const string VoiceSearchPath = "/api/voice-search";
-        private const string VoiceProviderPath = "/api/voice/provider";
         private const string DeviceEnrollmentPath = "/api/devices/enroll";
         private const string DeviceIdHeader = "X-TsukiVox-Device-Id";
-        private const string AudioDurationHeader = "X-TsukiVox-Audio-Ms";
         private const int RequestTimeoutSeconds = 6;
         private const int SearchRequestTimeoutSeconds = 25;
-
-        // Recognition (up to 8s) plus catalog rate-limit retries and request headroom.
-        private const int VoiceSearchTimeoutSeconds = 40;
 
         private string playlistOrigin;
         private string downloadOrigin;
@@ -273,114 +267,6 @@ namespace TsukiVox.AudioPrototype
                 }
 
                 onFailure?.Invoke(error);
-            }
-        }
-
-        /// <summary>
-        /// Uploads a short dry WAV clip and returns the transcript plus catalog results.
-        ///
-        /// The audio only travels to the configured TsukiVox service. Provider keys and
-        /// vendor selection stay on the server; the client never talks to a cloud vendor.
-        /// </summary>
-        public IEnumerator VoiceSearch(
-            byte[] wavPayload,
-            int audioMilliseconds,
-            Action<VoiceSearchResponse> onSuccess,
-            Action<PlaylistRequestError> onFailure)
-        {
-            if (wavPayload == null || wavPayload.Length == 0)
-            {
-                onFailure?.Invoke(PlaylistRequestError.Local("AUDIO_TOO_SHORT", "没有录到声音，再试一次。", true));
-                yield break;
-            }
-
-            using (var request = new UnityWebRequest(
-                CombineUrl(downloadOrigin, VoiceSearchPath),
-                UnityWebRequest.kHttpVerbPOST))
-            {
-                request.uploadHandler = new UploadHandlerRaw(wavPayload);
-                request.downloadHandler = new DownloadHandlerBuffer();
-                request.SetRequestHeader("Content-Type", "audio/wav");
-                request.SetRequestHeader("Accept", "application/json");
-                if (audioMilliseconds > 0)
-                {
-                    request.SetRequestHeader(AudioDurationHeader, audioMilliseconds.ToString());
-                }
-                ConfigureRequest(request, VoiceSearchTimeoutSeconds);
-
-                yield return request.SendWebRequest();
-
-                if (!IsRequestSuccessful(request))
-                {
-                    onFailure?.Invoke(CreateRequestFailure(request, "语音搜索"));
-                    yield break;
-                }
-
-                if (TryParseVoiceSearchResponse(request.downloadHandler.text, out var response, out var error))
-                {
-                    onSuccess?.Invoke(response);
-                    yield break;
-                }
-
-                onFailure?.Invoke(PlaylistRequestError.Local("INVALID_RESPONSE", error, false));
-            }
-        }
-
-        /// <summary>Reads which speech provider the service is currently using.</summary>
-        public IEnumerator FetchVoiceProvider(
-            Action<VoiceProviderResponse> onSuccess,
-            Action<PlaylistRequestError> onFailure)
-        {
-            using (var request = UnityWebRequest.Get(CombineUrl(downloadOrigin, VoiceProviderPath)))
-            {
-                ConfigureRequest(request);
-                yield return request.SendWebRequest();
-
-                if (!IsRequestSuccessful(request))
-                {
-                    onFailure?.Invoke(CreateRequestFailure(request, "读取语音供应商"));
-                    yield break;
-                }
-
-                if (TryParseVoiceProvider(request.downloadHandler.text, out var response, out var error))
-                {
-                    onSuccess?.Invoke(response);
-                    yield break;
-                }
-
-                onFailure?.Invoke(PlaylistRequestError.Local("INVALID_RESPONSE", error, false));
-            }
-        }
-
-        /// <summary>
-        /// Switches the service's speech provider. The server refuses providers
-        /// without credentials, so a failure here means that channel cannot work.
-        /// </summary>
-        public IEnumerator SetVoiceProvider(
-            string provider,
-            Action<VoiceProviderResponse> onSuccess,
-            Action<PlaylistRequestError> onFailure)
-        {
-            var requestBody = JsonUtility.ToJson(new VoiceProviderRequest { provider = provider });
-
-            using (var request = CreateJsonPostRequest(CombineUrl(downloadOrigin, VoiceProviderPath), requestBody))
-            {
-                ConfigureRequest(request);
-                yield return request.SendWebRequest();
-
-                if (!IsRequestSuccessful(request))
-                {
-                    onFailure?.Invoke(CreateRequestFailure(request, "切换语音供应商"));
-                    yield break;
-                }
-
-                if (TryParseVoiceProvider(request.downloadHandler.text, out var response, out var error))
-                {
-                    onSuccess?.Invoke(response);
-                    yield break;
-                }
-
-                onFailure?.Invoke(PlaylistRequestError.Local("INVALID_RESPONSE", error, false));
             }
         }
 
@@ -650,58 +536,6 @@ namespace TsukiVox.AudioPrototype
             }
         }
 
-        private static bool TryParseVoiceSearchResponse(
-            string json,
-            out VoiceSearchResponse response,
-            out string error)
-        {
-            try
-            {
-                response = JsonUtility.FromJson<VoiceSearchResponse>(json);
-                if (response == null)
-                {
-                    error = "语音搜索返回了空响应。";
-                    return false;
-                }
-
-                response.Normalize();
-                error = string.Empty;
-                return true;
-            }
-            catch (Exception exception)
-            {
-                response = null;
-                error = $"语音搜索返回了无效 JSON：{exception.Message}";
-                return false;
-            }
-        }
-
-        private static bool TryParseVoiceProvider(
-            string json,
-            out VoiceProviderResponse response,
-            out string error)
-        {
-            try
-            {
-                response = JsonUtility.FromJson<VoiceProviderResponse>(json);
-                if (response == null)
-                {
-                    error = "语音供应商接口返回了空响应。";
-                    return false;
-                }
-
-                response.Normalize();
-                error = string.Empty;
-                return true;
-            }
-            catch (Exception exception)
-            {
-                response = null;
-                error = $"语音供应商接口返回了无效 JSON：{exception.Message}";
-                return false;
-            }
-        }
-
         private static string NormalizeOrigin(string origin, string fallback)
         {
             var normalized = string.IsNullOrWhiteSpace(origin) ? fallback : origin.Trim();
@@ -760,12 +594,6 @@ namespace TsukiVox.AudioPrototype
         }
 
         [Serializable]
-        private sealed class VoiceProviderRequest
-        {
-            public string provider;
-        }
-
-        [Serializable]
         private sealed class PlaylistErrorResponse
         {
             public string error;
@@ -789,49 +617,9 @@ namespace TsukiVox.AudioPrototype
         }
     }
 
-    /// <summary>Which speech provider this device uses, and which ones it could use.</summary>
-    [Serializable]
-    public sealed class VoiceProviderResponse
-    {
-        public string provider;
-
-        /// <summary>True when this device chose the provider itself.</summary>
-        public bool deviceSelected;
-
-        /// <summary>Fallback used when this device has made no choice.</summary>
-        public string serverDefault;
-
-        public bool available;
-        public string[] configuredProviders = Array.Empty<string>();
-
-        public void Normalize()
-        {
-            provider ??= string.Empty;
-            serverDefault ??= string.Empty;
-            configuredProviders ??= Array.Empty<string>();
-        }
-
-        public bool Supports(string candidate)
-        {
-            if (configuredProviders == null)
-            {
-                return false;
-            }
-            for (var index = 0; index < configuredProviders.Length; index += 1)
-            {
-                if (string.Equals(configuredProviders[index], candidate, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-    }
-
     /// <summary>
-    /// Structured request failure. The server reports a machine readable
-    /// <c>code</c> alongside the human message, which the voice search UI needs
-    /// to tell network, service, upstream throttling and quota apart.
+    /// Structured request failure. The server reports a machine-readable
+    /// <c>code</c> alongside the human message for actionable client errors.
     /// </summary>
     [Serializable]
     public sealed class PlaylistRequestError
@@ -852,79 +640,6 @@ namespace TsukiVox.AudioPrototype
             };
         }
 
-        public bool Is(string candidate)
-        {
-            return string.Equals(code, candidate, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    [Serializable]
-    public sealed class VoiceSearchIntent
-    {
-        public string artist;
-        public string song;
-        public string[] modifiers = Array.Empty<string>();
-
-        public void Normalize()
-        {
-            artist ??= string.Empty;
-            song ??= string.Empty;
-            modifiers ??= Array.Empty<string>();
-        }
-    }
-
-    /// <summary>
-    /// Voice search result. The <c>items</c> array is intentionally identical to
-    /// <see cref="BilibiliSearchResponse"/> so the existing result rows and
-    /// enqueue path can render it without a second model.
-    /// </summary>
-    [Serializable]
-    public sealed class VoiceSearchResponse
-    {
-        public string transcript;
-        public string normalizedQuery;
-        public VoiceSearchIntent intent;
-        public string provider;
-        public int audioMs;
-        public int page = 1;
-        public int pageSize = 4;
-        public int total;
-        public bool hasMore;
-        public BilibiliCatalogItem[] items = Array.Empty<BilibiliCatalogItem>();
-
-        public int ItemCount => items == null ? 0 : items.Length;
-
-        public void Normalize()
-        {
-            transcript ??= string.Empty;
-            normalizedQuery ??= string.Empty;
-            provider ??= string.Empty;
-            intent ??= new VoiceSearchIntent();
-            intent.Normalize();
-            page = Math.Max(1, page);
-            pageSize = Math.Max(1, pageSize);
-            total = Math.Max(0, total);
-            audioMs = Math.Max(0, audioMs);
-            items ??= Array.Empty<BilibiliCatalogItem>();
-            for (var index = 0; index < items.Length; index += 1)
-            {
-                items[index]?.Normalize();
-            }
-        }
-
-        /// <summary>Converts to the existing search response shape for UI reuse.</summary>
-        public BilibiliSearchResponse ToSearchResponse()
-        {
-            return new BilibiliSearchResponse
-            {
-                query = normalizedQuery,
-                page = page,
-                pageSize = pageSize,
-                total = total,
-                hasMore = hasMore,
-                items = items ?? Array.Empty<BilibiliCatalogItem>(),
-            };
-        }
     }
 
     [Serializable]

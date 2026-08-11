@@ -19,14 +19,11 @@ namespace TsukiVox.AudioPrototype
         private const int SearchResultRowCount = 4;
         private const int SuggestRowCount = 9;
         private const int SuggestColumnCount = 3;
-        private const int VoiceLevelBarCount = 18;
         private const float RefreshIntervalSeconds = 0.1f;
         private const float SuggestDebounceSeconds = 0.35f;
         private const float SuggestColumnGap = 12f;
         private const float SuggestRowGap = 6f;
         private const float SuggestRowHeight = 34f;
-        private const float SongSearchKeyboardY = -150f;
-        private const float SongSearchKeyboardYWithVoice = -168f;
         private const float ContentWidth = 992f;
         private const int SearchResultColumnCount = 2;
         private const float SearchResultColumnGap = 12f;
@@ -229,13 +226,6 @@ namespace TsukiVox.AudioPrototype
         private TMP_Text appendKtvSearchLabel;
         private Toggle appendKtvSearchToggle;
         private Button songSearchButton;
-        private Button voiceSearchButton;
-        private QuestUiIcon voiceSearchIcon;
-        private TMP_Text voiceSearchStatusText;
-        private TMP_Text voiceHeardText;
-        private RectTransform voiceLevelRoot;
-        private readonly QuestUiSurface[] voiceLevelBars = new QuestUiSurface[VoiceLevelBarCount];
-        private VoiceSearchUiState lastVoiceState = VoiceSearchUiState.Idle;
         private RectTransform suggestContainer;
         private readonly RectTransform[] suggestRows = new RectTransform[SuggestRowCount];
         private readonly Button[] suggestButtons = new Button[SuggestRowCount];
@@ -287,11 +277,6 @@ namespace TsukiVox.AudioPrototype
         private Button localDevelopmentModeButton;
         private TMP_Text serviceConnectionText;
         private Toggle onlineFullCacheToggle;
-        private Toggle voiceSearchEnabledToggle;
-        private TMP_Text voiceSearchHintText;
-        private TMP_Text voiceProviderLabelText;
-        private Button tencentProviderButton;
-        private Button mimoProviderButton;
         private Toggle monitorOutputToggle;
         private Toggle safetyToggle;
         private Toggle nativeToggle;
@@ -589,58 +574,11 @@ namespace TsukiVox.AudioPrototype
         {
             BuildSubpageHeader(songSearchPage, "搜索点歌", out songSearchBackButton);
 
-            // 语音找歌是与文字搜索并列的入口，放在输入框上方一行。
-            voiceSearchButton = CreateIconButton(
-                songSearchPage,
-                "Voice Search",
-                QuestUiIconKind.Microphone,
-                new Vector2(-446f, 178f),
-                new Vector2(86f, 54f),
-                Accent,
-                AccentInk,
-                out voiceSearchIcon);
-            voiceSearchStatusText = CreateText(
-                songSearchPage,
-                "Voice Status",
-                "按一下说出歌名",
-                17,
-                FontStyle.Bold,
-                new Vector2(60f, 190f),
-                new Vector2(820f, 26f),
-                TextAnchor.MiddleLeft,
-                TextPrimary);
-            voiceHeardText = CreateText(
-                songSearchPage,
-                "Voice Heard",
-                string.Empty,
-                15,
-                FontStyle.Normal,
-                new Vector2(60f, 166f),
-                new Vector2(820f, 24f),
-                TextAnchor.MiddleLeft,
-                TextSecondary);
-
-            // 录音电平条：明确的"正在录音"视觉状态，不允许静默采集。
-            voiceLevelRoot = EnsureRect(
-                songSearchPage,
-                "Voice Level",
-                new Vector2(60f, 146f),
-                new Vector2(VoiceLevelBarCount * 14f, 14f));
-            for (var index = 0; index < VoiceLevelBarCount; index += 1)
-            {
-                var barRect = EnsureRect(
-                    voiceLevelRoot,
-                    $"Bar {index}",
-                    new Vector2(-voiceLevelRoot.sizeDelta.x * 0.5f + 7f + index * 14f, 0f),
-                    new Vector2(6f, 14f));
-                voiceLevelBars[index] = EnsureSurface(barRect, Accent, 3f, false);
-            }
-
             songSearchInput = CreateInputField(
                 songSearchPage,
                 "Song Search Input",
                 "请输入歌曲名，推荐使用全拼",
-                new Vector2(-126f, 112f),
+                new Vector2(-126f, 150f),
                 new Vector2(720f, 54f));
             songSearchInput.characterLimit = 80;
             songSearchInput.SetTextWithoutNotify(string.Empty);
@@ -650,17 +588,17 @@ namespace TsukiVox.AudioPrototype
                 "KTV",
                 16,
                 FontStyle.Bold,
-                new Vector2(266f, 112f),
+                new Vector2(266f, 150f),
                 new Vector2(56f, 36f),
                 TextAnchor.MiddleCenter,
                 TextSecondary);
-            appendKtvSearchToggle = CreateSwitch(songSearchPage, "Append KTV Switch", new Vector2(326f, 112f));
+            appendKtvSearchToggle = CreateSwitch(songSearchPage, "Append KTV Switch", new Vector2(326f, 150f));
             SetChildActive(songSearchPage, "Search Suggestions", false);
             songSearchButton = CreateIconButton(
                 songSearchPage,
                 "Search Songs",
                 QuestUiIconKind.Search,
-                new Vector2(446f, 112f),
+                new Vector2(446f, 150f),
                 new Vector2(86f, 54f),
                 Accent,
                 AccentInk,
@@ -673,7 +611,7 @@ namespace TsukiVox.AudioPrototype
             suggestContainer = EnsureRect(
                 songSearchPage,
                 "Suggest Container",
-                new Vector2(0f, 31f),
+                new Vector2(0f, 61f),
                 new Vector2(ContentWidth, suggestContainerHeight));
             suggestContainer.gameObject.SetActive(false);
 
@@ -720,7 +658,7 @@ namespace TsukiVox.AudioPrototype
             }
 
             var cardWidth = (ContentWidth - SearchResultColumnGap) / SearchResultColumnCount;
-            const float firstRowY = 14f;
+            const float firstRowY = 44f;
             for (var index = 0; index < SearchResultRowCount; index += 1)
             {
                 var columnIndex = index % SearchResultColumnCount;
@@ -860,10 +798,10 @@ namespace TsukiVox.AudioPrototype
                 SetChildActive(row, "Meta", false);
             }
 
-            searchPreviousPageButton = CreateTextButton(songSearchPage, "Previous Search Page", "上一页", new Vector2(-424f, -226f), new Vector2(128f, 46f), Surface, TextPrimary);
-            songSearchStatusText = CreateText(songSearchPage, "Search Status", "输入关键词或按麦克风说出歌名", 16, FontStyle.Normal, new Vector2(0f, -226f), new Vector2(520f, 34f), TextAnchor.MiddleCenter, TextSecondary);
-            searchNextPageButton = CreateTextButton(songSearchPage, "Next Search Page", "下一页", new Vector2(424f, -226f), new Vector2(128f, 46f), Surface, TextPrimary);
-            clearSearchButton = CreateTextButton(songSearchPage, "Clear Search", "清空", new Vector2(-286f, -226f), new Vector2(104f, 46f), Surface, TextSecondary);
+            searchPreviousPageButton = CreateTextButton(songSearchPage, "Previous Search Page", "上一页", new Vector2(-424f, -200f), new Vector2(128f, 46f), Surface, TextPrimary);
+            songSearchStatusText = CreateText(songSearchPage, "Search Status", "请输入关键词搜索歌曲", 16, FontStyle.Normal, new Vector2(0f, -200f), new Vector2(520f, 34f), TextAnchor.MiddleCenter, TextSecondary);
+            searchNextPageButton = CreateTextButton(songSearchPage, "Next Search Page", "下一页", new Vector2(424f, -200f), new Vector2(128f, 46f), Surface, TextPrimary);
+            clearSearchButton = CreateTextButton(songSearchPage, "Clear Search", "清空", new Vector2(-286f, -200f), new Vector2(104f, 46f), Surface, TextSecondary);
         }
 
         private void BuildSearchResultSkeleton(
@@ -1044,7 +982,7 @@ namespace TsukiVox.AudioPrototype
             dynamicsSlider = CreateSlider(voicePage, "Dynamics", new Vector2(86f, -200f), new Vector2(520f, 42f), true);
             dynamicsValueText = CreateText(voicePage, "Dynamics Value", "65%", 16, FontStyle.Bold, new Vector2(430f, -200f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
 
-            voiceMixerFooterText = CreateText(voicePage, "Mixer Footer", "距离跟随只调整返听，不影响语音找歌", 14, FontStyle.Normal, new Vector2(0f, -252f), new Vector2(ContentWidth, 28f), TextAnchor.MiddleCenter, TextSecondary);
+            voiceMixerFooterText = CreateText(voicePage, "Mixer Footer", "距离跟随只调整返听增益", 14, FontStyle.Normal, new Vector2(0f, -252f), new Vector2(ContentWidth, 28f), TextAnchor.MiddleCenter, TextSecondary);
         }
 
         private void RetireLegacyVoiceMixerUi()
@@ -1380,30 +1318,10 @@ namespace TsukiVox.AudioPrototype
 
             SetChildActive(servicePage, "Mode Hint", false);
             SetChildActive(servicePage, "Privacy Note", false);
-            SetChildActive(servicePage, "Voice Divider", false);
             CreateDivider(servicePage, "Address Divider", new Vector2(0f, -32f), new Vector2(ContentWidth, 1f));
 
             CreateText(servicePage, "Online Cache Title", "在线媒体完整缓存", 18, FontStyle.Bold, new Vector2(-330f, -76f), new Vector2(340f, 32f), TextAnchor.MiddleLeft, TextPrimary);
             onlineFullCacheToggle = CreateSwitch(servicePage, "Online Full Cache Switch", new Vector2(460f, -76f));
-            CreateDivider(servicePage, "Online Cache Divider", new Vector2(0f, -116f), new Vector2(ContentWidth, 1f));
-
-            CreateText(servicePage, "Voice Title", "语音找歌", 19, FontStyle.Bold, new Vector2(-356f, -154f), new Vector2(280f, 32f), TextAnchor.MiddleLeft, TextPrimary);
-            voiceSearchEnabledToggle = CreateSwitch(servicePage, "Voice Search Switch", new Vector2(460f, -154f));
-
-            // 识别供应商二选一，与上方服务模式相同的互斥按钮样式。
-            voiceProviderLabelText = CreateText(servicePage, "Provider Label", "识别供应商", 16, FontStyle.Normal, new Vector2(-380f, -208f), new Vector2(230f, 28f), TextAnchor.MiddleLeft, TextSecondary);
-            tencentProviderButton = CreateTextButton(servicePage, "Tencent Provider", "腾讯云", new Vector2(-60f, -208f), new Vector2(210f, 50f), Surface, TextPrimary);
-            mimoProviderButton = CreateTextButton(servicePage, "MiMo Provider", "小米 MiMo", new Vector2(170f, -208f), new Vector2(210f, 50f), Surface, TextPrimary);
-            voiceSearchHintText = CreateText(
-                servicePage,
-                "Voice Hint",
-                "关闭后不再采集或上传语音",
-                15,
-                FontStyle.Normal,
-                new Vector2(0f, -254f),
-                new Vector2(ContentWidth, 26f),
-                TextAnchor.MiddleLeft,
-                TextSecondary);
         }
 
         private void BuildMicProtectionPage()
@@ -1564,7 +1482,6 @@ namespace TsukiVox.AudioPrototype
             WireButton(microphoneButton, () => audioPrototype?.ToggleMonitoring());
 
             WireButton(songSearchButton, () => SearchSongs(1));
-            WireButton(voiceSearchButton, ToggleVoiceSearch);
             appendKtvSearchToggle.onValueChanged.RemoveAllListeners();
             appendKtvSearchToggle.SetIsOnWithoutNotify(appendKtvToSearch);
             appendKtvSearchToggle.onValueChanged.AddListener(HandleAppendKtvSearchToggle);
@@ -1644,8 +1561,6 @@ namespace TsukiVox.AudioPrototype
             WireButton(companionModeButton, SelectCompanionService);
             WireButton(onlineModeButton, SelectOnlineService);
             WireButton(localDevelopmentModeButton, SelectLocalDevelopmentService);
-            WireButton(tencentProviderButton, () => SelectVoiceProvider("tencent"));
-            WireButton(mimoProviderButton, () => SelectVoiceProvider("mimo"));
             WireButton(applyHostButton, ApplyServiceAddress);
             WireButton(defaultHostButton, ApplyDefaultServiceAddress);
             if (onlineFullCacheToggle != null)
@@ -1666,15 +1581,6 @@ namespace TsukiVox.AudioPrototype
 
             micProtectionToggle.onValueChanged.RemoveAllListeners();
             micProtectionToggle.onValueChanged.AddListener(value => handheldPropsPrototype?.SetMicFaceHapticsEnabled(value));
-            if (voiceSearchEnabledToggle != null)
-            {
-                voiceSearchEnabledToggle.onValueChanged.RemoveAllListeners();
-                voiceSearchEnabledToggle.onValueChanged.AddListener(value =>
-                {
-                    playlistPrototype?.SetVoiceSearchEnabled(value);
-                    RefreshSettings();
-                });
-            }
             micWarningDistanceSlider.onValueChanged.RemoveAllListeners();
             micWarningDistanceSlider.onValueChanged.AddListener(value => handheldPropsPrototype?.SetMicFaceWarningClearance(value * MicWarningClearanceStep));
             micCriticalDistanceSlider.onValueChanged.RemoveAllListeners();
@@ -1793,8 +1699,6 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
-            RefreshVoiceSearch();
-
             var response = playlistPrototype.SearchResults;
             var items = response?.items ?? Array.Empty<BilibiliCatalogItem>();
             searchResultSkeletonVisible = playlistPrototype.IsSearching;
@@ -1840,7 +1744,6 @@ namespace TsukiVox.AudioPrototype
             if (clearSearchButton != null)
             {
                 clearSearchButton.interactable = !playlistPrototype.IsSearching &&
-                                                 !playlistPrototype.IsVoiceBusy &&
                                                  playlistPrototype.HasSearchResults;
             }
 
@@ -1939,7 +1842,7 @@ namespace TsukiVox.AudioPrototype
                 ? "Native 低延迟仅提供原声；距离跟随仍然生效"
                 : audioPrototype.IsSafetyReducingGain
                     ? "安全保护正在降低返听增益"
-                    : "距离跟随只调整返听，不影响语音找歌";
+                    : "距离跟随只调整返听增益";
             voiceMixerFooterText.color = audioPrototype.IsSafetyReducingGain ? Warm : TextSecondary;
 
             for (var index = 0; index < presetButtons.Length; index += 1)
@@ -2185,26 +2088,6 @@ namespace TsukiVox.AudioPrototype
                 RefreshSwitchVisual(onlineFullCacheToggle, Accent);
             }
 
-            if (voiceSearchEnabledToggle != null && playlistPrototype != null)
-            {
-                voiceSearchEnabledToggle.SetIsOnWithoutNotify(playlistPrototype.IsVoiceSearchEnabled);
-                voiceSearchEnabledToggle.interactable = playlistPrototype.SupportsVoiceSearch;
-                RefreshSwitchVisual(voiceSearchEnabledToggle, Accent);
-                SetVoiceFeatureVisible(
-                    playlistPrototype.SupportsVoiceSearch && playlistPrototype.IsVoiceSearchEnabled);
-                RefreshVoiceProviderButtons();
-                if (voiceSearchHintText != null)
-                {
-                    voiceSearchHintText.text = !playlistPrototype.SupportsVoiceSearch
-                        ? "直接请求不采集或上传语音，请切换到点歌服务"
-                        : !playlistPrototype.IsVoiceSearchEnabled
-                        ? "已关闭：入口已隐藏，不再采集或上传语音"
-                        : audioPrototype != null && audioPrototype.PrefersNativeOboeBackend
-                            ? "Native 低延迟后端下无法采集语音，请先关闭它"
-                            : DescribeVoiceProviderHint();
-                }
-            }
-
             if (audioPrototype == null)
             {
                 return;
@@ -2425,46 +2308,7 @@ namespace TsukiVox.AudioPrototype
                 $"防碰撞  {(handheldPropsPrototype == null ? "missing" : $"{handheldPropsPrototype.MicFaceWarningClearance * 100f:0.0}/{handheldPropsPrototype.MicFaceCriticalClearance * 100f:0.0}cm {handheldPropsPrototype.MicFaceHapticStrength:P0}")}\n" +
                 $"嘴部定位  {(handheldPropsPrototype == null ? "missing" : handheldPropsPrototype.MicFaceMouthLocalOffset.ToString("F3"))}\n" +
                 $"播放服务  {playlistPrototype?.PlaylistOrigin ?? "missing"}\n" +
-                $"语音找歌  {DescribeVoiceDiagnostics()}\n" +
                 $"视频状态  {SingleLine(videoScreenPrototype?.StatusSummary)}";
-        }
-
-        /// <summary>
-        /// Voice search line for the diagnostics drawer. Includes the recognition
-        /// provider and last error code so on-device triage can tell apart capture,
-        /// network, upstream throttling and quota problems.
-        /// </summary>
-        private string DescribeVoiceDiagnostics()
-        {
-            if (playlistPrototype == null)
-            {
-                return "missing";
-            }
-            if (!playlistPrototype.IsVoiceSearchEnabled)
-            {
-                return "已关闭";
-            }
-
-            var parts = playlistPrototype.VoiceState.ToString();
-            if (!playlistPrototype.CanStartVoiceSearch && !playlistPrototype.IsVoiceBusy)
-            {
-                parts += " 不可用";
-            }
-            // 选中的供应商始终显示；VoiceProvider 是上一次实际识别用的那个。
-            var selection = playlistPrototype.VoiceProviderSelection;
-            if (!string.IsNullOrEmpty(selection))
-            {
-                parts += $" · 选中 {selection}";
-            }
-            if (!string.IsNullOrEmpty(playlistPrototype.VoiceProvider))
-            {
-                parts += $" · 上次 {playlistPrototype.VoiceProvider}";
-            }
-            if (!string.IsNullOrEmpty(playlistPrototype.VoiceErrorCode))
-            {
-                parts += $" · {playlistPrototype.VoiceErrorCode}";
-            }
-            return parts;
         }
 
         private void HandleMicrophoneToggle(bool enabled)
@@ -2511,111 +2355,10 @@ namespace TsukiVox.AudioPrototype
 
         private void OpenSongSearchPage()
         {
-            // 启动时输入和结果都保持为空，由用户输入、选择候选或使用语音找歌。
+            // 启动时输入和结果都保持为空，由用户输入或选择拼音候选。
             ShowPage(UiPage.SongSearch);
         }
 
-        /// <summary>
-        /// Clears the search page: results, status and the voice transcript receipt.
-        /// The input field keeps its text so the same query can be re-run.
-        /// </summary>
-        private void SelectVoiceProvider(string provider)
-        {
-            playlistPrototype?.SelectVoiceProvider(provider);
-            RefreshSettings();
-        }
-
-        /// <summary>
-        /// Highlights the active provider and disables ones the server has no
-        /// credentials for, so an unusable channel cannot be selected.
-        /// </summary>
-        private void RefreshVoiceProviderButtons()
-        {
-            if (playlistPrototype == null)
-            {
-                return;
-            }
-
-            var selection = playlistPrototype.VoiceProviderSelection;
-            var options = playlistPrototype.VoiceProviderOptions;
-            var busy = playlistPrototype.IsSwitchingVoiceProvider || playlistPrototype.IsVoiceBusy;
-            var enabled = playlistPrototype.IsVoiceSearchEnabled;
-
-            SetVoiceProviderButton(tencentProviderButton, "tencent", selection, options, busy, enabled);
-            SetVoiceProviderButton(mimoProviderButton, "mimo", selection, options, busy, enabled);
-        }
-
-        private void SetVoiceProviderButton(
-            Button button,
-            string provider,
-            string selection,
-            string[] options,
-            bool busy,
-            bool voiceEnabled)
-        {
-            if (button == null)
-            {
-                return;
-            }
-
-            var isSelected = string.Equals(selection, provider, StringComparison.OrdinalIgnoreCase);
-            var isConfigured = false;
-            if (options != null)
-            {
-                for (var index = 0; index < options.Length; index += 1)
-                {
-                    if (string.Equals(options[index], provider, StringComparison.OrdinalIgnoreCase))
-                    {
-                        isConfigured = true;
-                        break;
-                    }
-                }
-            }
-
-            SetServiceModeButtonVisual(button, isSelected);
-            button.interactable = voiceEnabled && isConfigured && !isSelected && !busy;
-
-            var label = button.GetComponentInChildren<TMP_Text>(true);
-            if (label != null && !isSelected)
-            {
-                // 未配置密钥的供应商压暗，明确表示不可选而不是点了没反应。
-                label.color = isConfigured ? TextPrimary : TextFaint;
-            }
-        }
-
-        private string DescribeVoiceProviderHint()
-        {
-            if (playlistPrototype == null)
-            {
-                return "按一下搜索页的麦克风按钮说出歌名";
-            }
-            if (playlistPrototype.IsSwitchingVoiceProvider)
-            {
-                return "正在切换识别供应商…";
-            }
-
-            var options = playlistPrototype.VoiceProviderOptions;
-            if (options == null || options.Length == 0)
-            {
-                return "服务端未配置语音识别密钥";
-            }
-
-            var current = QuestPlaylistPrototype.DescribeVoiceProvider(playlistPrototype.VoiceProviderSelection);
-            if (options.Length == 1)
-            {
-                return $"当前使用 {current}；服务端只配置了这一个供应商";
-            }
-
-            // 明确说明这是本机设置，避免误以为会改到别的头显。
-            return playlistPrototype.IsVoiceProviderDeviceSelected
-                ? $"当前使用 {current}（本机设置）；两者互不回退，切换后立即生效"
-                : $"当前使用 {current}（服务端默认）；切换后仅影响本机";
-        }
-
-        /// <summary>
-        /// Clears the search page: results, status and the voice transcript receipt.
-        /// The input field keeps its text so the same query can be re-run.
-        /// </summary>
         private void ClearSearchResults()
         {
             songSearchPageNumber = 1;
@@ -2815,174 +2558,6 @@ namespace TsukiVox.AudioPrototype
             playlistPrototype.RemoveQueueItem(itemId);
             RefreshQueue();
             RefreshSongSearch();
-        }
-
-        private void ToggleVoiceSearch()
-        {
-            if (playlistPrototype == null)
-            {
-                return;
-            }
-
-            var wasIdle = !playlistPrototype.IsVoiceBusy;
-            playlistPrototype.ToggleVoiceSearch();
-
-            // 开始与提交各给一次轻触觉反馈。
-            if (wasIdle && playlistPrototype.IsVoiceBusy)
-            {
-                handheldPropsPrototype?.PulseVoiceFeedback();
-            }
-            RefreshSongSearch();
-        }
-
-        /// <summary>
-        /// Renders the eight voice search states. Every state has visible copy, and
-        /// failures stay distinguishable so on-device triage is possible.
-        /// </summary>
-        private void RefreshVoiceSearch()
-        {
-            if (voiceSearchButton == null || playlistPrototype == null)
-            {
-                return;
-            }
-
-            var visible = playlistPrototype.IsVoiceSearchEnabled && playlistPrototype.SupportsVoiceSearch;
-            SetVoiceFeatureVisible(visible);
-            if (!visible)
-            {
-                return;
-            }
-
-            var state = playlistPrototype.VoiceState;
-            var listening = state == VoiceSearchUiState.Listening;
-            var busy = playlistPrototype.IsVoiceBusy;
-
-            voiceSearchButton.interactable = busy || playlistPrototype.CanStartVoiceSearch;
-            if (voiceSearchIcon != null)
-            {
-                voiceSearchIcon.color = listening ? Danger : AccentInk;
-            }
-
-            switch (state)
-            {
-                case VoiceSearchUiState.Listening:
-                    voiceSearchStatusText.text = "正在听… 再按一次取消";
-                    voiceSearchStatusText.color = Accent;
-                    break;
-                case VoiceSearchUiState.Uploading:
-                    voiceSearchStatusText.text = "识别中…";
-                    voiceSearchStatusText.color = TextSecondary;
-                    break;
-                case VoiceSearchUiState.Searching:
-                    voiceSearchStatusText.text = "正在找歌…";
-                    voiceSearchStatusText.color = TextSecondary;
-                    break;
-                case VoiceSearchUiState.Results:
-                    voiceSearchStatusText.text = "语音找歌完成";
-                    voiceSearchStatusText.color = Accent;
-                    break;
-                case VoiceSearchUiState.Empty:
-                    voiceSearchStatusText.text = "没找到视频，可改用下方文字搜索";
-                    voiceSearchStatusText.color = Warm;
-                    break;
-                case VoiceSearchUiState.NoSpeech:
-                    voiceSearchStatusText.text = SafeText(playlistPrototype.VoiceErrorMessage, "没听到声音，再试一次");
-                    voiceSearchStatusText.color = Warm;
-                    break;
-                case VoiceSearchUiState.Failed:
-                    voiceSearchStatusText.text = SingleLine(
-                        SafeText(playlistPrototype.VoiceErrorMessage, "语音找歌失败"));
-                    voiceSearchStatusText.color = Danger;
-                    break;
-                default:
-                    voiceSearchStatusText.text = playlistPrototype.CanStartVoiceSearch
-                        ? "按一下说出歌名"
-                        : "语音找歌暂不可用";
-                    voiceSearchStatusText.color = playlistPrototype.CanStartVoiceSearch
-                        ? TextPrimary
-                        : TextSecondary;
-                    break;
-            }
-
-            // "听到：" 只是可读回执，不是可编辑输入框。
-            var transcript = playlistPrototype.VoiceTranscript;
-            voiceHeardText.text = string.IsNullOrWhiteSpace(transcript)
-                ? string.Empty
-                : $"听到：{SingleLine(transcript)}";
-
-            var level = listening ? Mathf.Clamp01(playlistPrototype.VoiceLevel) : 0f;
-            for (var index = 0; index < VoiceLevelBarCount; index += 1)
-            {
-                if (voiceLevelBars[index] == null)
-                {
-                    continue;
-                }
-
-                var bar = (RectTransform)voiceLevelBars[index].transform;
-                if (!listening)
-                {
-                    bar.sizeDelta = new Vector2(6f, 3f);
-                    voiceLevelBars[index].color = palette.InactiveMeter;
-                    continue;
-                }
-
-                // 中间的条更高，形成常见的电平包络形状。
-                var distance = Mathf.Abs(index - (VoiceLevelBarCount - 1) * 0.5f) / ((VoiceLevelBarCount - 1) * 0.5f);
-                var scale = Mathf.Lerp(1f, 0.35f, distance);
-                var height = Mathf.Max(3f, level * 14f * scale);
-                bar.sizeDelta = new Vector2(6f, height);
-                voiceLevelBars[index].color = Accent;
-            }
-        }
-
-        private void SetVoiceFeatureVisible(bool visible)
-        {
-            voiceSearchButton?.gameObject.SetActive(visible);
-            voiceSearchStatusText?.gameObject.SetActive(visible);
-            voiceHeardText?.gameObject.SetActive(visible);
-            voiceLevelRoot?.gameObject.SetActive(visible);
-            SetSongSearchVoiceLayout(visible);
-
-            voiceProviderLabelText?.gameObject.SetActive(visible);
-            tencentProviderButton?.gameObject.SetActive(visible);
-            mimoProviderButton?.gameObject.SetActive(visible);
-        }
-
-        private void SetSongSearchVoiceLayout(bool voiceVisible)
-        {
-            var searchRowY = voiceVisible ? 112f : 150f;
-            SetAnchoredY(songSearchInput?.transform as RectTransform, searchRowY);
-            SetAnchoredY(appendKtvSearchLabel?.rectTransform, searchRowY);
-            SetAnchoredY(appendKtvSearchToggle?.transform as RectTransform, searchRowY);
-            SetAnchoredY(songSearchButton?.transform as RectTransform, searchRowY);
-            var inputHalfHeight = (songSearchInput?.transform as RectTransform)?.sizeDelta.y * 0.5f ?? 27f;
-            var suggestHalfHeight = suggestContainer != null ? suggestContainer.sizeDelta.y * 0.5f : 0f;
-            SetAnchoredY(suggestContainer, searchRowY - inputHalfHeight - 5f - suggestHalfHeight);
-            songSearchInput?.GetComponent<QuestAndroidKeyboardInput>()?.SetKeyboardAnchoredY(
-                voiceVisible ? SongSearchKeyboardYWithVoice : SongSearchKeyboardY);
-
-            var firstResultY = voiceVisible ? 14f : 44f;
-            for (var index = 0; index < searchResultRows.Length; index += 1)
-            {
-                var rowIndex = index / SearchResultColumnCount;
-                SetAnchoredY(
-                    searchResultRows[index],
-                    firstResultY - rowIndex * (SearchResultCardHeight + SearchResultRowGap));
-            }
-
-            var footerY = voiceVisible ? -226f : -200f;
-            SetAnchoredY(searchPreviousPageButton?.transform as RectTransform, footerY);
-            SetAnchoredY(clearSearchButton?.transform as RectTransform, footerY);
-            SetAnchoredY(songSearchStatusText?.rectTransform, footerY);
-            SetAnchoredY(searchNextPageButton?.transform as RectTransform, footerY);
-        }
-
-        private static void SetAnchoredY(RectTransform rect, float y)
-        {
-            if (rect != null)
-            {
-                rect.anchoredPosition = new Vector2(rect.anchoredPosition.x, y);
-            }
         }
 
         private void SearchSongs(int page)
@@ -3577,7 +3152,6 @@ namespace TsukiVox.AudioPrototype
             subscribedPlaylist.SearchStateChanged += HandleSearchStateChanged;
             subscribedPlaylist.AddItemStateChanged += HandleSearchStateChanged;
             subscribedPlaylist.SuggestStateChanged += HandleSuggestStateChanged;
-            subscribedPlaylist.VoiceSearchStateChanged += HandleVoiceSearchStateChanged;
         }
 
         private void UnsubscribePlaylist()
@@ -3591,7 +3165,6 @@ namespace TsukiVox.AudioPrototype
             subscribedPlaylist.SearchStateChanged -= HandleSearchStateChanged;
             subscribedPlaylist.AddItemStateChanged -= HandleSearchStateChanged;
             subscribedPlaylist.SuggestStateChanged -= HandleSuggestStateChanged;
-            subscribedPlaylist.VoiceSearchStateChanged -= HandleVoiceSearchStateChanged;
             subscribedPlaylist = null;
         }
 
@@ -3666,18 +3239,6 @@ namespace TsukiVox.AudioPrototype
         private void HandleSuggestStateChanged(QuestPlaylistPrototype sender)
         {
             RefreshSuggestions();
-        }
-
-        private void HandleVoiceSearchStateChanged(QuestPlaylistPrototype sender)
-        {
-            var state = sender.VoiceState;
-            // 提交时给一次轻震，让用户知道"说完了、已经在处理"。
-            if (state != lastVoiceState && state == VoiceSearchUiState.Uploading)
-            {
-                handheldPropsPrototype?.PulseVoiceFeedback();
-            }
-            lastVoiceState = state;
-            RefreshSongSearch();
         }
 
         private void ShowPage(UiPage page)

@@ -79,9 +79,6 @@ private IEnumerator LoadCoverTexture(string url, RawImage target)
 - 超时时间: 10秒
 - 失败时静默处理（显示占位背景色）
 
-##### SetSongSearchVoiceLayout 方法 (行 1695-1719)
-更新布局计算以支持 2x2 网格的固定定位。
-
 ### 2. BuildForQuest.cs (新文件)
 **路径**: `Assets/Editor/BuildForQuest.cs`
 
