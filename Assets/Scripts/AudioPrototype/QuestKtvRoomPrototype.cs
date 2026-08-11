@@ -25,12 +25,12 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 12;
+        public const int CurrentDesignRevision = 13;
         public const string ThemePrefsKey = "TsukiVox.RoomTheme";
 
         // Player start is the world/tracking origin; recentering returns the user to the sofa.
         public static readonly Vector3 PlayerStartPosition = Vector3.zero;
-        public static readonly Vector3 ScreenPosition = new Vector3(0f, 1.72f, 4.14f);
+        public static readonly Vector3 ScreenPosition = new Vector3(0f, 1.72f, FrontWallZ - ScreenWallOffset);
         public static readonly Quaternion ScreenRotation = Quaternion.identity;
         // Keep a slim optical bezel around 16:9 content. Source aspect ratios are
         // handled separately with contain semantics, so this margin is not needed
@@ -46,7 +46,8 @@ namespace TsukiVox.AudioPrototype
         private const float RoomWidth = 7.2f;
         private const float RoomHeight = 2.9f;
         private const float BackWallZ = -1.6f;
-        private const float FrontWallZ = 4.25f;
+        private const float FrontWallZ = 5f;
+        private const float ScreenWallOffset = 0.11f;
         private const float LevelBarHeight = 1.9f;
         private const float LevelBarMinHeight = 0.08f;
         private const float LevelBarCenterY = 1.55f;
@@ -350,16 +351,19 @@ namespace TsukiVox.AudioPrototype
             for (var index = 0; index < 4; index += 1)
             {
                 var x = index % 2 == 0 ? -2.2f : 2.2f;
-                var z = index < 2 ? 0.2f : 2.6f;
+                var z = index < 2 ? 0.2f : FrontWallZ - 1.65f;
                 CreateCylinder(geometryRoot, $"ceiling downlight {index}", 0.09f, 0.015f, new Vector3(x, RoomHeight - 0.02f, z), palette.Warm);
             }
         }
 
         private void BuildWallDecoration(RoomPalette palette)
         {
-            for (var index = 0; index < 7; index += 1)
+            const float sidePanelStartZ = -0.55f;
+            const float sidePanelSpacing = 0.65f;
+            var sidePanelCount = Mathf.FloorToInt((FrontWallZ - 0.9f - sidePanelStartZ) / sidePanelSpacing) + 1;
+            for (var index = 0; index < sidePanelCount; index += 1)
             {
-                var z = -0.55f + index * 0.65f;
+                var z = sidePanelStartZ + index * sidePanelSpacing;
                 var panelMaterial = index % 3 == 1 ? palette.WinePanel : palette.PaddedWall;
                 CreateBeveledBox(geometryRoot, $"left padded panel {index}", new Vector3(0.05f, 1.6f, 0.58f), new Vector3(-RoomWidth * 0.5f + 0.03f, 1.32f, z), panelMaterial, 0.02f);
                 CreateBeveledBox(geometryRoot, $"right padded panel {index}", new Vector3(0.05f, 1.6f, 0.58f), new Vector3(RoomWidth * 0.5f - 0.03f, 1.32f, z), panelMaterial, 0.02f);
@@ -367,10 +371,14 @@ namespace TsukiVox.AudioPrototype
                 CreateBeveledBox(geometryRoot, $"right brass divider {index}", new Vector3(0.055f, 1.74f, 0.025f), new Vector3(RoomWidth * 0.5f - 0.035f, 1.32f, z + 0.325f), palette.Trim, 0.01f);
             }
 
-            CreateBeveledBox(geometryRoot, "left wall rail", new Vector3(0.05f, 0.06f, 4.6f), new Vector3(-RoomWidth * 0.5f + 0.04f, 2.28f, 1.4f), palette.Trim, 0.018f);
-            CreateBeveledBox(geometryRoot, "right wall rail", new Vector3(0.05f, 0.06f, 4.6f), new Vector3(RoomWidth * 0.5f - 0.04f, 2.28f, 1.4f), palette.Trim, 0.018f);
-            CreateBeveledBox(geometryRoot, "left wall lower rail", new Vector3(0.05f, 0.08f, 4.6f), new Vector3(-RoomWidth * 0.5f + 0.04f, 0.38f, 1.4f), palette.Trim, 0.018f);
-            CreateBeveledBox(geometryRoot, "right wall lower rail", new Vector3(0.05f, 0.08f, 4.6f), new Vector3(RoomWidth * 0.5f - 0.04f, 0.38f, 1.4f), palette.Trim, 0.018f);
+            var sideRailStartZ = BackWallZ + 0.7f;
+            var sideRailEndZ = FrontWallZ - 0.55f;
+            var sideRailLength = sideRailEndZ - sideRailStartZ;
+            var sideRailCenterZ = (sideRailStartZ + sideRailEndZ) * 0.5f;
+            CreateBeveledBox(geometryRoot, "left wall rail", new Vector3(0.05f, 0.06f, sideRailLength), new Vector3(-RoomWidth * 0.5f + 0.04f, 2.28f, sideRailCenterZ), palette.Trim, 0.018f);
+            CreateBeveledBox(geometryRoot, "right wall rail", new Vector3(0.05f, 0.06f, sideRailLength), new Vector3(RoomWidth * 0.5f - 0.04f, 2.28f, sideRailCenterZ), palette.Trim, 0.018f);
+            CreateBeveledBox(geometryRoot, "left wall lower rail", new Vector3(0.05f, 0.08f, sideRailLength), new Vector3(-RoomWidth * 0.5f + 0.04f, 0.38f, sideRailCenterZ), palette.Trim, 0.018f);
+            CreateBeveledBox(geometryRoot, "right wall lower rail", new Vector3(0.05f, 0.08f, sideRailLength), new Vector3(RoomWidth * 0.5f - 0.04f, 0.38f, sideRailCenterZ), palette.Trim, 0.018f);
 
             for (var index = 0; index < 5; index += 1)
             {
@@ -576,9 +584,13 @@ namespace TsukiVox.AudioPrototype
 
         private void BuildLightStrips(RoomPalette palette)
         {
+            var sideStripStartZ = BackWallZ + 0.75f;
+            var sideStripEndZ = FrontWallZ - 0.3f;
+            var sideStripLength = sideStripEndZ - sideStripStartZ;
+            var sideStripCenterZ = (sideStripStartZ + sideStripEndZ) * 0.5f;
             CreateBeveledBox(feedbackRoot, "ceiling light strip", new Vector3(6.2f, 0.05f, 0.06f), new Vector3(0f, RoomHeight - 0.08f, FrontWallZ - 0.3f), palette.Warm, 0.02f, false, false, false);
-            CreateBeveledBox(feedbackRoot, "left light strip", new Vector3(0.05f, 0.05f, 4.8f), new Vector3(-RoomWidth * 0.5f + 0.06f, RoomHeight - 0.12f, 1.55f), palette.Warm, 0.02f, false, false, false);
-            CreateBeveledBox(feedbackRoot, "right light strip", new Vector3(0.05f, 0.05f, 4.8f), new Vector3(RoomWidth * 0.5f - 0.06f, RoomHeight - 0.12f, 1.55f), palette.Warm, 0.02f, false, false, false);
+            CreateBeveledBox(feedbackRoot, "left light strip", new Vector3(0.05f, 0.05f, sideStripLength), new Vector3(-RoomWidth * 0.5f + 0.06f, RoomHeight - 0.12f, sideStripCenterZ), palette.Warm, 0.02f, false, false, false);
+            CreateBeveledBox(feedbackRoot, "right light strip", new Vector3(0.05f, 0.05f, sideStripLength), new Vector3(RoomWidth * 0.5f - 0.06f, RoomHeight - 0.12f, sideStripCenterZ), palette.Warm, 0.02f, false, false, false);
         }
 
         private void ConfigureLighting()
