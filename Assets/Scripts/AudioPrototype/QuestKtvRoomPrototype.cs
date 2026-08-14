@@ -25,7 +25,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 15;
+        public const int CurrentDesignRevision = 19;
         public const string ThemePrefsKey = "TsukiVox.RoomTheme";
 
         // Player start is the world/tracking origin; recentering returns the user to the sofa.
@@ -262,6 +262,10 @@ namespace TsukiVox.AudioPrototype
                 {
                     SetEmission(material, themedColor.Color, themedColor.EmissionIntensity);
                 }
+                else if (material.HasProperty("_EmissionColor"))
+                {
+                    material.SetColor("_EmissionColor", Color.black);
+                }
             }
         }
 
@@ -318,6 +322,8 @@ namespace TsukiVox.AudioPrototype
             BuildScreenSurround(palette);
             BuildLevelBars(palette);
             BuildLightStrips(palette);
+            BuildPerformanceArea(palette);
+            BuildCornerDressing(palette);
         }
 
         private void BuildRoomShell(RoomPalette palette)
@@ -344,7 +350,11 @@ namespace TsukiVox.AudioPrototype
             CreateTrimBox(geometryRoot, "rug left trim", new Vector3(0.04f, 0.03f, 1.9f), new Vector3(-1.62f, 0.02f, 1.4f), palette.Trim, 0.012f);
             CreateTrimBox(geometryRoot, "rug right trim", new Vector3(0.04f, 0.03f, 1.9f), new Vector3(1.62f, 0.02f, 1.4f), palette.Trim, 0.012f);
 
-            CreateBeveledBox(geometryRoot, "ceiling inset", new Vector3(5.7f, 0.08f, roomDepth - 0.72f), new Vector3(0f, RoomHeight - 0.07f, roomCenterZ), palette.CeilingInset, 0.02f);
+            // Stop the inset short of the front soffit so seated views can still
+            // see the screen-top valance instead of a ceiling slab covering it.
+            var insetDepth = roomDepth - 1.28f;
+            var insetCenterZ = roomCenterZ - 0.28f;
+            CreateBeveledBox(geometryRoot, "ceiling inset", new Vector3(5.7f, 0.08f, insetDepth), new Vector3(0f, RoomHeight - 0.07f, insetCenterZ), palette.CeilingInset, 0.02f);
             // Keep the front drop attached to the ceiling so it cannot hide the
             // screen's upper matte edge from seated headset viewpoints.
             CreateBeveledBox(geometryRoot, "ceiling front drop", new Vector3(6.3f, 0.18f, 0.18f), new Vector3(0f, RoomHeight - 0.09f, FrontWallZ - 0.44f), palette.Ceiling, 0.03f);
@@ -352,12 +362,70 @@ namespace TsukiVox.AudioPrototype
             CreateBeveledBox(geometryRoot, "ceiling left drop", new Vector3(0.18f, 0.18f, roomDepth - 0.7f), new Vector3(-3.15f, RoomHeight - 0.16f, roomCenterZ), palette.Ceiling, 0.03f);
             CreateBeveledBox(geometryRoot, "ceiling right drop", new Vector3(0.18f, 0.18f, roomDepth - 0.7f), new Vector3(3.15f, RoomHeight - 0.16f, roomCenterZ), palette.Ceiling, 0.03f);
 
-            for (var index = 0; index < 4; index += 1)
+            var downlightIndex = 0;
+            for (var ix = -1; ix <= 1; ix += 1)
             {
-                var x = index % 2 == 0 ? -2.2f : 2.2f;
-                var z = index < 2 ? 0.2f : FrontWallZ - 1.65f;
-                CreateCylinder(geometryRoot, $"ceiling downlight {index}", 0.09f, 0.015f, new Vector3(x, RoomHeight - 0.02f, z), palette.Warm);
+                for (var iz = -1; iz <= 1; iz += 1)
+                {
+                    var x = ix * 2.3f;
+                    var z = 1.7f + iz * 1.55f;
+                    var radius = ix == 0 && iz == 0 ? 0.12f : 0.085f;
+                    CreateCylinder(
+                        geometryRoot,
+                        $"ceiling downlight {downlightIndex}",
+                        radius,
+                        0.015f,
+                        new Vector3(x, RoomHeight - 0.02f, z),
+                        palette.Warm);
+                    downlightIndex += 1;
+                }
             }
+
+            CreateBeveledBox(
+                geometryRoot,
+                "ceiling medallion",
+                new Vector3(1.05f, 0.02f, 1.05f),
+                new Vector3(0f, RoomHeight - 0.055f, 1.7f),
+                palette.CeilingInset,
+                0.04f);
+            CreateTrimBox(
+                geometryRoot,
+                "ceiling medallion front",
+                new Vector3(1.12f, 0.03f, 0.04f),
+                new Vector3(0f, RoomHeight - 0.05f, 2.24f),
+                palette.Trim,
+                0.01f);
+            CreateTrimBox(
+                geometryRoot,
+                "ceiling medallion back",
+                new Vector3(1.12f, 0.03f, 0.04f),
+                new Vector3(0f, RoomHeight - 0.05f, 1.16f),
+                palette.Trim,
+                0.01f);
+            CreateTrimBox(
+                geometryRoot,
+                "ceiling medallion left",
+                new Vector3(0.04f, 0.03f, 1.05f),
+                new Vector3(-0.54f, RoomHeight - 0.05f, 1.7f),
+                palette.Trim,
+                0.01f);
+            CreateTrimBox(
+                geometryRoot,
+                "ceiling medallion right",
+                new Vector3(0.04f, 0.03f, 1.05f),
+                new Vector3(0.54f, RoomHeight - 0.05f, 1.7f),
+                palette.Trim,
+                0.01f);
+            CreateBeveledBox(
+                geometryRoot,
+                "ceiling medallion light",
+                new Vector3(0.92f, 0.012f, 0.92f),
+                new Vector3(0f, RoomHeight - 0.068f, 1.7f),
+                palette.Warm,
+                0.02f,
+                false,
+                false,
+                false);
         }
 
         private void BuildWallDecoration(RoomPalette palette)
@@ -611,6 +679,266 @@ namespace TsukiVox.AudioPrototype
             CreateBeveledBox(feedbackRoot, "right light strip", new Vector3(0.07f, 0.07f, sideStripLength), new Vector3(RoomWidth * 0.5f - 0.06f, RoomHeight - 0.12f, sideStripCenterZ), palette.Warm, 0.01f, false, false, false);
         }
 
+        private void BuildPerformanceArea(RoomPalette palette)
+        {
+            const float stageWidth = 1.72f;
+            const float stageDepth = 1.08f;
+            const float stageHeight = 0.09f;
+            const float stageZ = 3.42f;
+            const float runnerWidth = 1.12f;
+            const float runnerDepth = 1.14f;
+            const float runnerZ = 2.48f;
+
+            CreateBeveledBox(
+                geometryRoot,
+                "stage plinth",
+                new Vector3(stageWidth + 0.06f, 0.03f, stageDepth + 0.06f),
+                new Vector3(0f, 0.015f, stageZ),
+                palette.SofaShadow,
+                0.02f);
+            CreateBeveledBox(
+                geometryRoot,
+                "stage deck",
+                new Vector3(stageWidth, stageHeight - 0.02f, stageDepth),
+                new Vector3(0f, 0.02f + (stageHeight - 0.02f) * 0.5f, stageZ),
+                palette.Stage,
+                0.025f);
+            CreateTrimBox(
+                geometryRoot,
+                "stage front nosing",
+                new Vector3(stageWidth + 0.02f, 0.03f, 0.04f),
+                new Vector3(0f, stageHeight - 0.01f, stageZ + stageDepth * 0.5f + 0.005f),
+                palette.Trim,
+                0.008f);
+            CreateTrimBox(
+                geometryRoot,
+                "stage back nosing",
+                new Vector3(stageWidth + 0.02f, 0.03f, 0.04f),
+                new Vector3(0f, stageHeight - 0.01f, stageZ - stageDepth * 0.5f - 0.005f),
+                palette.Trim,
+                0.008f);
+            CreateTrimBox(
+                geometryRoot,
+                "stage left nosing",
+                new Vector3(0.04f, 0.03f, stageDepth),
+                new Vector3(-stageWidth * 0.5f - 0.005f, stageHeight - 0.01f, stageZ),
+                palette.Trim,
+                0.008f);
+            CreateTrimBox(
+                geometryRoot,
+                "stage right nosing",
+                new Vector3(0.04f, 0.03f, stageDepth),
+                new Vector3(stageWidth * 0.5f + 0.005f, stageHeight - 0.01f, stageZ),
+                palette.Trim,
+                0.008f);
+
+            var ledY = 0.022f;
+            var ledX = stageWidth * 0.5f + 0.055f;
+            CreateBeveledBox(
+                feedbackRoot,
+                "stage led front",
+                new Vector3(stageWidth + 0.16f, 0.018f, 0.045f),
+                new Vector3(0f, ledY, stageZ + stageDepth * 0.5f + 0.055f),
+                palette.Warm,
+                0.008f,
+                false,
+                false,
+                false);
+            CreateBeveledBox(
+                feedbackRoot,
+                "stage led back",
+                new Vector3(stageWidth + 0.16f, 0.018f, 0.045f),
+                new Vector3(0f, ledY, stageZ - stageDepth * 0.5f - 0.055f),
+                palette.Warm,
+                0.008f,
+                false,
+                false,
+                false);
+            CreateBeveledBox(
+                feedbackRoot,
+                "stage led left",
+                new Vector3(0.045f, 0.018f, stageDepth + 0.07f),
+                new Vector3(-ledX, ledY, stageZ),
+                palette.Warm,
+                0.008f,
+                false,
+                false,
+                false);
+            CreateBeveledBox(
+                feedbackRoot,
+                "stage led right",
+                new Vector3(0.045f, 0.018f, stageDepth + 0.07f),
+                new Vector3(ledX, ledY, stageZ),
+                palette.Warm,
+                0.008f,
+                false,
+                false,
+                false);
+
+            CreateBeveledBox(
+                geometryRoot,
+                "runner rug",
+                new Vector3(runnerWidth, 0.018f, runnerDepth),
+                new Vector3(0f, 0.011f, runnerZ),
+                palette.Rug,
+                0.01f);
+            CreateTrimBox(
+                geometryRoot,
+                "runner front trim",
+                new Vector3(runnerWidth + 0.04f, 0.024f, 0.03f),
+                new Vector3(0f, 0.018f, runnerZ + runnerDepth * 0.5f),
+                palette.Trim,
+                0.008f);
+            CreateTrimBox(
+                geometryRoot,
+                "runner back trim",
+                new Vector3(runnerWidth + 0.04f, 0.024f, 0.03f),
+                new Vector3(0f, 0.018f, runnerZ - runnerDepth * 0.5f),
+                palette.Trim,
+                0.008f);
+            CreateTrimBox(
+                geometryRoot,
+                "runner left trim",
+                new Vector3(0.03f, 0.024f, runnerDepth),
+                new Vector3(-runnerWidth * 0.5f - 0.01f, 0.018f, runnerZ),
+                palette.Trim,
+                0.008f);
+            CreateTrimBox(
+                geometryRoot,
+                "runner right trim",
+                new Vector3(0.03f, 0.024f, runnerDepth),
+                new Vector3(runnerWidth * 0.5f + 0.01f, 0.018f, runnerZ),
+                palette.Trim,
+                0.008f);
+        }
+
+        private void BuildCornerDressing(RoomPalette palette)
+        {
+            CreateCornerAccent(-1f, palette);
+            CreateCornerAccent(1f, palette);
+        }
+
+        private void CreateCornerAccent(float side, RoomPalette palette)
+        {
+            var sideName = side < 0f ? "left" : "right";
+            var wallX = side * (RoomWidth * 0.5f - 0.07f);
+
+            CreateBeveledBox(
+                geometryRoot,
+                $"{sideName} corner pilaster",
+                new Vector3(0.11f, 2.42f, 0.46f),
+                new Vector3(wallX, 1.21f, 3.98f),
+                palette.WinePanel,
+                0.02f);
+            CreateTrimBox(
+                geometryRoot,
+                $"{sideName} corner pilaster cap",
+                new Vector3(0.14f, 0.04f, 0.5f),
+                new Vector3(wallX, 2.44f, 3.98f),
+                palette.Trim,
+                0.01f);
+            CreateTrimBox(
+                geometryRoot,
+                $"{sideName} corner pilaster base",
+                new Vector3(0.15f, 0.05f, 0.52f),
+                new Vector3(wallX, 0.025f, 3.98f),
+                palette.Trim,
+                0.012f);
+            CreateTrimBox(
+                geometryRoot,
+                $"{sideName} corner pilaster inlay",
+                new Vector3(0.02f, 1.7f, 0.03f),
+                new Vector3(wallX - side * 0.06f, 1.28f, 3.98f),
+                palette.Trim,
+                0.006f);
+            CreateBeveledBox(
+                geometryRoot,
+                $"{sideName} corner sconce",
+                new Vector3(0.04f, 0.03f, 0.22f),
+                new Vector3(wallX - side * 0.08f, 2.18f, 3.98f),
+                palette.Warm,
+                0.008f,
+                false,
+                false,
+                false);
+
+            var pedestalRoot = new GameObject($"{sideName} corner pedestal").transform;
+            pedestalRoot.SetParent(geometryRoot, false);
+            pedestalRoot.localPosition = new Vector3(side * 3.18f, 0f, 3.42f);
+            CreateBeveledBox(pedestalRoot, "block", new Vector3(0.34f, 0.38f, 0.34f), new Vector3(0f, 0.19f, 0f), palette.Table, 0.02f);
+            CreateTrimBox(pedestalRoot, "plate", new Vector3(0.38f, 0.02f, 0.38f), new Vector3(0f, 0.39f, 0f), palette.Trim, 0.006f);
+            CreateBeveledBox(
+                pedestalRoot,
+                "underglow",
+                new Vector3(0.28f, 0.016f, 0.28f),
+                new Vector3(0f, 0.02f, 0f),
+                palette.Warm,
+                0.006f,
+                false,
+                false,
+                false);
+
+            CreateMoonRelic(pedestalRoot, side, palette);
+            CreateDiscLamp(geometryRoot, $"{sideName} corner lamp", new Vector3(side * 3.2f, 0f, 4.46f), palette);
+        }
+
+        private static void CreateMoonRelic(Transform parent, float side, RoomPalette palette)
+        {
+            CreateCylinder(parent, "staff", 0.008f, 0.34f, new Vector3(0f, 0.57f, 0f), palette.Trim);
+            CreateCylinder(parent, "cradle", 0.07f, 0.014f, new Vector3(0f, 0.75f, 0f), palette.Trim);
+            CreateSphere(
+                parent,
+                "moon",
+                0.1f,
+                new Vector3(0f, 0.9f, 0f),
+                palette.Moon,
+                false,
+                false,
+                false);
+            var aura = CreateCylinder(
+                parent,
+                "moon aura",
+                0.13f,
+                0.01f,
+                new Vector3(0f, 0.9f, 0.03f),
+                palette.Neon,
+                false,
+                false,
+                false);
+            aura.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+
+            for (var index = 0; index < 6; index += 1)
+            {
+                var angle = index * Mathf.PI / 3f + 0.35f;
+                CreateSphere(
+                    parent,
+                    $"spark {index}",
+                    index % 2 == 0 ? 0.012f : 0.008f,
+                    new Vector3(Mathf.Cos(angle) * 0.16f, 0.9f + Mathf.Sin(angle) * 0.16f, -0.02f),
+                    index % 2 == 0 ? palette.Neon : palette.Warm,
+                    false,
+                    false,
+                    false);
+            }
+
+            CreateSphere(parent, "star a", 0.014f, new Vector3(side * 0.12f, 1.12f, -0.03f), palette.Neon, false, false, false);
+            CreateSphere(parent, "star b", 0.009f, new Vector3(-side * 0.1f, 0.72f, -0.04f), palette.Warm, false, false, false);
+        }
+
+        private static void CreateDiscLamp(Transform parent, string objectName, Vector3 position, RoomPalette palette)
+        {
+            var root = new GameObject(objectName).transform;
+            root.SetParent(parent, false);
+            root.localPosition = position;
+
+            CreateCylinder(root, "base", 0.1f, 0.02f, new Vector3(0f, 0.01f, 0f), palette.Table);
+            CreateCylinder(root, "base ring", 0.108f, 0.008f, new Vector3(0f, 0.018f, 0f), palette.Trim);
+            CreateCylinder(root, "pole", 0.012f, 1.28f, new Vector3(0f, 0.66f, 0f), palette.Trim);
+            CreateCylinder(root, "shade", 0.18f, 0.032f, new Vector3(0f, 1.32f, 0f), palette.Warm);
+            CreateCylinder(root, "shade ring", 0.16f, 0.01f, new Vector3(0f, 1.338f, 0f), palette.Trim);
+            CreateSphere(root, "bulb", 0.028f, new Vector3(0f, 1.3f, 0f), palette.Warm);
+        }
+
         private void ConfigureLighting()
         {
             var bright = currentTheme == RoomTheme.Bright;
@@ -854,6 +1182,29 @@ namespace TsukiVox.AudioPrototype
                 parent,
                 objectName,
                 new Vector3(radius * 2f, height * 0.5f, radius * 2f),
+                localPosition,
+                material,
+                castShadows,
+                receiveShadows,
+                staticGeometry);
+        }
+
+        private static GameObject CreateSphere(
+            Transform parent,
+            string objectName,
+            float radius,
+            Vector3 localPosition,
+            Material material,
+            bool castShadows = true,
+            bool receiveShadows = true,
+            bool staticGeometry = true)
+        {
+            var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            return ConfigurePrimitive(
+                sphere,
+                parent,
+                objectName,
+                Vector3.one * (radius * 2f),
                 localPosition,
                 material,
                 castShadows,
@@ -1151,6 +1502,12 @@ namespace TsukiVox.AudioPrototype
             public Material SpeakerCone;
             public Material Accent;
             public Material Warm;
+            public Material Neon;
+            public Material Moon;
+            public Material Foliage;
+            public Material Ceramic;
+            public Material Citrus;
+            public Material Stage;
             public Material ScreenFrame;
             public Material ScreenBezel;
             public Material LevelTrack;
@@ -1195,6 +1552,12 @@ namespace TsukiVox.AudioPrototype
                         ["V0.5 Speaker Cone"] = new ThemedColor(new Color(0.52f, 0.54f, 0.55f, 1f)),
                         ["V0.5 Accent"] = new ThemedColor(AccentColor, 0.8f),
                         ["V0.5 Warm Light"] = new ThemedColor(WarmColor, WarmLightBaseEmission),
+                        ["V0.5 Neon"] = new ThemedColor(AccentColor, 0.7f),
+                        ["V0.5 Moon"] = new ThemedColor(new Color(0.82f, 0.9f, 0.94f, 1f), 0.55f),
+                        ["V0.5 Foliage"] = new ThemedColor(new Color(0.38f, 0.58f, 0.32f, 1f)),
+                        ["V0.5 Ceramic"] = new ThemedColor(new Color(0.93f, 0.91f, 0.87f, 1f)),
+                        ["V0.5 Citrus"] = new ThemedColor(new Color(0.92f, 0.62f, 0.28f, 1f)),
+                        ["V0.5 Stage"] = new ThemedColor(new Color(0.58f, 0.46f, 0.33f, 1f)),
                         ["V0.5 Screen Frame"] = new ThemedColor(new Color(0.18f, 0.19f, 0.21f, 1f)),
                         ["V0.5 Screen Bezel"] = new ThemedColor(new Color(0.3f, 0.31f, 0.32f, 1f)),
                         ["V0.5 Level Track"] = new ThemedColor(new Color(0.62f, 0.75f, 0.73f, 1f), 0.35f),
@@ -1221,6 +1584,12 @@ namespace TsukiVox.AudioPrototype
                     ["V0.5 Speaker Cone"] = new ThemedColor(new Color(0.045f, 0.05f, 0.052f, 1f)),
                     ["V0.5 Accent"] = new ThemedColor(AccentColor, 0.8f),
                     ["V0.5 Warm Light"] = new ThemedColor(WarmColor, WarmLightBaseEmission),
+                    ["V0.5 Neon"] = new ThemedColor(AccentColor, 0.7f),
+                    ["V0.5 Moon"] = new ThemedColor(new Color(0.72f, 0.84f, 0.9f, 1f), 0.7f),
+                    ["V0.5 Foliage"] = new ThemedColor(new Color(0.12f, 0.28f, 0.14f, 1f), 0.12f),
+                    ["V0.5 Ceramic"] = new ThemedColor(new Color(0.62f, 0.56f, 0.5f, 1f)),
+                    ["V0.5 Citrus"] = new ThemedColor(new Color(0.72f, 0.42f, 0.12f, 1f)),
+                    ["V0.5 Stage"] = new ThemedColor(new Color(0.16f, 0.1f, 0.07f, 1f)),
                     ["V0.5 Screen Frame"] = new ThemedColor(new Color(0.008f, 0.009f, 0.011f, 1f)),
                     ["V0.5 Screen Bezel"] = new ThemedColor(new Color(0.035f, 0.042f, 0.048f, 1f)),
                     ["V0.5 Level Track"] = new ThemedColor(new Color(0.025f, 0.075f, 0.072f, 1f), 0.35f),
@@ -1250,6 +1619,12 @@ namespace TsukiVox.AudioPrototype
                     SpeakerCone = CreateMaterial("V0.5 Speaker Cone", colors, 0.3f, 0.05f),
                     Accent = CreateMaterial("V0.5 Accent", colors, 0.72f, 0.1f),
                     Warm = CreateMaterial("V0.5 Warm Light", colors, 0.35f, 0f),
+                    Neon = CreateMaterial("V0.5 Neon", colors, 0.72f, 0.1f),
+                    Moon = CreateMaterial("V0.5 Moon", colors, 0.55f, 0.08f),
+                    Foliage = CreateMaterial("V0.5 Foliage", colors, 0.12f, 0f),
+                    Ceramic = CreateMaterial("V0.5 Ceramic", colors, 0.45f, 0.05f),
+                    Citrus = CreateMaterial("V0.5 Citrus", colors, 0.38f, 0.04f),
+                    Stage = CreateMaterial("V0.5 Stage", colors, 0.28f, 0.04f),
                     ScreenFrame = CreateMaterial("V0.5 Screen Frame", colors, 0.7f, 0.22f),
                     ScreenBezel = CreateMaterial("V0.5 Screen Bezel", colors, 0.18f, 0.02f),
                     LevelTrack = CreateMaterial("V0.5 Level Track", colors, 0.16f, 0f),
