@@ -537,7 +537,7 @@ namespace TsukiVox.AudioPrototype
             statusText.alignment = TextAnchor.MiddleCenter;
             statusText.horizontalOverflow = HorizontalWrapMode.Wrap;
             statusText.verticalOverflow = VerticalWrapMode.Overflow;
-            statusText.color = new Color(0.82f, 0.92f, 0.94f, 0.9f);
+            statusText.color = new Color32(218, 214, 205, 230);
             statusText.text = "Video: waiting for ready playlist item.";
             statusText.rectTransform.sizeDelta = new Vector2(960f, 72f);
             statusText.rectTransform.anchoredPosition = Vector2.zero;
@@ -1884,7 +1884,7 @@ namespace TsukiVox.AudioPrototype
             rect.sizeDelta = size;
             rect.anchoredPosition = position;
             var image = buttonObject.AddComponent<Image>();
-            image.color = new Color(0.1f, 0.16f, 0.18f);
+            image.color = new Color32(26, 29, 36, 255);
             var button = buttonObject.AddComponent<Button>();
             button.targetGraphic = image;
             button.colors = CreateSelectableColors();
@@ -1896,7 +1896,7 @@ namespace TsukiVox.AudioPrototype
             text.text = label;
             text.fontSize = fontSize;
             text.fontStyle = FontStyle.Bold;
-            text.color = new Color(0.93f, 0.97f, 0.98f);
+            text.color = new Color32(242, 239, 232, 255);
             text.alignment = TextAnchor.MiddleCenter;
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.verticalOverflow = VerticalWrapMode.Overflow;
@@ -1918,11 +1918,11 @@ namespace TsukiVox.AudioPrototype
         {
             return new ColorBlock
             {
-                normalColor = new Color(0.1f, 0.16f, 0.18f),
-                highlightedColor = new Color(0.16f, 0.3f, 0.32f),
-                pressedColor = new Color(0.28f, 0.95f, 0.72f),
-                selectedColor = new Color(0.18f, 0.38f, 0.4f),
-                disabledColor = new Color(0.08f, 0.1f, 0.11f, 0.55f),
+                normalColor = new Color32(26, 29, 36, 255),
+                highlightedColor = new Color32(60, 57, 50, 255),
+                pressedColor = new Color32(184, 158, 109, 255),
+                selectedColor = new Color32(78, 69, 54, 255),
+                disabledColor = new Color32(21, 23, 27, 140),
                 colorMultiplier = 1f,
                 fadeDuration = 0.05f,
             };

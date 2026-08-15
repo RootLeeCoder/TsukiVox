@@ -1,0 +1,1077 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TsukiVox 月光主题对照</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            font-family: Inter, "Noto Sans SC", "Microsoft YaHei", sans-serif;
+            background: #05070c;
+            color: #f2f5fa;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            min-width: 320px;
+            min-height: 100vh;
+            margin: 0;
+            background: #05070c;
+        }
+
+        button,
+        input {
+            font: inherit;
+        }
+
+        button {
+            color: inherit;
+        }
+
+        .page-header {
+            min-height: 72px;
+            padding: 0 32px;
+            border-bottom: 1px solid #1c2431;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+        }
+
+        .page-brand {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+        }
+
+        .page-brand-mark {
+            width: 38px;
+            height: 38px;
+            border: 1px solid #64748b;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            color: #d8c49d;
+        }
+
+        .page-brand-mark svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        .page-brand-copy-page strong {
+            display: block;
+            font-size: 17px;
+            line-height: 1.1;
+            letter-spacing: 0;
+        }
+
+        .page-brand-copy-page > span {
+            display: block;
+            margin-top: 4px;
+            color: #8794a8;
+            font-size: 12px;
+            letter-spacing: 0;
+        }
+
+        .mode-switch {
+            padding: 4px;
+            border: 1px solid #273244;
+            border-radius: 8px;
+            display: flex;
+            gap: 4px;
+            background: #0a0e16;
+        }
+
+        .mode-button {
+            min-width: 82px;
+            min-height: 36px;
+            padding: 0 16px;
+            border: 0;
+            border-radius: 5px;
+            background: transparent;
+            color: #8e9bad;
+            cursor: pointer;
+        }
+
+        .mode-button[aria-pressed="true"] {
+            background: #d8c49d;
+            color: #211d15;
+            font-weight: 700;
+        }
+
+        main {
+            width: min(1480px, 100%);
+            margin: 0 auto;
+            padding: 44px 32px 72px;
+        }
+
+        .intro {
+            max-width: 760px;
+            margin-bottom: 34px;
+        }
+
+        .eyebrow {
+            margin: 0 0 9px;
+            color: #9bacbf;
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 34px;
+            line-height: 1.2;
+            letter-spacing: 0;
+        }
+
+        .intro p:last-child {
+            margin: 12px 0 0;
+            color: #8f9caf;
+            font-size: 15px;
+            line-height: 1.7;
+        }
+
+        .comparison {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 22px;
+        }
+
+        .sample {
+            min-width: 0;
+            opacity: 0;
+            transform: translateY(12px);
+            animation: enter 520ms ease forwards;
+        }
+
+        .sample:nth-child(2) {
+            animation-delay: 100ms;
+        }
+
+        @keyframes enter {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .sample-heading {
+            min-height: 54px;
+            margin-bottom: 11px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .sample-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sample-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 18px color-mix(in srgb, var(--accent), transparent 45%);
+        }
+
+        .sample-title strong {
+            font-size: 18px;
+            letter-spacing: 0;
+        }
+
+        .sample-title span,
+        .sample-note {
+            color: #8190a4;
+            font-size: 12px;
+            letter-spacing: 0;
+        }
+
+        .tablet {
+            position: relative;
+            min-height: 402px;
+            padding: 13px;
+            border: 1px solid var(--shell-line);
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--shell);
+            box-shadow: 0 24px 60px #00000052;
+            color: var(--text);
+            transition: background-color 240ms ease, border-color 240ms ease, color 240ms ease;
+        }
+
+        .screen {
+            min-height: 374px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            overflow: hidden;
+            background: var(--screen);
+            transition: background-color 240ms ease, border-color 240ms ease;
+        }
+
+        .app-header {
+            height: 61px;
+            padding: 0 18px;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+        }
+
+        .app-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .app-moon {
+            flex: 0 0 auto;
+            width: 34px;
+            height: 34px;
+            border: 1px solid var(--brand-accent);
+            border-radius: 8px;
+            display: grid;
+            place-items: center;
+            background: var(--brand-bg);
+            color: var(--brand-accent);
+        }
+
+        .app-moon svg {
+            width: 21px;
+            height: 21px;
+        }
+
+        .app-brand-copy {
+            min-width: 0;
+        }
+
+        .app-brand-copy strong,
+        .app-brand-copy span {
+            display: block;
+            white-space: nowrap;
+        }
+
+        .app-brand-copy strong {
+            font-size: 16px;
+            line-height: 1.1;
+        }
+
+        .app-brand-copy span {
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: 10px;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .connection {
+            margin-right: 6px;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            color: var(--muted);
+            font-size: 11px;
+            white-space: nowrap;
+        }
+
+        .connection i {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        .icon-button {
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            display: grid;
+            place-items: center;
+            background: var(--surface);
+            color: var(--text);
+            cursor: pointer;
+            transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
+        }
+
+        .icon-button:hover,
+        .icon-button:focus-visible {
+            border-color: var(--accent);
+            background: var(--surface-raised);
+            outline: none;
+            transform: translateY(-2px);
+        }
+
+        .icon-button svg {
+            width: 17px;
+            height: 17px;
+        }
+
+        .icon-button.primary {
+            border-color: var(--accent);
+            background: var(--accent);
+            color: var(--ink);
+        }
+
+        .now-playing {
+            min-height: 138px;
+            padding: 21px 26px 17px;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 168px;
+            align-items: center;
+            gap: 26px;
+        }
+
+        .song-meta {
+            margin: 0 0 8px;
+            color: var(--accent-strong);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .song-title {
+            margin: 0;
+            font-size: 31px;
+            line-height: 1.18;
+            letter-spacing: 0;
+        }
+
+        .song-detail {
+            margin: 7px 0 0;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .waveform {
+            height: 72px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .waveform i {
+            width: 5px;
+            height: var(--bar-height);
+            border-radius: 3px;
+            background: var(--accent);
+            animation: pulse 1.15s ease-in-out infinite alternate;
+            animation-delay: var(--delay);
+            transform-origin: center;
+        }
+
+        .is-paused .waveform i {
+            animation-play-state: paused;
+        }
+
+        @keyframes pulse {
+            from { transform: scaleY(0.62); opacity: 0.64; }
+            to { transform: scaleY(1); opacity: 1; }
+        }
+
+        .transport {
+            min-height: 105px;
+            padding: 12px 18px;
+            border-top: 1px solid var(--line);
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .transport .icon-button {
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+        }
+
+        .transport .icon-button.play {
+            width: 64px;
+            height: 64px;
+        }
+
+        .transport .icon-button.mic {
+            border-color: var(--warm);
+            background: var(--warm-surface);
+            color: var(--warm);
+        }
+
+        .transport .icon-button.mic[aria-pressed="false"] {
+            border-color: var(--line);
+            background: var(--surface);
+            color: var(--muted);
+        }
+
+        .transport svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        .transport .play svg {
+            width: 25px;
+            height: 25px;
+        }
+
+        .voice-summary {
+            min-height: 68px;
+            padding: 0 21px;
+            display: grid;
+            grid-template-columns: minmax(0, 1.1fr) minmax(100px, 0.7fr) auto;
+            align-items: center;
+            gap: 14px;
+            color: var(--text);
+        }
+
+        .voice-status,
+        .voice-mode,
+        .voice-link {
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .voice-status {
+            font-weight: 700;
+        }
+
+        .voice-status i {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--warm);
+        }
+
+        .voice-mode,
+        .voice-link {
+            color: var(--muted);
+        }
+
+        .voice-link svg {
+            width: 15px;
+            height: 15px;
+        }
+
+        .palette-section {
+            margin-top: 54px;
+            padding-top: 26px;
+            border-top: 1px solid #1c2431;
+        }
+
+        .palette-header {
+            margin-bottom: 18px;
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .palette-header h2 {
+            margin: 0;
+            font-size: 22px;
+            letter-spacing: 0;
+        }
+
+        .palette-header p {
+            margin: 0;
+            color: #7f8da1;
+            font-size: 12px;
+        }
+
+        .palette-table {
+            border-top: 1px solid #273244;
+        }
+
+        .palette-row {
+            min-height: 66px;
+            border-bottom: 1px solid #1c2431;
+            display: grid;
+            grid-template-columns: 180px minmax(0, 1fr) minmax(0, 1fr);
+            align-items: center;
+            gap: 22px;
+        }
+
+        .palette-role strong,
+        .palette-role span {
+            display: block;
+        }
+
+        .palette-role strong {
+            font-size: 13px;
+        }
+
+        .palette-role span {
+            margin-top: 3px;
+            color: #728095;
+            font-size: 11px;
+        }
+
+        .color-value {
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #a7b3c4;
+            font-family: "Cascadia Code", Consolas, monospace;
+            font-size: 12px;
+        }
+
+        .swatch {
+            width: 42px;
+            height: 24px;
+            flex: 0 0 auto;
+            border: 1px solid #ffffff24;
+            border-radius: 5px;
+            background: var(--swatch);
+        }
+
+        .design-note {
+            margin-top: 26px;
+            padding-left: 16px;
+            border-left: 2px solid #d8c49d;
+            color: #aab5c5;
+            font-size: 13px;
+            line-height: 1.75;
+        }
+
+        .current {
+            --shell: #141d1c;
+            --shell-line: #41504e;
+            --screen: #060a0a;
+            --surface: #0c1312;
+            --surface-raised: #111918;
+            --line: #243330;
+            --text: #f0f7f5;
+            --muted: #91a6a1;
+            --accent: #3de6bd;
+            --accent-strong: #8fffe3;
+            --ink: #03130f;
+            --warm: #f2b56b;
+            --warm-surface: #382617;
+            --brand-bg: #08090b;
+            --brand-accent: #32e6c3;
+        }
+
+        .golden-moonlight {
+            --shell: #18191d;
+            --shell-line: #464641;
+            --screen: #0b0d12;
+            --surface: #11151d;
+            --surface-raised: #1c2028;
+            --line: #393b40;
+            --text: #f2efe8;
+            --muted: #a9a697;
+            --accent: #d8c49d;
+            --accent-strong: #ede2cc;
+            --ink: #211d15;
+            --warm: #929caf;
+            --warm-surface: #1a202b;
+            --brand-bg: #111217;
+            --brand-accent: #e2cfa9;
+        }
+
+        body[data-mode="bright"] {
+            background: #d9dee7;
+            color: #121a29;
+        }
+
+        body[data-mode="bright"] .page-header,
+        body[data-mode="bright"] .palette-section,
+        body[data-mode="bright"] .palette-table,
+        body[data-mode="bright"] .palette-row {
+            border-color: #b8c1cf;
+        }
+
+        body[data-mode="bright"] .page-brand-mark,
+        body[data-mode="bright"] .mode-switch {
+            border-color: #adb8c8;
+        }
+
+        body[data-mode="bright"] .page-brand-mark {
+            color: #796642;
+        }
+
+        body[data-mode="bright"] .page-brand-copy-page > span,
+        body[data-mode="bright"] .intro p:last-child,
+        body[data-mode="bright"] .sample-title span,
+        body[data-mode="bright"] .sample-note,
+        body[data-mode="bright"] .palette-header p,
+        body[data-mode="bright"] .palette-role span {
+            color: #5c697c;
+        }
+
+        body[data-mode="bright"] .mode-switch {
+            background: #cbd2dd;
+        }
+
+        body[data-mode="bright"] .mode-button {
+            color: #465368;
+        }
+
+        body[data-mode="bright"] .mode-button[aria-pressed="true"] {
+            background: #2a2925;
+            color: #f4e8d2;
+        }
+
+        body[data-mode="bright"] .color-value,
+        body[data-mode="bright"] .design-note {
+            color: #465368;
+        }
+
+        body[data-mode="bright"] .current {
+            --shell: #d9d5ca;
+            --shell-line: #a9a392;
+            --screen: #e8e4db;
+            --surface: #f6f2e8;
+            --surface-raised: #fefbf4;
+            --line: #b8b09f;
+            --text: #171f1d;
+            --muted: #475450;
+            --accent: #3de6bd;
+            --accent-strong: #14a380;
+            --ink: #03130f;
+            --warm: #c77a29;
+            --warm-surface: #ffe8c2;
+            --brand-bg: #242626;
+            --brand-accent: #14ad87;
+        }
+
+        body[data-mode="bright"] .golden-moonlight {
+            --shell: #d9d9d7;
+            --shell-line: #aaa9a4;
+            --screen: #f0f1f3;
+            --surface: #fafaf8;
+            --surface-raised: #ffffff;
+            --line: #cbcbc7;
+            --text: #232427;
+            --muted: #66676c;
+            --accent: #b89e6d;
+            --accent-strong: #796642;
+            --ink: #211903;
+            --warm: #59657b;
+            --warm-surface: #e7eaf0;
+            --brand-bg: #2a2925;
+            --brand-accent: #e3cfa8;
+        }
+
+        @media (max-width: 1050px) {
+            .comparison {
+                grid-template-columns: 1fr;
+            }
+
+            .sample-note {
+                display: none;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .page-header {
+                min-height: 120px;
+                padding: 18px;
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            main {
+                padding: 30px 14px 52px;
+            }
+
+            h1 {
+                font-size: 27px;
+            }
+
+            .mode-switch {
+                width: 100%;
+            }
+
+            .mode-button {
+                flex: 1;
+            }
+
+            .tablet {
+                min-height: 388px;
+                padding: 8px;
+            }
+
+            .screen {
+                min-height: 370px;
+            }
+
+            .app-header {
+                padding: 0 12px;
+            }
+
+            .connection span {
+                display: none;
+            }
+
+            .now-playing {
+                min-height: 143px;
+                padding: 18px 16px 14px;
+                grid-template-columns: minmax(0, 1fr) 92px;
+                gap: 9px;
+            }
+
+            .song-title {
+                font-size: 26px;
+            }
+
+            .waveform {
+                gap: 5px;
+            }
+
+            .transport {
+                min-height: 98px;
+                padding: 10px 8px;
+                gap: 7px;
+            }
+
+            .transport .icon-button {
+                width: 46px;
+                height: 46px;
+            }
+
+            .transport .icon-button.play {
+                width: 56px;
+                height: 56px;
+            }
+
+            .voice-summary {
+                grid-template-columns: minmax(0, 1fr) auto;
+                padding: 0 14px;
+            }
+
+            .voice-mode {
+                display: none;
+            }
+
+            .palette-header {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 7px;
+            }
+
+            .palette-row {
+                padding: 14px 0;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+
+            .palette-role {
+                grid-column: 1 / -1;
+            }
+
+            .color-value {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 6px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                scroll-behavior: auto !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body data-mode="dark">
+    <header class="page-header">
+        <div class="page-brand">
+            <span class="page-brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+                </svg>
+            </span>
+            <span class="page-brand-copy-page">
+                <strong>TsukiVox</strong>
+                <span>月读声域 · 主题色预览</span>
+            </span>
+        </div>
+        <div class="mode-switch" role="group" aria-label="界面明暗模式">
+            <button class="mode-button" type="button" data-mode="dark" aria-pressed="true">深色主题</button>
+            <button class="mode-button" type="button" data-mode="bright" aria-pressed="false">明亮主题</button>
+        </div>
+    </header>
+
+    <main>
+        <section class="intro" aria-labelledby="page-title">
+            <p class="eyebrow">Color direction · V0.78</p>
+            <h1 id="page-title">从薄荷青，转向低饱和香槟金</h1>
+            <p>保持控制面板结构与信息密度不变，只比较色彩带来的品牌气质、层级辨识和操作反馈。</p>
+        </section>
+
+        <section class="comparison" aria-label="主题色视觉对照">
+            <article class="sample current">
+                <div class="sample-heading">
+                    <div class="sample-title">
+                        <i class="sample-dot" aria-hidden="true"></i>
+                        <strong>当前 · 薄荷青</strong>
+                        <span>Current</span>
+                    </div>
+                    <span class="sample-note">清新、数字感、偏功能型</span>
+                </div>
+                <div class="tablet">
+                    <div class="screen">
+                        <div class="app-header">
+                            <div class="app-brand">
+                                <span class="app-moon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+                                    </svg>
+                                </span>
+                                <span class="app-brand-copy">
+                                    <strong>TsukiVox</strong>
+                                    <span>月读声域</span>
+                                </span>
+                            </div>
+                            <div class="header-actions">
+                                <span class="connection"><i aria-hidden="true"></i><span>直接请求已就绪</span></span>
+                                <button class="icon-button primary" type="button" title="搜索点歌" aria-label="搜索点歌">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.4-3.4"></path></svg>
+                                </button>
+                                <button class="icon-button" type="button" title="设置" aria-label="设置">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="now-playing">
+                            <div>
+                                <p class="song-meta">正在播放 · 第 2 / 5 首</p>
+                                <h2 class="song-title">月下独酌</h2>
+                                <p class="song-detail">TsukiVox · 伴奏已就绪</p>
+                            </div>
+                            <div class="waveform" aria-label="播放音量动画">
+                                <i style="--bar-height:22px;--delay:-0.8s"></i><i style="--bar-height:38px;--delay:-0.2s"></i><i style="--bar-height:62px;--delay:-0.6s"></i><i style="--bar-height:34px;--delay:-0.1s"></i><i style="--bar-height:53px;--delay:-0.9s"></i><i style="--bar-height:27px;--delay:-0.4s"></i><i style="--bar-height:43px;--delay:-0.7s"></i>
+                            </div>
+                        </div>
+                        <div class="transport">
+                            <button class="icon-button" type="button" title="重播" aria-label="重播">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path></svg>
+                            </button>
+                            <button class="icon-button" type="button" title="上一首" aria-label="上一首">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 20-9-8 9-8v16Z"></path><path d="M5 19V5"></path></svg>
+                            </button>
+                            <button class="icon-button primary play" type="button" title="暂停" aria-label="暂停">
+                                <svg class="pause-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 4v16M15 4v16"></path></svg>
+                                <svg class="play-icon" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m7 4 13 8-13 8Z"></path></svg>
+                            </button>
+                            <button class="icon-button" type="button" title="下一首" aria-label="下一首">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 4 9 8-9 8V4Z"></path><path d="M19 5v14"></path></svg>
+                            </button>
+                            <button class="icon-button mic" type="button" title="麦克风" aria-label="麦克风" aria-pressed="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"></path></svg>
+                            </button>
+                        </div>
+                        <div class="voice-summary">
+                            <span class="voice-status"><i aria-hidden="true"></i>麦克风已开启</span>
+                            <span class="voice-mode">人声 · KTV</span>
+                            <span class="voice-link">调整人声
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </article>
+
+            <article class="sample golden-moonlight">
+                <div class="sample-heading">
+                    <div class="sample-title">
+                        <i class="sample-dot" aria-hidden="true"></i>
+                        <strong>提案 · 香槟月光</strong>
+                        <span>Proposed</span>
+                    </div>
+                    <span class="sample-note">柔和、克制、保留温暖月色</span>
+                </div>
+                <div class="tablet">
+                    <div class="screen">
+                        <div class="app-header">
+                            <div class="app-brand">
+                                <span class="app-moon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+                                    </svg>
+                                </span>
+                                <span class="app-brand-copy">
+                                    <strong>TsukiVox</strong>
+                                    <span>月读声域</span>
+                                </span>
+                            </div>
+                            <div class="header-actions">
+                                <span class="connection"><i aria-hidden="true"></i><span>直接请求已就绪</span></span>
+                                <button class="icon-button primary" type="button" title="搜索点歌" aria-label="搜索点歌">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.4-3.4"></path></svg>
+                                </button>
+                                <button class="icon-button" type="button" title="设置" aria-label="设置">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="now-playing">
+                            <div>
+                                <p class="song-meta">正在播放 · 第 2 / 5 首</p>
+                                <h2 class="song-title">月下独酌</h2>
+                                <p class="song-detail">TsukiVox · 伴奏已就绪</p>
+                            </div>
+                            <div class="waveform" aria-label="播放音量动画">
+                                <i style="--bar-height:22px;--delay:-0.8s"></i><i style="--bar-height:38px;--delay:-0.2s"></i><i style="--bar-height:62px;--delay:-0.6s"></i><i style="--bar-height:34px;--delay:-0.1s"></i><i style="--bar-height:53px;--delay:-0.9s"></i><i style="--bar-height:27px;--delay:-0.4s"></i><i style="--bar-height:43px;--delay:-0.7s"></i>
+                            </div>
+                        </div>
+                        <div class="transport">
+                            <button class="icon-button" type="button" title="重播" aria-label="重播">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path></svg>
+                            </button>
+                            <button class="icon-button" type="button" title="上一首" aria-label="上一首">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 20-9-8 9-8v16Z"></path><path d="M5 19V5"></path></svg>
+                            </button>
+                            <button class="icon-button primary play" type="button" title="暂停" aria-label="暂停">
+                                <svg class="pause-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 4v16M15 4v16"></path></svg>
+                                <svg class="play-icon" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m7 4 13 8-13 8Z"></path></svg>
+                            </button>
+                            <button class="icon-button" type="button" title="下一首" aria-label="下一首">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 4 9 8-9 8V4Z"></path><path d="M19 5v14"></path></svg>
+                            </button>
+                            <button class="icon-button mic" type="button" title="麦克风" aria-label="麦克风" aria-pressed="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"></path></svg>
+                            </button>
+                        </div>
+                        <div class="voice-summary">
+                            <span class="voice-status"><i aria-hidden="true"></i>麦克风已开启</span>
+                            <span class="voice-mode">人声 · KTV</span>
+                            <span class="voice-link">调整人声
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </article>
+        </section>
+
+        <section class="palette-section" aria-labelledby="palette-title">
+            <div class="palette-header">
+                <h2 id="palette-title">核心颜色变化</h2>
+                <p id="palette-caption">默认深色调色板</p>
+            </div>
+            <div class="palette-table">
+                <div class="palette-row">
+                    <div class="palette-role"><strong>主强调色</strong><span>播放、搜索与连接状态</span></div>
+                    <div class="color-value"><i class="swatch current-swatch" data-role="accent" style="--swatch:#3de6bd"></i><span data-current="#3DE6BD" data-current-bright="#3DE6BD">#3DE6BD</span></div>
+                    <div class="color-value"><i class="swatch proposed-swatch" data-role="accent" style="--swatch:#d8c49d"></i><span data-proposed="#D8C49D" data-proposed-bright="#B89E6D">#D8C49D</span></div>
+                </div>
+                <div class="palette-row">
+                    <div class="palette-role"><strong>浅金高光</strong><span>标签、焦点与波形高光</span></div>
+                    <div class="color-value"><i class="swatch current-swatch" data-role="strong" style="--swatch:#8fffe3"></i><span data-current="#8FFFE3" data-current-bright="#14A380">#8FFFE3</span></div>
+                    <div class="color-value"><i class="swatch proposed-swatch" data-role="strong" style="--swatch:#ede2cc"></i><span data-proposed="#EDE2CC" data-proposed-bright="#796642">#EDE2CC</span></div>
+                </div>
+                <div class="palette-row">
+                    <div class="palette-role"><strong>屏幕背景</strong><span>控制面板最底层</span></div>
+                    <div class="color-value"><i class="swatch current-swatch" data-role="screen" style="--swatch:#060a0a"></i><span data-current="#060A0A" data-current-bright="#E8E4DB">#060A0A</span></div>
+                    <div class="color-value"><i class="swatch proposed-swatch" data-role="screen" style="--swatch:#0b0d12"></i><span data-proposed="#0B0D12" data-proposed-bright="#F0F1F3">#0B0D12</span></div>
+                </div>
+                <div class="palette-row">
+                    <div class="palette-role"><strong>层级表面</strong><span>按钮、抽屉与键盘按键</span></div>
+                    <div class="color-value"><i class="swatch current-swatch" data-role="surface" style="--swatch:#0c1312"></i><span data-current="#0C1312" data-current-bright="#F6F2E8">#0C1312</span></div>
+                    <div class="color-value"><i class="swatch proposed-swatch" data-role="surface" style="--swatch:#11151d"></i><span data-proposed="#11151D" data-proposed-bright="#FAFAF8">#11151D</span></div>
+                </div>
+                <div class="palette-row">
+                    <div class="palette-role"><strong>辅助雾蓝灰</strong><span>麦克风与次级状态</span></div>
+                    <div class="color-value"><i class="swatch current-swatch" data-role="warm" style="--swatch:#f2b56b"></i><span data-current="#F2B56B" data-current-bright="#C77A29">#F2B56B</span></div>
+                    <div class="color-value"><i class="swatch proposed-swatch" data-role="warm" style="--swatch:#929caf"></i><span data-proposed="#929CAF" data-proposed-bright="#59657B">#929CAF</span></div>
+                </div>
+            </div>
+            <p class="design-note">香槟金只承担播放、搜索与关键状态，炭黑和中性灰建立空间层次，雾蓝灰留给麦克风等次级状态。降低黄色纯度后仍保留温暖月色，但不会产生廉价的“亮金按钮”感。</p>
+        </section>
+    </main>
+
+    <script>
+        const palettes = {
+            dark: {
+                current: { accent: "#3DE6BD", strong: "#8FFFE3", screen: "#060A0A", surface: "#0C1312", warm: "#F2B56B" },
+                proposed: { accent: "#D8C49D", strong: "#EDE2CC", screen: "#0B0D12", surface: "#11151D", warm: "#929CAF" }
+            },
+            bright: {
+                current: { accent: "#3DE6BD", strong: "#14A380", screen: "#E8E4DB", surface: "#F6F2E8", warm: "#C77A29" },
+                proposed: { accent: "#B89E6D", strong: "#796642", screen: "#F0F1F3", surface: "#FAFAF8", warm: "#59657B" }
+            }
+        };
+
+        const updatePaletteTable = (mode) => {
+            document.querySelectorAll(".current-swatch").forEach((swatch) => {
+                swatch.style.setProperty("--swatch", palettes[mode].current[swatch.dataset.role]);
+            });
+            document.querySelectorAll(".proposed-swatch").forEach((swatch) => {
+                swatch.style.setProperty("--swatch", palettes[mode].proposed[swatch.dataset.role]);
+            });
+            document.querySelectorAll("[data-current]").forEach((label) => {
+                label.textContent = mode === "bright" ? label.dataset.currentBright : label.dataset.current;
+            });
+            document.querySelectorAll("[data-proposed]").forEach((label) => {
+                label.textContent = mode === "bright" ? label.dataset.proposedBright : label.dataset.proposed;
+            });
+            document.getElementById("palette-caption").textContent = mode === "bright" ? "明亮调色板" : "默认深色调色板";
+        };
+
+        document.querySelectorAll(".mode-button").forEach((button) => {
+            button.addEventListener("click", () => {
+                const mode = button.dataset.mode;
+                document.body.dataset.mode = mode;
+                document.querySelectorAll(".mode-button").forEach((item) => {
+                    item.setAttribute("aria-pressed", String(item === button));
+                });
+                updatePaletteTable(mode);
+            });
+        });
+
+        let isPlaying = true;
+        document.querySelectorAll(".play").forEach((button) => {
+            button.addEventListener("click", () => {
+                isPlaying = !isPlaying;
+                document.querySelectorAll(".sample").forEach((sample) => sample.classList.toggle("is-paused", !isPlaying));
+                document.querySelectorAll(".play").forEach((playButton) => {
+                    playButton.querySelector(".pause-icon").hidden = !isPlaying;
+                    playButton.querySelector(".play-icon").hidden = isPlaying;
+                    playButton.title = isPlaying ? "暂停" : "播放";
+                    playButton.setAttribute("aria-label", isPlaying ? "暂停" : "播放");
+                });
+            });
+        });
+
+        let micEnabled = true;
+        document.querySelectorAll(".mic").forEach((button) => {
+            button.addEventListener("click", () => {
+                micEnabled = !micEnabled;
+                document.querySelectorAll(".mic").forEach((micButton) => micButton.setAttribute("aria-pressed", String(micEnabled)));
+                document.querySelectorAll(".voice-status").forEach((status) => {
+                    status.lastChild.textContent = micEnabled ? "麦克风已开启" : "麦克风已关闭";
+                });
+            });
+        });
+    </script>
+</body>
+</html>

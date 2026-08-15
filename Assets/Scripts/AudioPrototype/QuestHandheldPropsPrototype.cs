@@ -368,7 +368,7 @@ namespace TsukiVox.AudioPrototype
             var markerRoot = new GameObject("mic mouth point marker").transform;
             markerRoot.SetParent(parent, false);
 
-            var markerColor = new Color(0.15f, 1f, 0.72f, 1f);
+            var markerColor = new Color32(237, 226, 204, 255);
             var coreMaterial = PropMaterials.Emissive("mic mouth marker core", markerColor, 3.5f, 0.05f);
             var guideMaterial = PropMaterials.AdditiveShell("mic mouth marker guide", markerColor, 0.38f);
             MeshFactory.CreateSphere(markerRoot, "marker core", 0.005f, coreMaterial);
@@ -794,7 +794,7 @@ namespace TsukiVox.AudioPrototype
             // against this point minus MicrophoneGrilleRadius, so do not move it.
             private const float GrilleCenterZ = 0.145f;
 
-            private static readonly Color RingColor = new Color(0.2f, 0.9f, 0.76f, 1f);
+            private static readonly Color RingColor = new Color32(146, 156, 175, 255);
 
             private readonly Transform anchor;
             private readonly Transform grille;

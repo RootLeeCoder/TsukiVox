@@ -22,10 +22,10 @@ namespace TsukiVox.AudioPrototype
         private static readonly Quaternion PanelWorldRotation = QuestAppShellPrototype.ControlPanelWorldRotation;
         private static readonly Vector3 PanelWorldScale = QuestAppShellPrototype.ControlPanelWorldScale;
 
-        private static readonly Color PointerIdleColor = new Color(0.32f, 0.92f, 1f, 0.88f);
-        private static readonly Color PointerHoverColor = new Color(0.52f, 1f, 0.84f, 1f);
-        private static readonly Color PointerPressedColor = new Color(1f, 0.84f, 0.28f, 1f);
-        private static readonly Color PointerMissColor = new Color(0.26f, 0.42f, 0.48f, 0.45f);
+        private static readonly Color PointerIdleColor = new Color32(146, 156, 175, 224);
+        private static readonly Color PointerHoverColor = new Color32(237, 226, 204, 255);
+        private static readonly Color PointerPressedColor = new Color32(184, 158, 109, 255);
+        private static readonly Color PointerMissColor = new Color32(89, 97, 111, 115);
 
         [SerializeField] private Canvas targetCanvas;
         [SerializeField] private GraphicRaycaster raycaster;
@@ -989,10 +989,10 @@ namespace TsukiVox.AudioPrototype
             var colors = new ColorBlock
             {
                 normalColor = Color.white,
-                highlightedColor = new Color(0.5f, 1f, 0.95f, 1f),
-                pressedColor = new Color(1f, 0.88f, 0.34f, 1f),
-                selectedColor = new Color(0.6f, 0.95f, 1f, 1f),
-                disabledColor = new Color(0.45f, 0.5f, 0.52f, 0.45f),
+                highlightedColor = new Color32(240, 230, 210, 255),
+                pressedColor = new Color32(188, 167, 126, 255),
+                selectedColor = new Color32(226, 207, 169, 255),
+                disabledColor = new Color32(112, 112, 113, 115),
                 colorMultiplier = 1f,
                 fadeDuration = 0.05f,
             };

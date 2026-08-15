@@ -55,13 +55,13 @@ namespace TsukiVox.AudioPrototype.Editor
             PlayerSettings.colorSpace = ColorSpace.Linear;
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            RenderSettings.ambientLight = new Color(0.18f, 0.2f, 0.22f);
+            RenderSettings.ambientLight = new Color32(38, 41, 50, 255);
 
             var cameraObject = new GameObject("Main Camera");
             var camera = cameraObject.AddComponent<Camera>();
             cameraObject.AddComponent<AudioListener>();
             camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = new Color(0.03f, 0.04f, 0.05f);
+            camera.backgroundColor = new Color32(8, 10, 15, 255);
             camera.nearClipPlane = 0.02f;
             camera.farClipPlane = 40f;
             camera.allowHDR = true;
@@ -232,7 +232,7 @@ namespace TsukiVox.AudioPrototype.Editor
             rect.anchoredPosition = Vector2.zero;
             rect.sizeDelta = new Vector2(1240f, 690f);
             var image = panelObject.AddComponent<Image>();
-            image.color = new Color(0.04f, 0.055f, 0.062f, 0.92f);
+            image.color = new Color32(11, 13, 18, 235);
             return rect;
         }
 
@@ -245,7 +245,7 @@ namespace TsukiVox.AudioPrototype.Editor
             text.text = label;
             text.fontSize = size;
             text.fontStyle = style;
-            text.color = new Color(0.93f, 0.97f, 0.98f);
+            text.color = new Color32(242, 239, 232, 255);
             text.alignment = TextAnchor.MiddleCenter;
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.verticalOverflow = VerticalWrapMode.Overflow;
@@ -272,7 +272,7 @@ namespace TsukiVox.AudioPrototype.Editor
             backgroundRect.sizeDelta = new Vector2(320f, 14f);
             backgroundRect.anchoredPosition = new Vector2(0f, -10f);
             var backgroundImage = background.AddComponent<Image>();
-            backgroundImage.color = new Color(0.12f, 0.16f, 0.18f);
+            backgroundImage.color = new Color32(36, 39, 46, 255);
 
             var fill = new GameObject("Fill");
             fill.transform.SetParent(background.transform, false);
@@ -282,7 +282,7 @@ namespace TsukiVox.AudioPrototype.Editor
             fillRect.offsetMin = Vector2.zero;
             fillRect.offsetMax = Vector2.zero;
             var fillImage = fill.AddComponent<Image>();
-            fillImage.color = new Color(0.26f, 0.95f, 0.78f);
+            fillImage.color = new Color32(216, 196, 157, 255);
 
             var slider = root.AddComponent<Slider>();
             slider.minValue = 0f;
@@ -316,7 +316,7 @@ namespace TsukiVox.AudioPrototype.Editor
             rect.sizeDelta = size;
             rect.anchoredPosition = position;
             var image = buttonObject.AddComponent<Image>();
-            image.color = new Color(0.1f, 0.16f, 0.18f);
+            image.color = new Color32(26, 29, 36, 255);
             var button = buttonObject.AddComponent<Button>();
             button.targetGraphic = image;
             button.colors = CreateSelectableColors();
@@ -341,7 +341,7 @@ namespace TsukiVox.AudioPrototype.Editor
             backgroundRect.sizeDelta = new Vector2(28f, 28f);
             backgroundRect.anchoredPosition = new Vector2(-58f, 0f);
             var backgroundImage = background.AddComponent<Image>();
-            backgroundImage.color = new Color(0.12f, 0.16f, 0.18f);
+            backgroundImage.color = new Color32(36, 39, 46, 255);
 
             var checkmark = new GameObject("Checkmark");
             checkmark.transform.SetParent(background.transform, false);
@@ -349,7 +349,7 @@ namespace TsukiVox.AudioPrototype.Editor
             checkmarkRect.sizeDelta = new Vector2(18f, 18f);
             checkmarkRect.anchoredPosition = Vector2.zero;
             var checkmarkImage = checkmark.AddComponent<Image>();
-            checkmarkImage.color = new Color(0.28f, 0.95f, 0.72f);
+            checkmarkImage.color = new Color32(216, 196, 157, 255);
 
             var text = CreateText(toggleObject.transform, label, 16, FontStyle.Normal);
             text.alignment = TextAnchor.MiddleLeft;
@@ -560,11 +560,11 @@ namespace TsukiVox.AudioPrototype.Editor
         {
             return new ColorBlock
             {
-                normalColor = new Color(0.1f, 0.16f, 0.18f),
-                highlightedColor = new Color(0.16f, 0.3f, 0.32f),
-                pressedColor = new Color(0.28f, 0.46f, 0.42f),
-                selectedColor = new Color(0.13f, 0.22f, 0.24f),
-                disabledColor = new Color(0.08f, 0.1f, 0.11f, 0.55f),
+                normalColor = new Color32(26, 29, 36, 255),
+                highlightedColor = new Color32(240, 230, 210, 255),
+                pressedColor = new Color32(188, 167, 126, 255),
+                selectedColor = new Color32(226, 207, 169, 255),
+                disabledColor = new Color32(21, 23, 27, 140),
                 colorMultiplier = 1f,
                 fadeDuration = 0.08f,
             };

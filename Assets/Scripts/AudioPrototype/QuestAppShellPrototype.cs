@@ -22,12 +22,12 @@ namespace TsukiVox.AudioPrototype
         private const string PanelName = "Panel";
         private const string ShellObjectName = "Quest App Shell Prototype";
 
-        private static readonly Color PanelBackground = new Color(0.025f, 0.035f, 0.04f, 0.94f);
-        private static readonly Color SectionBackground = new Color(0.055f, 0.075f, 0.082f, 0.82f);
-        private static readonly Color SectionLine = new Color(0.16f, 0.25f, 0.27f, 0.72f);
-        private static readonly Color TextPrimary = new Color(0.93f, 0.97f, 0.98f, 1f);
-        private static readonly Color TextSecondary = new Color(0.64f, 0.75f, 0.76f, 1f);
-        private static readonly Color Accent = new Color(0.25f, 0.95f, 0.72f, 1f);
+        private static readonly Color PanelBackground = new Color32(11, 13, 18, 240);
+        private static readonly Color SectionBackground = new Color32(20, 23, 29, 209);
+        private static readonly Color SectionLine = new Color32(57, 59, 64, 184);
+        private static readonly Color TextPrimary = new Color32(242, 239, 232, 255);
+        private static readonly Color TextSecondary = new Color32(169, 166, 151, 255);
+        private static readonly Color Accent = new Color32(216, 196, 157, 255);
         [Header("Scene References")]
         [SerializeField] private Canvas controlCanvas;
         [SerializeField] private RectTransform panel;
@@ -554,7 +554,7 @@ namespace TsukiVox.AudioPrototype
                 var image = buttons[i].GetComponent<Image>();
                 if (image != null)
                 {
-                    image.color = new Color(0.08f, 0.14f, 0.15f, 1f);
+                    image.color = new Color32(26, 29, 36, 255);
                 }
             }
 
