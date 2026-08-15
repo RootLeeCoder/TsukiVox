@@ -4,6 +4,9 @@ namespace TsukiVox.AudioPrototype
 {
     public static class DirectPlaylist
     {
+        public const string MediaCacheDirectoryName = "DirectMediaCache";
+        public const string LegacyVideoCacheDirectoryName = "video-cache";
+
         public const string StatusDownloading = "downloading";
         public const string StatusReady = "ready";
         public const string StatusError = "error";
@@ -18,6 +21,21 @@ namespace TsukiVox.AudioPrototype
         public const string ControlClearExceptCurrent = "clearExceptCurrent";
         public const string ControlClearAll = "clearAll";
         public const string ControlRemove = "remove";
+    }
+
+    public readonly struct MediaCacheClearResult
+    {
+        public MediaCacheClearResult(int deletedFileCount, long deletedBytes, string error)
+        {
+            DeletedFileCount = Math.Max(0, deletedFileCount);
+            DeletedBytes = Math.Max(0L, deletedBytes);
+            Error = error ?? string.Empty;
+        }
+
+        public int DeletedFileCount { get; }
+        public long DeletedBytes { get; }
+        public string Error { get; }
+        public bool Succeeded => string.IsNullOrEmpty(Error);
     }
 
     [Serializable]

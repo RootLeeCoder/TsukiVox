@@ -138,6 +138,18 @@ namespace TsukiVox.AudioPrototype
             RefreshStepVisuals(0f);
         }
 
+        public void RestoreDefaultSetting()
+        {
+            PlayerPrefs.DeleteKey(TiltStepPrefsKey);
+            if (currentStepIndex == DefaultStepIndex && !isAnimating)
+            {
+                RefreshStepVisuals(-1f);
+                return;
+            }
+
+            SetTiltStep(DefaultStepIndex);
+        }
+
         private void Update()
         {
             if (tabletPivot == null && Time.unscaledTime >= nextHierarchyResolveAt)

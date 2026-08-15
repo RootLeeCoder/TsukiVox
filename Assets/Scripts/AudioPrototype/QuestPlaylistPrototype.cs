@@ -148,6 +148,38 @@ namespace TsukiVox.AudioPrototype
             ApplyControl(DirectPlaylist.ControlClear, null);
         }
 
+        public MediaCacheClearResult ClearMediaCache()
+        {
+            CancelDownloads();
+            ApplyControl(DirectPlaylist.ControlClearAll, null);
+
+            var deletedFileCount = 0;
+            var deletedBytes = 0L;
+            var errors = new List<string>();
+            ClearCacheDirectory(
+                DirectPlaylist.MediaCacheDirectoryName,
+                ref deletedFileCount,
+                ref deletedBytes,
+                errors);
+            ClearCacheDirectory(
+                DirectPlaylist.LegacyVideoCacheDirectoryName,
+                ref deletedFileCount,
+                ref deletedBytes,
+                errors);
+
+            var error = string.Join("；", errors);
+            if (string.IsNullOrEmpty(error))
+            {
+                Debug.Log($"[TsukiVox Direct] Cleared {deletedFileCount} cached media files ({deletedBytes} bytes).");
+            }
+            else
+            {
+                Debug.LogWarning($"[TsukiVox Direct] Media cache was only partially cleared: {error}");
+            }
+
+            return new MediaCacheClearResult(deletedFileCount, deletedBytes, error);
+        }
+
         public void ClearPlayedQueue()
         {
             ApplyControl(DirectPlaylist.ControlClearPlayed, null);
@@ -454,7 +486,7 @@ namespace TsukiVox.AudioPrototype
                     var lastProgressPublishedAt = -1f;
                     yield return directClient.ResolveAndCache(
                         catalogItem,
-                        Path.Combine(Application.persistentDataPath, "DirectMediaCache"),
+                        Path.Combine(Application.persistentDataPath, DirectPlaylist.MediaCacheDirectoryName),
                         media => ApplyResolvedMetadata(itemId, media),
                         progress =>
                         {
@@ -783,6 +815,58 @@ namespace TsukiVox.AudioPrototype
                 }
             }
             return false;
+        }
+
+        private static void ClearCacheDirectory(
+            string directoryName,
+            ref int deletedFileCount,
+            ref long deletedBytes,
+            List<string> errors)
+        {
+            var directoryPath = Path.Combine(Application.persistentDataPath, directoryName);
+            if (!Directory.Exists(directoryPath))
+            {
+                return;
+            }
+
+            string[] files;
+            try
+            {
+                files = Directory.GetFiles(directoryPath, "*", SearchOption.AllDirectories);
+            }
+            catch (Exception exception)
+            {
+                errors.Add($"{directoryName} 无法读取：{exception.Message}");
+                return;
+            }
+
+            for (var index = 0; index < files.Length; index += 1)
+            {
+                var filePath = files[index];
+                try
+                {
+                    var length = new FileInfo(filePath).Length;
+                    File.Delete(filePath);
+                    deletedFileCount += 1;
+                    deletedBytes += Math.Max(0L, length);
+                }
+                catch (Exception exception)
+                {
+                    errors.Add($"{directoryName}/{Path.GetFileName(filePath)} 删除失败：{exception.Message}");
+                }
+            }
+
+            try
+            {
+                if (Directory.Exists(directoryPath) && Directory.GetFileSystemEntries(directoryPath).Length == 0)
+                {
+                    Directory.Delete(directoryPath);
+                }
+            }
+            catch (Exception exception)
+            {
+                errors.Add($"{directoryName} 无法收尾：{exception.Message}");
+            }
         }
 
         private static string ExtractBvid(string value)

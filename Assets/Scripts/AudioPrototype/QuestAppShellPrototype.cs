@@ -335,21 +335,27 @@ namespace TsukiVox.AudioPrototype
 
         private void AppendCacheDirectoryInfo()
         {
-            var cacheDirectory = Path.Combine(Application.persistentDataPath, "video-cache");
-            debugBuilder.AppendLine($"videoCacheDirectory {cacheDirectory}");
+            AppendCacheDirectoryInfo(DirectPlaylist.MediaCacheDirectoryName);
+            AppendCacheDirectoryInfo(DirectPlaylist.LegacyVideoCacheDirectoryName);
+        }
+
+        private void AppendCacheDirectoryInfo(string directoryName)
+        {
+            var cacheDirectory = Path.Combine(Application.persistentDataPath, directoryName);
+            debugBuilder.AppendLine($"mediaCacheDirectory {directoryName} {cacheDirectory}");
             if (!Directory.Exists(cacheDirectory))
             {
-                debugBuilder.AppendLine("videoCacheExists False");
+                debugBuilder.AppendLine($"mediaCacheExists {directoryName} False");
                 return;
             }
 
-            debugBuilder.AppendLine("videoCacheExists True");
+            debugBuilder.AppendLine($"mediaCacheExists {directoryName} True");
             var files = Directory.GetFiles(cacheDirectory);
-            debugBuilder.AppendLine($"videoCacheFileCount {files.Length}");
+            debugBuilder.AppendLine($"mediaCacheFileCount {directoryName} {files.Length}");
             for (var i = 0; i < Mathf.Min(files.Length, 8); i += 1)
             {
                 var info = new FileInfo(files[i]);
-                debugBuilder.AppendLine($"videoCacheFile {info.Name} {info.Length} bytes");
+                debugBuilder.AppendLine($"mediaCacheFile {directoryName} {info.Name} {info.Length} bytes");
             }
         }
 

@@ -40,6 +40,8 @@ namespace TsukiVox.AudioPrototype
         private const float QueueRowWidth = 580f;
         private const float EnqueueConfirmationSeconds = 6.5f;
         private const float ExitConfirmationSeconds = 4f;
+        private const float DestructiveActionConfirmationSeconds = 4f;
+        private const float MaintenanceResultSeconds = 5f;
 
         private Color ScreenBackground => palette.ScreenBackground;
         private Color Surface => palette.Surface;
@@ -306,6 +308,12 @@ namespace TsukiVox.AudioPrototype
         private TMP_Text diagnosticsRequestModeText;
         private TMP_Text diagnosticsVideoText;
         private TMP_Text rawDiagnosticsText;
+        private Button clearMediaCacheButton;
+        private TMP_Text clearMediaCacheButtonText;
+        private QuestUiIcon clearMediaCacheIcon;
+        private Button restoreDefaultSettingsButton;
+        private TMP_Text restoreDefaultSettingsButtonText;
+        private QuestUiIcon restoreDefaultSettingsIcon;
         private Button copyDiagnosticsButton;
 
         private TMP_Text enqueueConfirmationTitleText;
@@ -320,6 +328,12 @@ namespace TsukiVox.AudioPrototype
         private bool queueDrawerVisible;
         private float nextRefreshAt;
         private float exitConfirmationExpiresAt;
+        private float clearMediaCacheConfirmationExpiresAt;
+        private float restoreDefaultSettingsConfirmationExpiresAt;
+        private float maintenanceResultExpiresAt;
+        private string maintenanceResultMessage = string.Empty;
+        private string lastMaintenanceDetails = string.Empty;
+        private bool maintenanceResultFailed;
         private Coroutine pageTransition;
         private Coroutine debugDrawerTransition;
         private Coroutine queueDrawerTransition;
@@ -425,6 +439,8 @@ namespace TsukiVox.AudioPrototype
             CancelSearchResultCoverRequests();
             CancelQueueCoverRequests();
             exitConfirmationExpiresAt = 0f;
+            clearMediaCacheConfirmationExpiresAt = 0f;
+            restoreDefaultSettingsConfirmationExpiresAt = 0f;
             UnsubscribePlaylist();
             UnsubscribeRoom();
         }
@@ -1389,18 +1405,27 @@ namespace TsukiVox.AudioPrototype
             diagnosticsVideoText = CreateText(debugDrawer, "Video Status", "视频状态：待机", 16, FontStyle.Normal, new Vector2(0f, 34f), new Vector2(548f, 62f), TextAnchor.MiddleLeft, TextSecondary);
             CreateDivider(debugDrawer, "Video Divider", new Vector2(0f, -3f), new Vector2(548f, 1f));
 
-            rawDetailsButton = CreateSurfaceButton(debugDrawer, "Raw Details Toggle", new Vector2(0f, -47f), new Vector2(548f, 56f), Color.clear, Color.clear);
+            rawDetailsButton = CreateSurfaceButton(debugDrawer, "Raw Details Toggle", new Vector2(0f, -36f), new Vector2(548f, 44f), Color.clear, Color.clear);
             rawDetailsButtonText = CreateText(rawDetailsButton.transform, "Title", "展开原始详情", 17, FontStyle.Bold, new Vector2(-112f, 0f), new Vector2(310f, 36f), TextAnchor.MiddleLeft, TextPrimary);
             EnsureIcon(rawDetailsButton.transform, "Chevron", QuestUiIconKind.ChevronRight, new Vector2(250f, 0f), new Vector2(20f, 20f), TextSecondary);
 
-            rawDetailsRoot = EnsureRect(debugDrawer, "Raw Details", new Vector2(0f, -126f), new Vector2(548f, 104f));
+            rawDetailsRoot = EnsureRect(debugDrawer, "Raw Details", new Vector2(0f, -113f), new Vector2(548f, 100f));
             EnsureSurface(rawDetailsRoot, palette.RawDetailsSurface, 6f, false);
-            rawDiagnosticsText = CreateText(rawDetailsRoot, "Text", string.Empty, 13, FontStyle.Normal, Vector2.zero, new Vector2(510f, 86f), TextAnchor.UpperLeft, TextSecondary);
+            rawDiagnosticsText = CreateText(rawDetailsRoot, "Text", string.Empty, 12, FontStyle.Normal, Vector2.zero, new Vector2(510f, 82f), TextAnchor.UpperLeft, TextSecondary);
             rawDiagnosticsText.textWrappingMode = TextWrappingModes.Normal;
             rawDiagnosticsText.overflowMode = TextOverflowModes.Truncate;
 
-            copyDiagnosticsButton = CreateTextButton(debugDrawer, "Copy Complete Diagnostics", "复制完整诊断信息", new Vector2(0f, -226f), new Vector2(548f, 52f), palette.DiagnosticsActionSurface, AccentStrong);
-            EnsureIcon(copyDiagnosticsButton.transform, "Icon", QuestUiIconKind.Copy, new Vector2(-160f, 0f), new Vector2(22f, 22f), AccentStrong);
+            clearMediaCacheButton = CreateSurfaceButton(debugDrawer, "Clear Media Cache", new Vector2(-141f, -190f), new Vector2(266f, 44f), Surface, Line);
+            clearMediaCacheIcon = EnsureIcon(clearMediaCacheButton.transform, "Icon", QuestUiIconKind.Trash, new Vector2(-103f, 0f), new Vector2(20f, 20f), Danger);
+            clearMediaCacheButtonText = CreateText(clearMediaCacheButton.transform, "Label", "清除媒体缓存", 15, FontStyle.Bold, new Vector2(16f, 0f), new Vector2(210f, 32f), TextAnchor.MiddleCenter, Danger);
+
+            restoreDefaultSettingsButton = CreateSurfaceButton(debugDrawer, "Restore Default Settings", new Vector2(141f, -190f), new Vector2(266f, 44f), Surface, Line);
+            restoreDefaultSettingsIcon = EnsureIcon(restoreDefaultSettingsButton.transform, "Icon", QuestUiIconKind.Replay, new Vector2(-103f, 0f), new Vector2(20f, 20f), Warm);
+            restoreDefaultSettingsButtonText = CreateText(restoreDefaultSettingsButton.transform, "Label", "恢复全部默认设置", 15, FontStyle.Bold, new Vector2(16f, 0f), new Vector2(210f, 32f), TextAnchor.MiddleCenter, TextPrimary);
+
+            copyDiagnosticsButton = CreateTextButton(debugDrawer, "Copy Complete Diagnostics", "复制完整诊断信息", new Vector2(0f, -244f), new Vector2(548f, 40f), palette.DiagnosticsActionSurface, AccentStrong);
+            copyDiagnosticsButton.GetComponentInChildren<TMP_Text>(true).fontSize = 16f;
+            EnsureIcon(copyDiagnosticsButton.transform, "Icon", QuestUiIconKind.Copy, new Vector2(-160f, 0f), new Vector2(20f, 20f), AccentStrong);
 
             debugScrim.SetAsLastSibling();
             debugDrawer.SetAsLastSibling();
@@ -1542,6 +1567,8 @@ namespace TsukiVox.AudioPrototype
             WireButton(closeDiagnosticsButton, () => SetDebugDrawerVisible(false));
             WireButton(debugScrimButton, () => SetDebugDrawerVisible(false));
             WireButton(rawDetailsButton, ToggleRawDetails);
+            WireButton(clearMediaCacheButton, HandleClearMediaCache);
+            WireButton(restoreDefaultSettingsButton, HandleRestoreDefaultSettings);
             WireButton(copyDiagnosticsButton, () => appShellPrototype?.CopyCompleteDebugInfoToClipboard());
         }
 
@@ -2149,7 +2176,32 @@ namespace TsukiVox.AudioPrototype
                 : videoScreenPrototype.IsPreparing ? "视频正在准备"
                 : videoScreenPrototype.IsPlaying ? "视频正在播放"
                 : "视频待机";
-            diagnosticsVideoText.text = $"视频状态：{videoSummary}\n{SingleLine(videoScreenPrototype?.StatusSummary)}";
+            var clearConfirmationActive = clearMediaCacheConfirmationExpiresAt > Time.unscaledTime;
+            var restoreConfirmationActive = restoreDefaultSettingsConfirmationExpiresAt > Time.unscaledTime;
+            var maintenanceResultActive = maintenanceResultExpiresAt > Time.unscaledTime &&
+                                          !string.IsNullOrEmpty(maintenanceResultMessage);
+            if (clearConfirmationActive)
+            {
+                diagnosticsVideoText.text = "清除媒体缓存：请再次点击确认\n将停止播放、取消下载并清空当前队列";
+                diagnosticsVideoText.color = Danger;
+            }
+            else if (restoreConfirmationActive)
+            {
+                diagnosticsVideoText.text = "恢复全部默认设置：请再次点击确认\n媒体缓存不会被删除";
+                diagnosticsVideoText.color = Warm;
+            }
+            else if (maintenanceResultActive)
+            {
+                diagnosticsVideoText.text = maintenanceResultMessage;
+                diagnosticsVideoText.color = maintenanceResultFailed ? Danger : AccentStrong;
+            }
+            else
+            {
+                diagnosticsVideoText.text = $"视频状态：{videoSummary}\n{SingleLine(videoScreenPrototype?.StatusSummary)}";
+                diagnosticsVideoText.color = TextSecondary;
+            }
+
+            RefreshMaintenanceButtons(clearConfirmationActive, restoreConfirmationActive);
 
             rawDiagnosticsText.text =
                 $"构建信息  {QuestBuildInfo.RawSummary}\n" +
@@ -2161,7 +2213,10 @@ namespace TsukiVox.AudioPrototype
                 $"防碰撞  {(handheldPropsPrototype == null ? "missing" : $"{handheldPropsPrototype.MicFaceWarningClearance * 100f:0.0}/{handheldPropsPrototype.MicFaceCriticalClearance * 100f:0.0}cm {handheldPropsPrototype.MicFaceHapticStrength:P0}")}\n" +
                 $"嘴部定位  {(handheldPropsPrototype == null ? "missing" : handheldPropsPrototype.MicFaceMouthLocalOffset.ToString("F3"))}\n" +
                 $"内容接口  {BilibiliDirectClient.ApiOrigin}\n" +
-                $"视频状态  {SingleLine(videoScreenPrototype?.StatusSummary)}";
+                $"视频状态  {SingleLine(videoScreenPrototype?.StatusSummary)}" +
+                (string.IsNullOrEmpty(lastMaintenanceDetails)
+                    ? string.Empty
+                    : $"\n存储操作  {SingleLine(lastMaintenanceDetails)}");
         }
 
         private void HandleMicrophoneToggle(bool enabled)
@@ -2759,6 +2814,128 @@ namespace TsukiVox.AudioPrototype
             micCalibrationStatusText.text = "已恢复默认参数";
             RefreshMicProtection();
             RefreshMicMouthPoint();
+        }
+
+        private void HandleClearMediaCache()
+        {
+            var now = Time.unscaledTime;
+            if (clearMediaCacheConfirmationExpiresAt <= now)
+            {
+                clearMediaCacheConfirmationExpiresAt = now + DestructiveActionConfirmationSeconds;
+                restoreDefaultSettingsConfirmationExpiresAt = 0f;
+                maintenanceResultExpiresAt = 0f;
+                RefreshDiagnostics();
+                return;
+            }
+
+            clearMediaCacheConfirmationExpiresAt = 0f;
+            if (playlistPrototype == null)
+            {
+                SetMaintenanceResult(
+                    "无法清除媒体缓存\n点歌组件当前不可用",
+                    true,
+                    "media cache clear failed: playlist component missing");
+                RefreshDiagnostics();
+                return;
+            }
+
+            var result = playlistPrototype.ClearMediaCache();
+            confirmedSearchItemIds.Clear();
+            pendingQueueRemovalItemIds.Clear();
+            if (result.Succeeded)
+            {
+                var message = result.DeletedFileCount == 0
+                    ? "媒体缓存已经为空\n当前播放和队列已停止"
+                    : $"媒体缓存已清除 · {result.DeletedFileCount} 个文件\n已释放 {FormatBytes(result.DeletedBytes)}，当前队列已清空";
+                SetMaintenanceResult(
+                    message,
+                    false,
+                    $"cleared {result.DeletedFileCount} files, {result.DeletedBytes} bytes");
+            }
+            else
+            {
+                SetMaintenanceResult(
+                    $"媒体缓存未完全清除\n已删除 {result.DeletedFileCount} 个文件，请复制诊断信息",
+                    true,
+                    result.Error);
+            }
+
+            RefreshAll();
+        }
+
+        private void HandleRestoreDefaultSettings()
+        {
+            var now = Time.unscaledTime;
+            if (restoreDefaultSettingsConfirmationExpiresAt <= now)
+            {
+                restoreDefaultSettingsConfirmationExpiresAt = now + DestructiveActionConfirmationSeconds;
+                clearMediaCacheConfirmationExpiresAt = 0f;
+                maintenanceResultExpiresAt = 0f;
+                RefreshDiagnostics();
+                return;
+            }
+
+            restoreDefaultSettingsConfirmationExpiresAt = 0f;
+            CancelMicFaceCalibration();
+            PlayerPrefs.DeleteAll();
+            appendKtvToSearch = false;
+            audioPrototype?.RestoreDefaultSettings();
+
+            if (handheldPropsPrototype == null)
+            {
+                handheldPropsPrototype = FindAnyObjectByType<QuestHandheldPropsPrototype>();
+            }
+            handheldPropsPrototype?.ResetMicFaceHapticPreferences();
+
+            var tiltController = FindAnyObjectByType<QuestTabletTiltController>();
+            tiltController?.RestoreDefaultSetting();
+            var themeController = FindAnyObjectByType<QuestRoomThemeController>();
+            themeController?.RestoreDefaultSetting();
+            PlayerPrefs.Save();
+
+            exitConfirmationExpiresAt = 0f;
+            RefreshAppendKtvSearchToggle();
+            SetMaintenanceResult(
+                "全部设置已恢复默认\n暗色主题 · 平板 30° · KTV 后缀关闭",
+                false,
+                "all settings restored to defaults; media cache retained");
+            RefreshAll();
+        }
+
+        private void SetMaintenanceResult(string message, bool failed, string details)
+        {
+            maintenanceResultMessage = message ?? string.Empty;
+            maintenanceResultFailed = failed;
+            maintenanceResultExpiresAt = Time.unscaledTime + MaintenanceResultSeconds;
+            lastMaintenanceDetails = details ?? string.Empty;
+        }
+
+        private void RefreshMaintenanceButtons(bool clearConfirmationActive, bool restoreConfirmationActive)
+        {
+            if (clearMediaCacheButton != null)
+            {
+                clearMediaCacheButton.interactable = playlistPrototype != null;
+                clearMediaCacheButtonText.text = clearConfirmationActive ? "再次点击确认" : "清除媒体缓存";
+                clearMediaCacheButtonText.color = Danger;
+                clearMediaCacheIcon.color = Danger;
+                if (clearMediaCacheButton.targetGraphic is QuestUiSurface clearSurface)
+                {
+                    clearSurface.color = clearConfirmationActive ? WarmSurface : Surface;
+                    clearMediaCacheButton.colors = CreateButtonColors(clearSurface.color);
+                }
+            }
+
+            if (restoreDefaultSettingsButton != null)
+            {
+                restoreDefaultSettingsButtonText.text = restoreConfirmationActive ? "再次点击确认" : "恢复全部默认设置";
+                restoreDefaultSettingsButtonText.color = restoreConfirmationActive ? Danger : TextPrimary;
+                restoreDefaultSettingsIcon.color = restoreConfirmationActive ? Danger : Warm;
+                if (restoreDefaultSettingsButton.targetGraphic is QuestUiSurface restoreSurface)
+                {
+                    restoreSurface.color = restoreConfirmationActive ? WarmSurface : Surface;
+                    restoreDefaultSettingsButton.colors = CreateButtonColors(restoreSurface.color);
+                }
+            }
         }
 
         private void ToggleRawDetails()
@@ -3507,6 +3684,11 @@ namespace TsukiVox.AudioPrototype
             rawDetailsVisible = false;
             rawDetailsRoot.gameObject.SetActive(false);
             rawDetailsButtonText.text = "展开原始详情";
+            if (!visible)
+            {
+                clearMediaCacheConfirmationExpiresAt = 0f;
+                restoreDefaultSettingsConfirmationExpiresAt = 0f;
+            }
         }
 
         private CanvasGroup GetPageGroup(UiPage page)
@@ -4003,6 +4185,26 @@ namespace TsukiVox.AudioPrototype
         private static string FormatProgress(float progress)
         {
             return $"{Mathf.RoundToInt(Mathf.Clamp01(progress) * 100f)}%";
+        }
+
+        private static string FormatBytes(long bytes)
+        {
+            var value = Math.Max(0L, bytes);
+            if (value < 1024L)
+            {
+                return $"{value} B";
+            }
+
+            var scaled = (double)value;
+            var units = new[] { "B", "KB", "MB", "GB", "TB" };
+            var unitIndex = 0;
+            while (scaled >= 1024d && unitIndex < units.Length - 1)
+            {
+                scaled /= 1024d;
+                unitIndex += 1;
+            }
+
+            return $"{scaled:0.#} {units[unitIndex]}";
         }
 
         private static string NormalizeCatalogItemId(BilibiliCatalogItem item)

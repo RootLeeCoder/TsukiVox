@@ -108,6 +108,21 @@ namespace TsukiVox.AudioPrototype
             }
         }
 
+        public void RestoreDefaultSetting()
+        {
+            PlayerPrefs.DeleteKey(QuestKtvRoomPrototype.ThemePrefsKey);
+            currentTheme = RoomTheme.Dark;
+            if (roomPrototype == null)
+            {
+                roomPrototype = FindAnyObjectByType<QuestKtvRoomPrototype>();
+                SubscribeRoom();
+            }
+
+            roomPrototype?.ApplyTheme(RoomTheme.Dark);
+            currentTheme = roomPrototype != null ? roomPrototype.CurrentTheme : RoomTheme.Dark;
+            RefreshThemeVisuals();
+        }
+
         private void LateUpdate()
         {
             if (switchCanvas == null)

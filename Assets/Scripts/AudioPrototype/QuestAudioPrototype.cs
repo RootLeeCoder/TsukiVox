@@ -22,6 +22,7 @@ namespace TsukiVox.AudioPrototype
         private const float MeterDisplayCurve = 0.62f;
         private const float DefaultDistanceFullGainClearance = 0.06f;
         private const float DefaultDistanceCutoffClearance = 0.30f;
+        private const bool DefaultDistanceMonitoringEnabled = true;
         private const float AudioPreferencesSaveDelay = 0.5f;
         private const string PresetPrefsKey = "TsukiVox.Audio.Preset.v1";
         private const string MonitorVolumePrefsKey = "TsukiVox.Audio.MonitorVolume.v1";
@@ -433,6 +434,39 @@ namespace TsukiVox.AudioPrototype
         public void SetSafetyLimiterEnabled(bool enabled)
         {
             ApplySafetyState(enabled);
+        }
+
+        public void RestoreDefaultSettings()
+        {
+            currentPreset = initialPreset;
+            var defaults = GetPresetSettings(currentPreset);
+            monitorVolume = defaults.Volume;
+            ambienceAmount = defaults.Ambience;
+            echoAmount = defaults.Echo;
+            dynamicsAmount = defaults.Dynamics;
+            distanceMonitoringEnabled = DefaultDistanceMonitoringEnabled;
+            isMicrophoneDistanceTracked = false;
+            microphoneSurfaceClearance = float.PositiveInfinity;
+            distanceMonitorGain = 0f;
+            safetyMonitorGain = 1f;
+
+            ApplyCurrentEffectSettings();
+            SetMonitorOutputEnabled(true);
+            ApplySafetyState(true);
+            if (preferNativeOboeBackend)
+            {
+                ApplyNativePreference(false);
+            }
+            else
+            {
+                preferNativeOboeBackend = false;
+                nativeToggle?.SetIsOnWithoutNotify(false);
+            }
+
+            ApplyEffectiveMonitorGain();
+            monitorVolumeSlider?.SetValueWithoutNotify(monitorVolume);
+            QueueAudioPreferencesSave();
+            RefreshUi();
         }
 
         public void SelectPreviousPreset()

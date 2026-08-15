@@ -104,6 +104,7 @@ namespace TsukiVox.AudioPrototype
         private float lastStatusRefreshAt;
         private Coroutine sendNextRoutine;
         private Coroutine loadRoutine;
+        private UnityWebRequest activeCacheRequest;
         private VideoClip builtInDefaultVideoClip;
         private bool isPlayingBuiltInDefault;
         private bool builtInDefaultPlaybackFailed;
@@ -146,6 +147,7 @@ namespace TsukiVox.AudioPrototype
 
             if (loadRoutine != null)
             {
+                AbortActiveCacheRequest();
                 StopCoroutine(loadRoutine);
                 loadRoutine = null;
             }
@@ -738,6 +740,7 @@ namespace TsukiVox.AudioPrototype
         {
             if (loadRoutine != null)
             {
+                AbortActiveCacheRequest();
                 StopCoroutine(loadRoutine);
             }
 
@@ -1245,6 +1248,7 @@ namespace TsukiVox.AudioPrototype
         {
             if (loadRoutine != null)
             {
+                AbortActiveCacheRequest();
                 StopCoroutine(loadRoutine);
                 loadRoutine = null;
             }
@@ -1281,6 +1285,17 @@ namespace TsukiVox.AudioPrototype
             SetStatus(status);
         }
 
+        private void AbortActiveCacheRequest()
+        {
+            if (activeCacheRequest == null)
+            {
+                return;
+            }
+
+            activeCacheRequest.Abort();
+            activeCacheRequest = null;
+        }
+
         public bool PlayBuiltInDefault()
         {
             if (videoPlayer == null)
@@ -1314,6 +1329,7 @@ namespace TsukiVox.AudioPrototype
 
             if (loadRoutine != null)
             {
+                AbortActiveCacheRequest();
                 StopCoroutine(loadRoutine);
                 loadRoutine = null;
             }
@@ -1690,6 +1706,7 @@ namespace TsukiVox.AudioPrototype
             SetStatus($"Video: caching {SafeTitle(item)}...\n{GetVideoDiagnostics()}");
             using (var request = UnityWebRequest.Get(sourceUrl))
             {
+                activeCacheRequest = request;
                 request.timeout = Mathf.CeilToInt(downloadTimeoutSeconds);
                 request.downloadHandler = new DownloadHandlerFile(temporaryPath)
                 {
@@ -1706,6 +1723,7 @@ namespace TsukiVox.AudioPrototype
                     SetStatus($"Video: caching {SafeTitle(item)} {progress:P0}\n{GetVideoDiagnostics()}");
                     yield return null;
                 }
+                activeCacheRequest = null;
 
                 if (!IsRequestSuccessful(request))
                 {
@@ -1786,7 +1804,9 @@ namespace TsukiVox.AudioPrototype
 
         private static string GetCacheFilePath(string url)
         {
-            Directory.CreateDirectory(Path.Combine(Application.persistentDataPath, "video-cache"));
+            Directory.CreateDirectory(Path.Combine(
+                Application.persistentDataPath,
+                DirectPlaylist.LegacyVideoCacheDirectoryName));
             var extension = ".mp4";
             if (Uri.TryCreate(url, UriKind.Absolute, out var parsed))
             {
@@ -1800,7 +1820,7 @@ namespace TsukiVox.AudioPrototype
 
             return Path.Combine(
                 Application.persistentDataPath,
-                "video-cache",
+                DirectPlaylist.LegacyVideoCacheDirectoryName,
                 $"{StableHash(CanonicalizeMediaUrl(url))}{extension}");
         }
 
