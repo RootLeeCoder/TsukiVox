@@ -30,6 +30,7 @@ namespace TsukiVox.AudioPrototype
         Stop,
         Power,
         Crosshair,
+        SlidersHorizontal,
     }
 
     /// <summary>
@@ -151,6 +152,17 @@ namespace TsukiVox.AudioPrototype
                             12f + Mathf.Sin(angle) * 9.2f,
                             thickness);
                     }
+                    break;
+                case QuestUiIconKind.SlidersHorizontal:
+                    AddLine(vertexHelper, rect, 4f, 6f, 7f, 6f, thickness);
+                    AddCircle(vertexHelper, rect, 9f, 6f, 2f, thickness);
+                    AddLine(vertexHelper, rect, 11f, 6f, 20f, 6f, thickness);
+                    AddLine(vertexHelper, rect, 4f, 12f, 13f, 12f, thickness);
+                    AddCircle(vertexHelper, rect, 15f, 12f, 2f, thickness);
+                    AddLine(vertexHelper, rect, 17f, 12f, 20f, 12f, thickness);
+                    AddLine(vertexHelper, rect, 4f, 18f, 9f, 18f, thickness);
+                    AddCircle(vertexHelper, rect, 11f, 18f, 2f, thickness);
+                    AddLine(vertexHelper, rect, 13f, 18f, 20f, 18f, thickness);
                     break;
                 case QuestUiIconKind.Replay:
                     // Lucide RotateCcw, matching the WebXR control icon geometry.

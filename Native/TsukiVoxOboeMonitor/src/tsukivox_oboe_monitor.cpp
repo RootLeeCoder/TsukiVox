@@ -16,7 +16,7 @@ namespace
     constexpr int32_t TargetSampleRate = 48000;
     constexpr int32_t InputChannelCount = 1;
     constexpr int32_t OutputChannelCount = 2;
-    constexpr float MaximumGain = 1.4f;
+    constexpr float MaximumGain = 3.0f;
     constexpr float LimiterCeiling = 0.95f;
     constexpr int32_t NativeSuccess = 1;
     constexpr int32_t NativeFailure = 0;

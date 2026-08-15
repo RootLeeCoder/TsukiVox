@@ -152,9 +152,11 @@ namespace TsukiVox.AudioPrototype
         private TMP_Text songTitleText;
         private TMP_Text songDetailText;
         private TMP_Text transportHoverText;
-        private TMP_Text voiceSummaryText;
-        private TMP_Text voiceModeSummaryText;
-        private QuestUiSurface voiceLiveDot;
+        private Slider homeVideoVolumeSlider;
+        private Slider homeVoiceVolumeSlider;
+        private TMP_Text homeVideoVolumeValueText;
+        private TMP_Text homeVoiceVolumeValueText;
+        private QuestUiIcon homeVoiceVolumeIcon;
         private QuestUiSurface[] waveBars;
 
         private Button queueDrawerButton;
@@ -174,14 +176,12 @@ namespace TsukiVox.AudioPrototype
         private Button voiceBackButton;
         private Toggle voiceMicrophoneToggle;
         private Slider inputMeterSlider;
-        private Slider monitorVolumeSlider;
         private Slider ambienceSlider;
         private Slider echoSlider;
         private Slider dynamicsSlider;
         private Toggle distanceMonitoringToggle;
         private TMP_Text distanceMonitoringStatusText;
         private TMP_Text voicePresetStatusText;
-        private TMP_Text monitorVolumeValueText;
         private TMP_Text ambienceValueText;
         private TMP_Text echoValueText;
         private TMP_Text dynamicsValueText;
@@ -561,12 +561,20 @@ namespace TsukiVox.AudioPrototype
             ConfigureHover(nextButton, transportHoverText, "下一首");
             ConfigureHover(microphoneButton, transportHoverText, "麦克风");
 
-            voicePageButton = CreateSurfaceButton(homePage, "Voice Summary", new Vector2(0f, -225f), new Vector2(ContentWidth, 72f), Color.clear, Color.clear);
-            voiceLiveDot = EnsureSurface(EnsureRect(voicePageButton.transform, "Live Dot", new Vector2(-472f, 0f), new Vector2(12f, 12f)), Warm, 6f, false);
-            voiceSummaryText = CreateText(voicePageButton.transform, "Status", "麦克风已开启", 18, FontStyle.Bold, new Vector2(-340f, 0f), new Vector2(220f, 40f), TextAnchor.MiddleLeft, TextPrimary);
-            voiceModeSummaryText = CreateText(voicePageButton.transform, "Mode", "人声 · KTV", 17, FontStyle.Normal, new Vector2(-110f, 0f), new Vector2(190f, 40f), TextAnchor.MiddleLeft, TextSecondary);
-            CreateText(voicePageButton.transform, "Command", "调整人声", 17, FontStyle.Normal, new Vector2(360f, 0f), new Vector2(150f, 40f), TextAnchor.MiddleRight, TextSecondary);
-            EnsureIcon(voicePageButton.transform, "Chevron", QuestUiIconKind.ChevronRight, new Vector2(476f, 0f), new Vector2(22f, 22f), TextSecondary);
+            SetChildActive(homePage, "Voice Summary", false);
+            EnsureIcon(homePage, "Video Volume Icon", QuestUiIconKind.Volume, new Vector2(-474f, -225f), new Vector2(28f, 28f), Accent);
+            CreateText(homePage, "Video Volume Label", "视频", 16, FontStyle.Bold, new Vector2(-424f, -225f), new Vector2(68f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            homeVideoVolumeSlider = CreateSlider(homePage, "Home Video Volume", new Vector2(-260f, -225f), new Vector2(260f, 46f), true, Accent, AccentStrong);
+            homeVideoVolumeValueText = CreateText(homePage, "Video Volume Value", "75%", 16, FontStyle.Bold, new Vector2(-88f, -225f), new Vector2(64f, 32f), TextAnchor.MiddleRight, AccentStrong);
+
+            CreateDivider(homePage, "Mixer Channel Divider", new Vector2(-34f, -225f), new Vector2(1f, 42f));
+            homeVoiceVolumeIcon = EnsureIcon(homePage, "Voice Volume Icon", QuestUiIconKind.Microphone, new Vector2(8f, -225f), new Vector2(28f, 28f), Warm);
+            CreateText(homePage, "Voice Volume Label", "人声", 16, FontStyle.Bold, new Vector2(58f, -225f), new Vector2(68f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            homeVoiceVolumeSlider = CreateSlider(homePage, "Home Voice Volume", new Vector2(230f, -225f), new Vector2(240f, 46f), true, Warm, Warm);
+            homeVoiceVolumeValueText = CreateText(homePage, "Voice Volume Value", "70%", 16, FontStyle.Bold, new Vector2(386f, -225f), new Vector2(64f, 32f), TextAnchor.MiddleRight, Warm);
+
+            voicePageButton = CreateIconButton(homePage, "Open Voice Settings", QuestUiIconKind.SlidersHorizontal, new Vector2(466f, -225f), new Vector2(56f, 56f), Surface, TextPrimary, out _);
+            ConfigureHover(voicePageButton, transportHoverText, "人声设置");
         }
 
         private void BuildSongSearchPage()
@@ -965,23 +973,19 @@ namespace TsukiVox.AudioPrototype
 
             CreateDivider(voicePage, "Preset Divider", new Vector2(0f, -5f), new Vector2(ContentWidth, 1f));
 
-            CreateText(voicePage, "Volume Title", "返听音量", 17, FontStyle.Bold, new Vector2(-408f, -38f), new Vector2(170f, 30f), TextAnchor.MiddleLeft, TextPrimary);
-            monitorVolumeSlider = CreateSlider(voicePage, "Monitor Volume", new Vector2(86f, -38f), new Vector2(520f, 42f), true);
-            monitorVolumeValueText = CreateText(voicePage, "Monitor Volume Value", "100%", 16, FontStyle.Bold, new Vector2(430f, -38f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
+            CreateText(voicePage, "Ambience Title", "空间感", 17, FontStyle.Bold, new Vector2(-408f, -50f), new Vector2(170f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            ambienceSlider = CreateSlider(voicePage, "Ambience", new Vector2(86f, -50f), new Vector2(520f, 42f), true);
+            ambienceValueText = CreateText(voicePage, "Ambience Value", "55%", 16, FontStyle.Bold, new Vector2(430f, -50f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
 
-            CreateText(voicePage, "Ambience Title", "空间感", 17, FontStyle.Bold, new Vector2(-408f, -92f), new Vector2(170f, 30f), TextAnchor.MiddleLeft, TextPrimary);
-            ambienceSlider = CreateSlider(voicePage, "Ambience", new Vector2(86f, -92f), new Vector2(520f, 42f), true);
-            ambienceValueText = CreateText(voicePage, "Ambience Value", "55%", 16, FontStyle.Bold, new Vector2(430f, -92f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
+            CreateText(voicePage, "Echo Title", "回声", 17, FontStyle.Bold, new Vector2(-408f, -116f), new Vector2(170f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            echoSlider = CreateSlider(voicePage, "Echo", new Vector2(86f, -116f), new Vector2(520f, 42f), true);
+            echoValueText = CreateText(voicePage, "Echo Value", "30%", 16, FontStyle.Bold, new Vector2(430f, -116f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
 
-            CreateText(voicePage, "Echo Title", "回声", 17, FontStyle.Bold, new Vector2(-408f, -146f), new Vector2(170f, 30f), TextAnchor.MiddleLeft, TextPrimary);
-            echoSlider = CreateSlider(voicePage, "Echo", new Vector2(86f, -146f), new Vector2(520f, 42f), true);
-            echoValueText = CreateText(voicePage, "Echo Value", "30%", 16, FontStyle.Bold, new Vector2(430f, -146f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
+            CreateText(voicePage, "Dynamics Title", "人声稳定", 17, FontStyle.Bold, new Vector2(-408f, -182f), new Vector2(170f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            dynamicsSlider = CreateSlider(voicePage, "Dynamics", new Vector2(86f, -182f), new Vector2(520f, 42f), true);
+            dynamicsValueText = CreateText(voicePage, "Dynamics Value", "65%", 16, FontStyle.Bold, new Vector2(430f, -182f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
 
-            CreateText(voicePage, "Dynamics Title", "人声稳定", 17, FontStyle.Bold, new Vector2(-408f, -200f), new Vector2(170f, 30f), TextAnchor.MiddleLeft, TextPrimary);
-            dynamicsSlider = CreateSlider(voicePage, "Dynamics", new Vector2(86f, -200f), new Vector2(520f, 42f), true);
-            dynamicsValueText = CreateText(voicePage, "Dynamics Value", "65%", 16, FontStyle.Bold, new Vector2(430f, -200f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
-
-            voiceMixerFooterText = CreateText(voicePage, "Mixer Footer", "距离跟随只调整返听增益", 14, FontStyle.Normal, new Vector2(0f, -252f), new Vector2(ContentWidth, 28f), TextAnchor.MiddleCenter, TextSecondary);
+            voiceMixerFooterText = CreateText(voicePage, "Mixer Footer", "距离跟随只调整返听增益", 14, FontStyle.Normal, new Vector2(0f, -245f), new Vector2(ContentWidth, 28f), TextAnchor.MiddleCenter, TextSecondary);
         }
 
         private void RetireLegacyVoiceMixerUi()
@@ -990,6 +994,9 @@ namespace TsukiVox.AudioPrototype
             SetChildActive(voicePage, "Volume Hint", false);
             SetChildActive(voicePage, "Volume Icon", false);
             SetChildActive(voicePage, "Volume Divider", false);
+            SetChildActive(voicePage, "Volume Title", false);
+            SetChildActive(voicePage, "Monitor Volume", false);
+            SetChildActive(voicePage, "Monitor Volume Value", false);
             SetChildActive(voicePage, "Preset Hint", false);
             SetChildActive(voicePage, "Safety Note", false);
         }
@@ -1456,6 +1463,19 @@ namespace TsukiVox.AudioPrototype
             WireButton(nextButton, () => playlistPrototype?.SendNext());
             WireButton(microphoneButton, () => audioPrototype?.ToggleMonitoring());
 
+            homeVideoVolumeSlider.onValueChanged.RemoveAllListeners();
+            homeVideoVolumeSlider.onValueChanged.AddListener(value =>
+            {
+                videoScreenPrototype?.SetVideoVolume(value);
+                RefreshHome();
+            });
+            homeVoiceVolumeSlider.onValueChanged.RemoveAllListeners();
+            homeVoiceVolumeSlider.onValueChanged.AddListener(value =>
+            {
+                audioPrototype?.SetMonitorVolume(value);
+                RefreshHome();
+            });
+
             WireButton(songSearchButton, () => SearchSongs(1));
             appendKtvSearchToggle.onValueChanged.RemoveAllListeners();
             appendKtvSearchToggle.SetIsOnWithoutNotify(appendKtvToSearch);
@@ -1492,12 +1512,6 @@ namespace TsukiVox.AudioPrototype
 
             voiceMicrophoneToggle.onValueChanged.RemoveAllListeners();
             voiceMicrophoneToggle.onValueChanged.AddListener(HandleMicrophoneToggle);
-            monitorVolumeSlider.onValueChanged.RemoveAllListeners();
-            monitorVolumeSlider.onValueChanged.AddListener(value =>
-            {
-                audioPrototype?.SetMonitorVolume(value);
-                RefreshVoice();
-            });
             ambienceSlider.onValueChanged.RemoveAllListeners();
             ambienceSlider.onValueChanged.AddListener(value =>
             {
@@ -1587,6 +1601,22 @@ namespace TsukiVox.AudioPrototype
 
         private void RefreshHome()
         {
+            var hasVideoAudio = videoScreenPrototype != null;
+            homeVideoVolumeSlider.interactable = hasVideoAudio;
+            homeVideoVolumeSlider.SetValueWithoutNotify(videoScreenPrototype?.VideoVolume ?? 0f);
+            homeVideoVolumeValueText.text = hasVideoAudio
+                ? $"{Mathf.RoundToInt(videoScreenPrototype.VideoVolume * 100f)}%"
+                : "--";
+            homeVideoVolumeValueText.color = hasVideoAudio ? AccentStrong : TextSecondary;
+
+            var hasVoiceAudio = audioPrototype != null;
+            homeVoiceVolumeSlider.interactable = hasVoiceAudio;
+            homeVoiceVolumeSlider.SetValueWithoutNotify(audioPrototype?.MonitorVolume ?? 0f);
+            homeVoiceVolumeValueText.text = hasVoiceAudio
+                ? $"{Mathf.RoundToInt(audioPrototype.MonitorVolume * 100f)}%"
+                : "--";
+            voicePageButton.interactable = hasVoiceAudio;
+
             var connected = playlistPrototype != null && playlistPrototype.IsConnected;
             connectionText.text = connected ? "直接请求已就绪" : "点歌组件不可用";
             connectionText.color = connected ? TextPrimary : Warm;
@@ -1636,11 +1666,10 @@ namespace TsukiVox.AudioPrototype
             microphoneButton.interactable = audioPrototype != null && !audioPrototype.IsWaitingForPermission;
             microphoneSurface.color = micLive ? WarmSurface : Surface;
             microphoneIcon.color = micLive ? Warm : TextSecondary;
-            voiceLiveDot.color = micLive ? Warm : TextSecondary;
-            voiceSummaryText.text = audioPrototype != null && audioPrototype.IsWaitingForPermission
-                ? "等待麦克风权限"
-                : micLive ? "麦克风已开启" : "麦克风已关闭";
-            voiceModeSummaryText.text = $"人声 · {FormatPreset(audioPrototype?.CurrentPresetIndex ?? 0)}";
+            homeVoiceVolumeIcon.color = audioPrototype != null && audioPrototype.IsSafetyReducingGain
+                ? Danger
+                : micLive ? Warm : TextSecondary;
+            homeVoiceVolumeValueText.color = micLive ? Warm : TextSecondary;
 
             var inputLevel = audioPrototype?.InputLevel ?? 0f;
             for (var index = 0; index < waveBars.Length; index += 1)
@@ -1761,15 +1790,12 @@ namespace TsukiVox.AudioPrototype
             voiceMicrophoneToggle.SetIsOnWithoutNotify(audioPrototype.IsMonitoring);
             RefreshSwitchVisual(voiceMicrophoneToggle, Warm);
             inputMeterSlider.SetValueWithoutNotify(audioPrototype.InputLevel);
-            monitorVolumeSlider.maxValue = audioPrototype.MonitorVolumeMaximum;
-            monitorVolumeSlider.SetValueWithoutNotify(audioPrototype.MonitorVolume);
             ambienceSlider.SetValueWithoutNotify(audioPrototype.AmbienceAmount);
             echoSlider.SetValueWithoutNotify(audioPrototype.EchoAmount);
             dynamicsSlider.SetValueWithoutNotify(audioPrototype.DynamicsAmount);
             distanceMonitoringToggle.SetIsOnWithoutNotify(audioPrototype.IsDistanceMonitoringEnabled);
             RefreshSwitchVisual(distanceMonitoringToggle, AccentStrong);
 
-            monitorVolumeValueText.text = $"{Mathf.RoundToInt(audioPrototype.MonitorVolume * 100f)}%";
             ambienceValueText.text = $"{Mathf.RoundToInt(audioPrototype.AmbienceAmount * 100f)}%";
             echoValueText.text = $"{Mathf.RoundToInt(audioPrototype.EchoAmount * 100f)}%";
             dynamicsValueText.text = $"{Mathf.RoundToInt(audioPrototype.DynamicsAmount * 100f)}%";
@@ -2208,7 +2234,8 @@ namespace TsukiVox.AudioPrototype
                 $"音频后端  {audioPrototype?.ActiveBackendName ?? "missing"}\n" +
                 $"人声预设  {audioPrototype?.CurrentPresetName ?? "missing"}\n" +
                 $"输入/输出  {(audioPrototype?.InputLevel ?? 0f):P0} / {(audioPrototype?.OutputLevel ?? 0f):P0}\n" +
-                $"人声参数  音量 {(audioPrototype?.MonitorVolume ?? 0f):0.00} · 空间 {(audioPrototype?.AmbienceAmount ?? 0f):P0} · 回声 {(audioPrototype?.EchoAmount ?? 0f):P0} · 稳定 {(audioPrototype?.DynamicsAmount ?? 0f):P0}\n" +
+                $"主页音量  视频 {(videoScreenPrototype?.VideoVolume ?? 0f):P0} · 人声 {(audioPrototype?.MonitorVolume ?? 0f):P0} · 前级 {(audioPrototype?.MonitorPreGainDecibels ?? -80f):+0.0;-0.0;0.0} dB\n" +
+                $"人声参数  空间 {(audioPrototype?.AmbienceAmount ?? 0f):P0} · 回声 {(audioPrototype?.EchoAmount ?? 0f):P0} · 稳定 {(audioPrototype?.DynamicsAmount ?? 0f):P0}\n" +
                 $"距离返听  {(audioPrototype == null ? "missing" : $"{(audioPrototype.IsDistanceMonitoringEnabled ? "on" : "off")} · {(audioPrototype.IsMicrophoneDistanceTracked ? $"{audioPrototype.MicrophoneSurfaceClearance * 100f:0.0}cm" : "untracked")} · {audioPrototype.DistanceMonitorGain:P0}")}\n" +
                 $"防碰撞  {(handheldPropsPrototype == null ? "missing" : $"{handheldPropsPrototype.MicFaceWarningClearance * 100f:0.0}/{handheldPropsPrototype.MicFaceCriticalClearance * 100f:0.0}cm {handheldPropsPrototype.MicFaceHapticStrength:P0}")}\n" +
                 $"嘴部定位  {(handheldPropsPrototype == null ? "missing" : handheldPropsPrototype.MicFaceMouthLocalOffset.ToString("F3"))}\n" +
@@ -2880,6 +2907,7 @@ namespace TsukiVox.AudioPrototype
             PlayerPrefs.DeleteAll();
             appendKtvToSearch = false;
             audioPrototype?.RestoreDefaultSettings();
+            videoScreenPrototype?.RestoreDefaultVolume();
 
             if (handheldPropsPrototype == null)
             {
@@ -3792,8 +3820,17 @@ namespace TsukiVox.AudioPrototype
             return button;
         }
 
-        private Slider CreateSlider(Transform parent, string name, Vector2 position, Vector2 size, bool showHandle)
+        private Slider CreateSlider(
+            Transform parent,
+            string name,
+            Vector2 position,
+            Vector2 size,
+            bool showHandle,
+            Color? fillColor = null,
+            Color? handleColor = null)
         {
+            var resolvedFillColor = fillColor ?? Accent;
+            var resolvedHandleColor = handleColor ?? AccentStrong;
             var root = EnsureRect(parent, name, position, size);
             var backgroundRect = EnsureRect(root, "Track", Vector2.zero, new Vector2(size.x, 10f));
             var background = EnsureSurface(backgroundRect, palette.SliderTrack, 5f, true);
@@ -3802,14 +3839,14 @@ namespace TsukiVox.AudioPrototype
             fillRect.anchorMin = new Vector2(0f, 0.5f);
             fillRect.anchorMax = new Vector2(1f, 0.5f);
             fillRect.sizeDelta = new Vector2(0f, 10f);
-            var fill = EnsureSurface(fillRect, Accent, 5f, false);
+            var fill = EnsureSurface(fillRect, resolvedFillColor, 5f, false);
             RectTransform handleRect = null;
             QuestUiSurface handle = null;
             if (showHandle)
             {
                 var handleArea = EnsureRect(root, "Handle Slide Area", Vector2.zero, new Vector2(size.x - 20f, size.y));
                 handleRect = EnsureRect(handleArea, "Handle", Vector2.zero, new Vector2(24f, 24f));
-                handle = EnsureSurface(handleRect, AccentStrong, 12f, true);
+                handle = EnsureSurface(handleRect, resolvedHandleColor, 12f, true);
             }
 
             var slider = GetOrAddComponent<Slider>(root.gameObject);

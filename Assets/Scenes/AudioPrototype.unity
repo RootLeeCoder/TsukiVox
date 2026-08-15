@@ -318,9 +318,9 @@ MonoBehaviour:
   m_HandleRect: {fileID: 1092806940}
   m_Direction: 0
   m_MinValue: 0
-  m_MaxValue: 1.4
+  m_MaxValue: 1
   m_WholeNumbers: 0
-  m_Value: 1
+  m_Value: 0.7
   m_OnValueChanged:
     m_PersistentCalls:
       m_Calls: []
@@ -69943,7 +69943,7 @@ MonoBehaviour:
   monitorToggle: {fileID: 2099513133}
   nativeToggle: {fileID: 642736198}
   safetyToggle: {fileID: 1551748514}
-  monitorVolume: 1
+  monitorVolume: 0.7
   safetyLimiterEnabled: 1
   preferNativeOboeBackend: 0
   requestLowLatencyAudio: 1
@@ -69952,7 +69952,7 @@ MonoBehaviour:
   echoAmount: 0.3
   dynamicsAmount: 0.65
   distanceMonitoringEnabled: 1
-  distanceFullGainClearance: 0.06
+  distanceFullGainClearance: 0.12
   distanceCutoffClearance: 0.3
   distanceAttackSmoothing: 12
   distanceReleaseSmoothing: 7
@@ -87290,9 +87290,9 @@ MonoBehaviour:
   m_HandleRect: {fileID: 0}
   m_Direction: 0
   m_MinValue: 0
-  m_MaxValue: 1.4
+  m_MaxValue: 1
   m_WholeNumbers: 0
-  m_Value: 1
+  m_Value: 0.7
   m_OnValueChanged:
     m_PersistentCalls:
       m_Calls: []

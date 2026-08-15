@@ -14,18 +14,21 @@ namespace TsukiVox.AudioPrototype
         private const int MicrophoneClipSeconds = 2;
         private const int SpectrumSize = 512;
         private const float MinimumMonitorVolume = 0f;
-        private const float MaximumMonitorVolume = 1.4f;
+        private const float MaximumMonitorVolume = 1f;
+        private const float DefaultMonitorVolume = 0.7f;
+        private const float VoiceVolumeCurveExponent = 2.9050633f;
         private const float HotInputLevel = 0.95f;
         private const float UnityInputMeterGain = 36f;
         private const float UnityOutputMeterGain = 24f;
         private const float NativeMeterGain = 22f;
         private const float MeterDisplayCurve = 0.62f;
-        private const float DefaultDistanceFullGainClearance = 0.06f;
+        private const float DefaultDistanceFullGainClearance = 0.12f;
         private const float DefaultDistanceCutoffClearance = 0.30f;
         private const bool DefaultDistanceMonitoringEnabled = true;
         private const float AudioPreferencesSaveDelay = 0.5f;
         private const string PresetPrefsKey = "TsukiVox.Audio.Preset.v1";
         private const string MonitorVolumePrefsKey = "TsukiVox.Audio.MonitorVolume.v1";
+        private const string VoiceVolumePrefsKey = "TsukiVox.Audio.VoiceVolume.v2";
         private const string AmbiencePrefsKey = "TsukiVox.Audio.Ambience.v1";
         private const string EchoPrefsKey = "TsukiVox.Audio.Echo.v1";
         private const string DynamicsPrefsKey = "TsukiVox.Audio.Dynamics.v1";
@@ -54,7 +57,7 @@ namespace TsukiVox.AudioPrototype
         [SerializeField] private Toggle safetyToggle;
 
         [Header("Runtime Defaults")]
-        [SerializeField, Range(0f, MaximumMonitorVolume)] private float monitorVolume = 1f;
+        [SerializeField, Range(0f, MaximumMonitorVolume)] private float monitorVolume = DefaultMonitorVolume;
         [SerializeField] private bool safetyLimiterEnabled = true;
         [SerializeField] private bool preferNativeOboeBackend = false;
         [SerializeField] private bool requestLowLatencyAudio = true;
@@ -109,6 +112,7 @@ namespace TsukiVox.AudioPrototype
         private float processorCompressorRatio = 1f;
         private float processorMakeupGain = 1f;
         private float processorLimiterCeiling = 0.92f;
+        private float processorMonitorPreGain = 1f;
         private float processorEnvelope;
         private float processorGain = 1f;
 
@@ -122,15 +126,13 @@ namespace TsukiVox.AudioPrototype
 
         private readonly struct PresetSettings
         {
-            public PresetSettings(float volume, float ambience, float echo, float dynamics)
+            public PresetSettings(float ambience, float echo, float dynamics)
             {
-                Volume = volume;
                 Ambience = ambience;
                 Echo = echo;
                 Dynamics = dynamics;
             }
 
-            public float Volume { get; }
             public float Ambience { get; }
             public float Echo { get; }
             public float Dynamics { get; }
@@ -154,6 +156,10 @@ namespace TsukiVox.AudioPrototype
 
         public float MonitorVolumeMaximum => MaximumMonitorVolume;
 
+        public float MonitorPreGain => CalculateVoicePreGain(monitorVolume);
+
+        public float MonitorPreGainDecibels => LinearToDb(MonitorPreGain);
+
         public float AmbienceAmount => ambienceAmount;
 
         public float EchoAmount => echoAmount;
@@ -168,7 +174,7 @@ namespace TsukiVox.AudioPrototype
 
         public float DistanceMonitorGain => distanceMonitorGain;
 
-        public float EffectiveMonitorVolume => monitorVolume * distanceMonitorGain * safetyMonitorGain;
+        public float EffectiveMonitorVolume => MonitorPreGain * distanceMonitorGain * safetyMonitorGain;
 
         public bool HasCustomEffectSettings
         {
@@ -268,6 +274,13 @@ namespace TsukiVox.AudioPrototype
         {
             if (!vocalProcessorEnabled)
             {
+                for (var sampleIndex = 0; sampleIndex < data.Length; sampleIndex += 1)
+                {
+                    data[sampleIndex] = SoftLimit(
+                        data[sampleIndex] * processorMonitorPreGain,
+                        processorLimiterCeiling);
+                }
+
                 return;
             }
 
@@ -276,7 +289,7 @@ namespace TsukiVox.AudioPrototype
                 var sidechain = 0f;
                 for (var channel = 0; channel < channels; channel += 1)
                 {
-                    var driven = data[index + channel] * processorInputDrive;
+                    var driven = data[index + channel] * processorInputDrive * processorMonitorPreGain;
                     data[index + channel] = driven;
                     var absolute = Math.Abs(driven);
                     if (absolute > sidechain)
@@ -440,7 +453,7 @@ namespace TsukiVox.AudioPrototype
         {
             currentPreset = initialPreset;
             var defaults = GetPresetSettings(currentPreset);
-            monitorVolume = defaults.Volume;
+            monitorVolume = DefaultMonitorVolume;
             ambienceAmount = defaults.Ambience;
             echoAmount = defaults.Echo;
             dynamicsAmount = defaults.Dynamics;
@@ -705,7 +718,6 @@ namespace TsukiVox.AudioPrototype
         {
             currentPreset = preset;
             var settings = GetPresetSettings(preset);
-            monitorVolume = settings.Volume;
             ambienceAmount = settings.Ambience;
             echoAmount = settings.Echo;
             dynamicsAmount = settings.Dynamics;
@@ -756,6 +768,7 @@ namespace TsukiVox.AudioPrototype
         private void ConfigureVocalProcessor()
         {
             vocalProcessorEnabled = dynamicsAmount > 0.001f;
+            processorMonitorPreGain = CalculateVoicePreGain(monitorVolume);
             processorInputDrive = Mathf.Lerp(1f, 7.2f, dynamicsAmount);
             processorGateThreshold = DbToLinear(Mathf.Lerp(-68f, -54f, dynamicsAmount));
             processorCompressorThreshold = DbToLinear(Mathf.Lerp(-10f, -31f, dynamicsAmount));
@@ -766,7 +779,8 @@ namespace TsukiVox.AudioPrototype
 
         private void ApplyMonitorVolume(float value)
         {
-            monitorVolume = Mathf.Clamp(value, MinimumMonitorVolume, MaximumMonitorVolume);
+            monitorVolume = Mathf.Clamp01(value);
+            processorMonitorPreGain = CalculateVoicePreGain(monitorVolume);
             ApplyEffectiveMonitorGain();
             monitorVolumeSlider?.SetValueWithoutNotify(monitorVolume);
             QueueAudioPreferencesSave();
@@ -891,7 +905,7 @@ namespace TsukiVox.AudioPrototype
             var effectiveGain = Mathf.Clamp(
                 EffectiveMonitorVolume,
                 MinimumMonitorVolume,
-                MaximumMonitorVolume);
+                CalculateVoicePreGain(MaximumMonitorVolume));
             if (Mathf.Abs(effectiveGain - appliedMonitorGain) < 0.001f)
             {
                 return;
@@ -900,7 +914,7 @@ namespace TsukiVox.AudioPrototype
             appliedMonitorGain = effectiveGain;
             if (monitorSource != null)
             {
-                monitorSource.volume = effectiveGain;
+                monitorSource.volume = Mathf.Clamp01(distanceMonitorGain * safetyMonitorGain);
             }
 
             if (activeBackend == NativeAudioBackend.NativeOboeDryMonitor)
@@ -916,10 +930,18 @@ namespace TsukiVox.AudioPrototype
             currentPreset = (PrototypePreset)Mathf.Clamp(savedPreset, 0, presetCount - 1);
 
             var defaults = GetPresetSettings(currentPreset);
-            monitorVolume = Mathf.Clamp(
-                PlayerPrefs.GetFloat(MonitorVolumePrefsKey, defaults.Volume),
-                MinimumMonitorVolume,
-                MaximumMonitorVolume);
+            if (PlayerPrefs.HasKey(VoiceVolumePrefsKey))
+            {
+                monitorVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(VoiceVolumePrefsKey, DefaultMonitorVolume));
+            }
+            else if (PlayerPrefs.HasKey(MonitorVolumePrefsKey))
+            {
+                monitorVolume = MigrateLegacyMonitorVolume(PlayerPrefs.GetFloat(MonitorVolumePrefsKey));
+            }
+            else
+            {
+                monitorVolume = DefaultMonitorVolume;
+            }
             ambienceAmount = Mathf.Clamp01(PlayerPrefs.GetFloat(AmbiencePrefsKey, defaults.Ambience));
             echoAmount = Mathf.Clamp01(PlayerPrefs.GetFloat(EchoPrefsKey, defaults.Echo));
             dynamicsAmount = Mathf.Clamp01(PlayerPrefs.GetFloat(DynamicsPrefsKey, defaults.Dynamics));
@@ -931,7 +953,7 @@ namespace TsukiVox.AudioPrototype
         private void QueueAudioPreferencesSave()
         {
             PlayerPrefs.SetInt(PresetPrefsKey, (int)currentPreset);
-            PlayerPrefs.SetFloat(MonitorVolumePrefsKey, monitorVolume);
+            PlayerPrefs.SetFloat(VoiceVolumePrefsKey, monitorVolume);
             PlayerPrefs.SetFloat(AmbiencePrefsKey, ambienceAmount);
             PlayerPrefs.SetFloat(EchoPrefsKey, echoAmount);
             PlayerPrefs.SetFloat(DynamicsPrefsKey, dynamicsAmount);
@@ -1243,15 +1265,43 @@ namespace TsukiVox.AudioPrototype
             return (float)Math.Pow(10.0, decibels / 20.0);
         }
 
+        private static float LinearToDb(float linear)
+        {
+            return linear <= 0.000001f ? -80f : 20f * Mathf.Log10(linear);
+        }
+
+        public static float CalculateVoicePreGain(float normalizedVolume)
+        {
+            if (normalizedVolume <= 0f)
+            {
+                return 0f;
+            }
+
+            // 70% preserves unity gain; 100% reaches +9 dB without relying on AudioSource.volume > 1.
+            return Mathf.Pow(Mathf.Clamp01(normalizedVolume) / DefaultMonitorVolume, VoiceVolumeCurveExponent);
+        }
+
+        private static float MigrateLegacyMonitorVolume(float legacyGain)
+        {
+            if (legacyGain <= 0f)
+            {
+                return 0f;
+            }
+
+            var normalized = DefaultMonitorVolume *
+                             Mathf.Pow(Mathf.Clamp(legacyGain, 0f, 1.4f), 1f / VoiceVolumeCurveExponent);
+            return Mathf.Clamp01(normalized);
+        }
+
         private static PresetSettings GetPresetSettings(PrototypePreset preset)
         {
             return preset switch
             {
-                PrototypePreset.DryReference => new PresetSettings(0.35f, 0f, 0f, 0f),
-                PrototypePreset.KtvRoom => new PresetSettings(1f, 0.55f, 0.3f, 0.65f),
-                PrototypePreset.StrongKtv => new PresetSettings(1.15f, 0.86f, 0.62f, 0.9f),
-                PrototypePreset.SafeSmallRoom => new PresetSettings(0.75f, 0.34f, 0.12f, 0.48f),
-                _ => new PresetSettings(1f, 0.55f, 0.3f, 0.65f),
+                PrototypePreset.DryReference => new PresetSettings(0f, 0f, 0f),
+                PrototypePreset.KtvRoom => new PresetSettings(0.55f, 0.3f, 0.65f),
+                PrototypePreset.StrongKtv => new PresetSettings(0.86f, 0.62f, 0.9f),
+                PrototypePreset.SafeSmallRoom => new PresetSettings(0.34f, 0.12f, 0.48f),
+                _ => new PresetSettings(0.55f, 0.3f, 0.65f),
             };
         }
 

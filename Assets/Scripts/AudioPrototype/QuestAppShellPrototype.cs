@@ -299,6 +299,9 @@ namespace TsukiVox.AudioPrototype
                 debugBuilder.AppendLine($"audioBackend {audioPrototype.ActiveBackendName}");
                 debugBuilder.AppendLine($"audioPreset {audioPrototype.CurrentPresetName}");
                 debugBuilder.AppendLine($"audioMonitorVolume {audioPrototype.MonitorVolume:0.000}");
+                debugBuilder.AppendLine(
+                    $"audioMonitorPreGain {audioPrototype.MonitorPreGain:0.000} " +
+                    $"{audioPrototype.MonitorPreGainDecibels:+0.0;-0.0;0.0}dB");
                 debugBuilder.AppendLine($"audioEffectiveMonitorVolume {audioPrototype.EffectiveMonitorVolume:0.000}");
                 debugBuilder.AppendLine(
                     $"audioEffects ambience {audioPrototype.AmbienceAmount:0.00} " +
@@ -309,6 +312,11 @@ namespace TsukiVox.AudioPrototype
                     $"tracked {audioPrototype.IsMicrophoneDistanceTracked} " +
                     $"clearance {(audioPrototype.IsMicrophoneDistanceTracked ? audioPrototype.MicrophoneSurfaceClearance.ToString("0.000") : "unavailable")} " +
                     $"gain {audioPrototype.DistanceMonitorGain:0.00}");
+            }
+
+            if (videoScreenPrototype != null)
+            {
+                debugBuilder.AppendLine($"videoVolume {videoScreenPrototype.VideoVolume:0.000}");
             }
 
             AppendTextIfPresent("audioStatus", "Ready.");

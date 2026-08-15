@@ -112,8 +112,8 @@ namespace TsukiVox.AudioPrototype.Editor
             var outputSlider = CreateSlider(panel.transform, "Output Level", new Vector2(-170f, -70f));
             var volumeSlider = CreateSlider(panel.transform, "Monitor Volume", new Vector2(-300f, -130f));
             volumeSlider.minValue = 0f;
-            volumeSlider.maxValue = 1.4f;
-            volumeSlider.value = 1f;
+            volumeSlider.maxValue = 1f;
+            volumeSlider.value = 0.7f;
 
             var startButton = CreateButton(panel.transform, "Start Mic", new Vector2(-495f, -206f));
             var stopButton = CreateButton(panel.transform, "Stop", new Vector2(-365f, -206f));
@@ -178,7 +178,7 @@ namespace TsukiVox.AudioPrototype.Editor
             so.FindProperty("monitorToggle").objectReferenceValue = monitorToggle;
             so.FindProperty("nativeToggle").objectReferenceValue = nativeToggle;
             so.FindProperty("safetyToggle").objectReferenceValue = safetyToggle;
-            so.FindProperty("monitorVolume").floatValue = 1f;
+            so.FindProperty("monitorVolume").floatValue = 0.7f;
             so.FindProperty("preferNativeOboeBackend").boolValue = false;
             so.ApplyModifiedPropertiesWithoutUndo();
 

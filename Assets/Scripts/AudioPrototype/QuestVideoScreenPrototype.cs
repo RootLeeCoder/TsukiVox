@@ -25,6 +25,9 @@ namespace TsukiVox.AudioPrototype
         private const float StallFallbackSeconds = 3f;
         private const float StallProgressEpsilonSeconds = 0.08f;
         private const float StallSuppressionSeconds = 2f;
+        private const float DefaultVideoVolume = 0.75f;
+        private const float VideoPreferencesSaveDelay = 0.5f;
+        private const string VideoVolumePrefsKey = "TsukiVox.Video.Volume.v1";
 
         private static readonly Vector3 DefaultScreenPosition = new Vector3(0f, 3.35f, 3.45f);
         private static readonly Vector2 DefaultScreenSafeSize = new Vector2(3.25f, 1.83f);
@@ -34,6 +37,9 @@ namespace TsukiVox.AudioPrototype
         [SerializeField] private QuestPlaylistPrototype playlistPrototype;
         [SerializeField] private bool autoPlayWhenPlaylistIsPlaying = true;
         [SerializeField] private bool sendNextWhenVideoEnds = true;
+
+        [Header("Audio")]
+        [SerializeField, Range(0f, 1f)] private float videoVolume = DefaultVideoVolume;
 
         [Header("Screen")]
         [SerializeField] private RawImage screenImage;
@@ -109,6 +115,8 @@ namespace TsukiVox.AudioPrototype
         private bool isPlayingBuiltInDefault;
         private bool builtInDefaultPlaybackFailed;
         private string builtInDefaultPlaylistItemId = string.Empty;
+        private bool videoPreferencesDirty;
+        private float videoPreferencesSaveAt;
 
         public static QuestVideoScreenPrototype EnsureScenePrototype()
         {
@@ -127,6 +135,7 @@ namespace TsukiVox.AudioPrototype
 
         private void Awake()
         {
+            videoVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(VideoVolumePrefsKey, DefaultVideoVolume));
             ConfigureSceneReferences();
         }
 
@@ -156,10 +165,24 @@ namespace TsukiVox.AudioPrototype
 
         private void OnDestroy()
         {
+            SavePendingVideoPreferences();
             if (renderTexture != null)
             {
                 renderTexture.Release();
             }
+        }
+
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused)
+            {
+                SavePendingVideoPreferences();
+            }
+        }
+
+        private void OnApplicationQuit()
+        {
+            SavePendingVideoPreferences();
         }
 
         private void Update()
@@ -181,6 +204,7 @@ namespace TsukiVox.AudioPrototype
             SynchronizeVideoSurface();
             UpdatePlaybackDiagnostics();
             MonitorPlaybackStalls();
+            SaveVideoPreferencesIfDue();
         }
 
         private void ConfigureSceneReferences()
@@ -220,9 +244,29 @@ namespace TsukiVox.AudioPrototype
 
         public float CacheProgress => cacheProgress;
 
+        public float VideoVolume => videoVolume;
+
         public string CachePhase => cachePhase;
 
         public string ActiveItemId => activeItemId;
+
+        public void SetVideoVolume(float value)
+        {
+            videoVolume = Mathf.Clamp01(value);
+            if (videoAudioSource != null)
+            {
+                videoAudioSource.volume = videoVolume;
+            }
+
+            PlayerPrefs.SetFloat(VideoVolumePrefsKey, videoVolume);
+            videoPreferencesDirty = true;
+            videoPreferencesSaveAt = Time.unscaledTime + VideoPreferencesSaveDelay;
+        }
+
+        public void RestoreDefaultVolume()
+        {
+            SetVideoVolume(DefaultVideoVolume);
+        }
 
         public void SetStatusOverlayVisible(bool visible)
         {
@@ -279,6 +323,7 @@ namespace TsukiVox.AudioPrototype
             videoAudioSource.spatialBlend = 0f;
             videoAudioSource.priority = 64;
             videoAudioSource.bypassReverbZones = true;
+            videoAudioSource.volume = videoVolume;
 
             videoPlayer.playOnAwake = false;
             videoPlayer.isLooping = false;
@@ -299,6 +344,25 @@ namespace TsukiVox.AudioPrototype
             videoPlayer.errorReceived += HandleVideoError;
             videoPlayer.loopPointReached += HandleVideoEnded;
             videoPlayer.frameReady += HandleFrameReady;
+        }
+
+        private void SaveVideoPreferencesIfDue()
+        {
+            if (videoPreferencesDirty && Time.unscaledTime >= videoPreferencesSaveAt)
+            {
+                SavePendingVideoPreferences();
+            }
+        }
+
+        private void SavePendingVideoPreferences()
+        {
+            if (!videoPreferencesDirty)
+            {
+                return;
+            }
+
+            PlayerPrefs.Save();
+            videoPreferencesDirty = false;
         }
 
         private void EnsureRenderTexture()
@@ -1571,6 +1635,7 @@ namespace TsukiVox.AudioPrototype
             debugBuilder.AppendLine($"unity {Application.unityVersion}");
             debugBuilder.AppendLine($"persistentDataPath {Application.persistentDataPath}");
             debugBuilder.AppendLine($"status {lastStatusMessage}");
+            debugBuilder.AppendLine($"videoVolume {videoVolume:0.000}");
 
             var state = playlistPrototype != null ? playlistPrototype.CurrentState : null;
             var item = state?.CurrentItem;
