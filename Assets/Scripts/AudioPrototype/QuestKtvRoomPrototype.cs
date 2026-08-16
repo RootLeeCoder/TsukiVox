@@ -25,7 +25,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 22;
+        public const int CurrentDesignRevision = 23;
         public const string ThemePrefsKey = "TsukiVox.RoomTheme";
 
         // Player start is the world/tracking origin; recentering returns the user to the sofa.
@@ -609,29 +609,143 @@ namespace TsukiVox.AudioPrototype
                 new Vector3(0f, trimCenterY, trimZ),
                 palette.FocalTrim,
                 0.006f);
-            CreateBeveledBox(geometryRoot, "screen left column", new Vector3(0.24f, 2.6f, 0.08f), new Vector3(-2.85f, 1.35f, FrontWallZ - 0.05f), palette.WinePanel, 0.025f);
-            CreateBeveledBox(geometryRoot, "screen right column", new Vector3(0.24f, 2.6f, 0.08f), new Vector3(2.85f, 1.35f, FrontWallZ - 0.05f), palette.WinePanel, 0.025f);
+            CreateSpeakerAcousticPanel(palette, "left speaker acoustic panel", -2.68f);
+            CreateSpeakerAcousticPanel(palette, "right speaker acoustic panel", 2.68f);
 
-            CreateSpeaker(palette, "left speaker", -2.57f);
-            CreateSpeaker(palette, "right speaker", 2.57f);
+            CreateSpeaker(palette, "left speaker", -2.78f);
+            CreateSpeaker(palette, "right speaker", 2.78f);
+        }
+
+        private void CreateSpeakerAcousticPanel(RoomPalette palette, string objectName, float x)
+        {
+            var panelRoot = new GameObject(objectName).transform;
+            panelRoot.SetParent(geometryRoot, false);
+            panelRoot.localPosition = new Vector3(x, 1.43f, 0f);
+
+            CreateBeveledBox(
+                panelRoot,
+                "shadow reveal",
+                new Vector3(0.66f, 2.26f, 0.025f),
+                new Vector3(0f, 0f, FrontWallZ - 0.035f),
+                palette.SofaShadow,
+                0.018f);
+            CreateBeveledBox(
+                panelRoot,
+                "fabric inset",
+                new Vector3(0.56f, 2.16f, 0.045f),
+                new Vector3(0f, 0f, FrontWallZ - 0.065f),
+                palette.PaddedWall,
+                0.024f);
         }
 
         private void CreateSpeaker(RoomPalette palette, string objectName, float x)
         {
+            const float speakerY = 2.38f;
+            const float speakerZ = FrontWallZ - 0.3f;
+            var side = Mathf.Sign(x);
+
+            CreateSpeakerMount(palette, objectName, x, speakerY);
+
             var speakerRoot = new GameObject(objectName).transform;
             speakerRoot.SetParent(geometryRoot, false);
-            speakerRoot.localPosition = new Vector3(x, 1.45f, FrontWallZ - 0.075f);
+            speakerRoot.localPosition = new Vector3(x, speakerY, speakerZ);
+            speakerRoot.localRotation = Quaternion.Euler(-7f, side * 11f, 0f);
 
-            CreateBeveledBox(speakerRoot, "cabinet", new Vector3(0.34f, 1.55f, 0.12f), Vector3.zero, palette.Speaker, 0.025f);
-            CreateTrimBox(speakerRoot, "brass header", new Vector3(0.28f, 0.05f, 0.035f), new Vector3(0f, 0.61f, -0.072f), palette.FocalTrim, 0.01f);
-            CreateSpeakerDriver(speakerRoot, "upper driver", new Vector3(0f, 0.3f, -0.09f), 0.1f, palette);
-            CreateSpeakerDriver(speakerRoot, "lower driver", new Vector3(0f, -0.28f, -0.09f), 0.13f, palette);
+            CreateTaperedSpeakerCabinet(
+                speakerRoot,
+                "tapered cabinet",
+                new Vector2(0.58f, 0.4f),
+                new Vector2(0.48f, 0.34f),
+                0.36f,
+                0.035f,
+                Vector3.zero,
+                palette.SpeakerCabinet);
+            CreateBeveledBox(
+                speakerRoot,
+                "recessed grille",
+                new Vector3(0.515f, 0.325f, 0.025f),
+                new Vector3(0f, 0f, -0.185f),
+                palette.SpeakerGrille,
+                0.018f);
+
+            for (var index = -3; index <= 3; index += 1)
+            {
+                CreateBox(
+                    speakerRoot,
+                    $"grille relief {index + 3}",
+                    new Vector3(0.455f, 0.006f, 0.004f),
+                    new Vector3(0f, index * 0.038f, -0.199f),
+                    palette.SpeakerDetail,
+                    false,
+                    false);
+            }
+
+            CreateTrimBox(
+                speakerRoot,
+                "brand badge",
+                new Vector3(0.105f, 0.027f, 0.012f),
+                new Vector3(0f, -0.127f, -0.204f),
+                palette.FocalTrim,
+                0.006f,
+                false,
+                false);
+
+            for (var hingeSide = -1; hingeSide <= 1; hingeSide += 2)
+            {
+                var hinge = CreateCylinder(
+                    speakerRoot,
+                    hingeSide < 0 ? "left yoke cap" : "right yoke cap",
+                    0.042f,
+                    0.018f,
+                    new Vector3(hingeSide * 0.252f, 0f, 0.085f),
+                    palette.SpeakerHardware);
+                hinge.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+            }
         }
 
-        private void CreateSpeakerDriver(Transform parent, string objectName, Vector3 position, float radius, RoomPalette palette)
+        private void CreateSpeakerMount(RoomPalette palette, string speakerName, float x, float y)
         {
-            var driver = CreateCylinder(parent, objectName, radius, 0.025f, position, palette.SpeakerCone);
-            driver.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            var mountRoot = new GameObject($"{speakerName} mount").transform;
+            mountRoot.SetParent(geometryRoot, false);
+            mountRoot.localPosition = new Vector3(x, y, 0f);
+
+            CreateBeveledBox(
+                mountRoot,
+                "wall plate",
+                new Vector3(0.17f, 0.21f, 0.028f),
+                new Vector3(0f, 0f, FrontWallZ - 0.115f),
+                palette.SpeakerHardware,
+                0.012f);
+            CreateBeveledBox(
+                mountRoot,
+                "support arm",
+                new Vector3(0.065f, 0.065f, 0.15f),
+                new Vector3(0f, 0f, FrontWallZ - 0.205f),
+                palette.SpeakerHardware,
+                0.012f);
+
+            var pivot = CreateCylinder(
+                mountRoot,
+                "aiming pivot",
+                0.045f,
+                0.28f,
+                new Vector3(0f, 0f, FrontWallZ - 0.28f),
+                palette.SpeakerHardware);
+            pivot.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+
+            for (var boltIndex = -1; boltIndex <= 1; boltIndex += 2)
+            {
+                var bolt = CreateCylinder(
+                    mountRoot,
+                    boltIndex < 0 ? "upper wall bolt" : "lower wall bolt",
+                    0.012f,
+                    0.007f,
+                    new Vector3(0f, boltIndex * 0.065f, FrontWallZ - 0.098f),
+                    palette.FocalTrim,
+                    false,
+                    false);
+                bolt.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            }
         }
 
         private void BuildLevelBars(RoomPalette palette)
@@ -1221,6 +1335,118 @@ namespace TsukiVox.AudioPrototype
                 staticGeometry);
         }
 
+        private static GameObject CreateTaperedSpeakerCabinet(
+            Transform parent,
+            string objectName,
+            Vector2 frontSize,
+            Vector2 rearSize,
+            float depth,
+            float cornerChamfer,
+            Vector3 localPosition,
+            Material material,
+            bool castShadows = true,
+            bool receiveShadows = true,
+            bool staticGeometry = true)
+        {
+            var cabinet = new GameObject(objectName);
+            cabinet.transform.SetParent(parent, false);
+            cabinet.transform.localPosition = localPosition;
+            cabinet.AddComponent<MeshFilter>().sharedMesh = CreateTaperedSpeakerCabinetMesh(
+                objectName,
+                frontSize,
+                rearSize,
+                depth,
+                cornerChamfer);
+            var renderer = cabinet.AddComponent<MeshRenderer>();
+            ConfigureRenderer(renderer, material, castShadows, receiveShadows);
+            cabinet.isStatic = staticGeometry;
+            return cabinet;
+        }
+
+        private static Mesh CreateTaperedSpeakerCabinetMesh(
+            string meshName,
+            Vector2 frontSize,
+            Vector2 rearSize,
+            float depth,
+            float cornerChamfer)
+        {
+            var safeFrontSize = new Vector2(Mathf.Max(0.01f, frontSize.x), Mathf.Max(0.01f, frontSize.y));
+            var safeRearSize = new Vector2(Mathf.Max(0.01f, rearSize.x), Mathf.Max(0.01f, rearSize.y));
+            var safeDepth = Mathf.Max(0.01f, depth);
+            var frontRing = CreateChamferedRectangleRing(safeFrontSize, cornerChamfer, -safeDepth * 0.5f);
+            var rearRing = CreateChamferedRectangleRing(safeRearSize, cornerChamfer * 0.72f, safeDepth * 0.5f);
+
+            var vertices = new List<Vector3>(96);
+            var normals = new List<Vector3>(96);
+            var uvs = new List<Vector2>(96);
+            var triangles = new List<int>(48);
+            for (var index = 0; index < frontRing.Length; index += 1)
+            {
+                var next = (index + 1) % frontRing.Length;
+                AddMeshTriangle(
+                    vertices,
+                    normals,
+                    uvs,
+                    triangles,
+                    new Vector3(0f, 0f, frontRing[index].z),
+                    frontRing[index],
+                    frontRing[next],
+                    Vector3.back);
+                AddMeshTriangle(
+                    vertices,
+                    normals,
+                    uvs,
+                    triangles,
+                    new Vector3(0f, 0f, rearRing[index].z),
+                    rearRing[next],
+                    rearRing[index],
+                    Vector3.forward);
+
+                var sideNormal = Vector3.Cross(
+                    rearRing[index] - frontRing[index],
+                    rearRing[next] - frontRing[index]).normalized;
+                AddMeshQuad(
+                    vertices,
+                    normals,
+                    uvs,
+                    triangles,
+                    frontRing[index],
+                    rearRing[index],
+                    rearRing[next],
+                    frontRing[next],
+                    sideNormal);
+            }
+
+            var mesh = new Mesh
+            {
+                name = $"{meshName} mesh",
+                vertices = vertices.ToArray(),
+                normals = normals.ToArray(),
+                uv = uvs.ToArray(),
+                triangles = triangles.ToArray(),
+            };
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        private static Vector3[] CreateChamferedRectangleRing(Vector2 size, float requestedChamfer, float z)
+        {
+            var halfWidth = size.x * 0.5f;
+            var halfHeight = size.y * 0.5f;
+            var chamfer = Mathf.Clamp(requestedChamfer, 0f, Mathf.Min(halfWidth, halfHeight) * 0.8f);
+            return new[]
+            {
+                new Vector3(-halfWidth + chamfer, halfHeight, z),
+                new Vector3(halfWidth - chamfer, halfHeight, z),
+                new Vector3(halfWidth, halfHeight - chamfer, z),
+                new Vector3(halfWidth, -halfHeight + chamfer, z),
+                new Vector3(halfWidth - chamfer, -halfHeight, z),
+                new Vector3(-halfWidth + chamfer, -halfHeight, z),
+                new Vector3(-halfWidth, -halfHeight + chamfer, z),
+                new Vector3(-halfWidth, halfHeight - chamfer, z),
+            };
+        }
+
         private static GameObject CreateCrescent(
             Transform parent,
             string objectName,
@@ -1356,6 +1582,44 @@ namespace TsukiVox.AudioPrototype
             };
             mesh.RecalculateBounds();
             return mesh;
+        }
+
+        private static void AddMeshTriangle(
+            List<Vector3> vertices,
+            List<Vector3> normals,
+            List<Vector2> uvs,
+            List<int> triangles,
+            Vector3 a,
+            Vector3 b,
+            Vector3 c,
+            Vector3 normal)
+        {
+            var vertexOffset = vertices.Count;
+            vertices.Add(a);
+            vertices.Add(b);
+            vertices.Add(c);
+            for (var index = 0; index < 3; index += 1)
+            {
+                normals.Add(normal);
+            }
+
+            uvs.Add(new Vector2(0.5f, 0.5f));
+            uvs.Add(new Vector2(0f, 0f));
+            uvs.Add(new Vector2(1f, 0f));
+
+            var windingNormal = Vector3.Cross(b - a, c - a);
+            if (Vector3.Dot(windingNormal, normal) >= 0f)
+            {
+                triangles.Add(vertexOffset);
+                triangles.Add(vertexOffset + 1);
+                triangles.Add(vertexOffset + 2);
+            }
+            else
+            {
+                triangles.Add(vertexOffset);
+                triangles.Add(vertexOffset + 2);
+                triangles.Add(vertexOffset + 1);
+            }
         }
 
         private static void AddMeshQuad(
@@ -1712,8 +1976,10 @@ namespace TsukiVox.AudioPrototype
             public Material SofaShadow;
             public Material Table;
             public Material Glass;
-            public Material Speaker;
-            public Material SpeakerCone;
+            public Material SpeakerCabinet;
+            public Material SpeakerGrille;
+            public Material SpeakerDetail;
+            public Material SpeakerHardware;
             public Material Accent;
             public Material Warm;
             public Material Neon;
@@ -1762,8 +2028,10 @@ namespace TsukiVox.AudioPrototype
                         ["V0.5 Sofa Shadow"] = new ThemedColor(Rgb(0x8A7775)),
                         ["V0.5 Table"] = new ThemedColor(Rgb(0xA99B87)),
                         ["V0.5 Smoked Glass"] = new ThemedColor(Rgb(0xD8DCE2, 0.45f)),
-                        ["V0.5 Speaker Cloth"] = new ThemedColor(Rgb(0xB0B1B4)),
-                        ["V0.5 Speaker Cone"] = new ThemedColor(Rgb(0x86898E)),
+                        ["V0.5 Speaker Cabinet"] = new ThemedColor(Rgb(0x25282D)),
+                        ["V0.5 Speaker Grille"] = new ThemedColor(Rgb(0x0D0F12)),
+                        ["V0.5 Speaker Detail"] = new ThemedColor(Rgb(0x292D33)),
+                        ["V0.5 Speaker Hardware"] = new ThemedColor(Rgb(0x3A3D42)),
                         ["V0.5 Accent"] = new ThemedColor(GetAccentColor(theme), 0.55f),
                         ["V0.5 Warm Light"] = new ThemedColor(GetWarmColor(theme), WarmLightBaseEmission),
                         ["V0.5 Neon"] = new ThemedColor(GetAccentColor(theme), 0.5f),
@@ -1794,8 +2062,10 @@ namespace TsukiVox.AudioPrototype
                     ["V0.5 Sofa Shadow"] = new ThemedColor(Rgb(0x151214)),
                     ["V0.5 Table"] = new ThemedColor(Rgb(0x17191D)),
                     ["V0.5 Smoked Glass"] = new ThemedColor(Rgb(0x202834, 0.68f)),
-                    ["V0.5 Speaker Cloth"] = new ThemedColor(Rgb(0x0A0B0E)),
-                    ["V0.5 Speaker Cone"] = new ThemedColor(Rgb(0x17191F)),
+                    ["V0.5 Speaker Cabinet"] = new ThemedColor(Rgb(0x111318)),
+                    ["V0.5 Speaker Grille"] = new ThemedColor(Rgb(0x050608)),
+                    ["V0.5 Speaker Detail"] = new ThemedColor(Rgb(0x1C2026)),
+                    ["V0.5 Speaker Hardware"] = new ThemedColor(Rgb(0x30343B)),
                     ["V0.5 Accent"] = new ThemedColor(GetAccentColor(theme), 0.55f),
                     ["V0.5 Warm Light"] = new ThemedColor(GetWarmColor(theme), WarmLightBaseEmission),
                     ["V0.5 Neon"] = new ThemedColor(GetAccentColor(theme), 0.5f),
@@ -1829,8 +2099,10 @@ namespace TsukiVox.AudioPrototype
                     SofaShadow = CreateMaterial("V0.5 Sofa Shadow", colors, 0.1f, 0f),
                     Table = CreateMaterial("V0.5 Table", colors, 0.58f, 0.22f),
                     Glass = CreateMaterial("V0.5 Smoked Glass", colors, 0.82f, 0.18f, true),
-                    Speaker = CreateMaterial("V0.5 Speaker Cloth", colors, 0.06f, 0f),
-                    SpeakerCone = CreateMaterial("V0.5 Speaker Cone", colors, 0.3f, 0.05f),
+                    SpeakerCabinet = CreateMaterial("V0.5 Speaker Cabinet", colors, 0.24f, 0.08f),
+                    SpeakerGrille = CreateMaterial("V0.5 Speaker Grille", colors, 0.06f, 0f),
+                    SpeakerDetail = CreateMaterial("V0.5 Speaker Detail", colors, 0.12f, 0.02f),
+                    SpeakerHardware = CreateMaterial("V0.5 Speaker Hardware", colors, 0.46f, 0.62f),
                     Accent = CreateMaterial("V0.5 Accent", colors, 0.72f, 0.1f),
                     Warm = CreateMaterial("V0.5 Warm Light", colors, 0.35f, 0f),
                     Neon = CreateMaterial("V0.5 Neon", colors, 0.72f, 0.1f),
