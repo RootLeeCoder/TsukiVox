@@ -50,6 +50,8 @@ namespace TsukiVox.AudioPrototype
         private const float GripMountOffsetY = 0.02f;
         private const float WarningHapticDuration = 0.035f;
         private const float CriticalHapticDuration = 0.075f;
+        private const float MicToggleHapticAmplitude = 0.32f;
+        private const float MicToggleHapticDuration = 0.045f;
         private const string MicFaceEnabledPrefsKey = "TsukiVox.MicFaceHaptics.Enabled.v1";
         private const string MicFaceWarningClearancePrefsKey = "TsukiVox.MicFaceHaptics.WarningClearance.v2";
         private const string MicFaceCriticalClearancePrefsKey = "TsukiVox.MicFaceHaptics.CriticalClearance.v2";
@@ -126,6 +128,7 @@ namespace TsukiVox.AudioPrototype
         private float smoothedLevel;
         private bool wasColorPreviousPressed;
         private bool wasColorNextPressed;
+        private bool wasMicTogglePressed;
         private bool isRightControllerTracked;
         private bool isMicFaceWarningActive;
         private bool wasMicFaceCritical;
@@ -195,14 +198,17 @@ namespace TsukiVox.AudioPrototype
             UpdateMicFaceMouthMarker();
             UpdateMicrophoneFaceProximityHaptics();
 
-            if (!driveFeedbackFromMic)
-            {
-                return;
-            }
-
             if (audioPrototype == null)
             {
                 audioPrototype = FindAnyObjectByType<QuestAudioPrototype>();
+            }
+
+            UpdateMicrophoneMonitoringControl();
+            micProp?.SetMonitoringState(audioPrototype != null && audioPrototype.IsMonitoring, Time.unscaledDeltaTime);
+
+            if (!driveFeedbackFromMic)
+            {
+                return;
             }
 
             var targetLevel = audioPrototype != null
@@ -584,6 +590,28 @@ namespace TsukiVox.AudioPrototype
         {
             SetMicFaceMouthMarkerVisible(false);
             ResetMicrophoneFaceProximity();
+            wasMicTogglePressed = false;
+        }
+
+        private void UpdateMicrophoneMonitoringControl()
+        {
+            // Quest right B is secondaryButton. The press edge toggles the shared
+            // monitoring state, which also drives the consumer UI and mic model.
+            var device = GetControllerDevice(rightHand: true);
+            if (device == null)
+            {
+                wasMicTogglePressed = false;
+                return;
+            }
+
+            var isPressed = IsButtonPressed(device, "secondaryButton");
+            if (isPressed && !wasMicTogglePressed && audioPrototype != null && !audioPrototype.IsWaitingForPermission)
+            {
+                audioPrototype.ToggleMonitoring();
+                SendRightControllerHaptic(MicToggleHapticAmplitude, MicToggleHapticDuration);
+            }
+
+            wasMicTogglePressed = isPressed;
         }
 
         private void UpdateGlowstickColorControls()
@@ -793,11 +821,15 @@ namespace TsukiVox.AudioPrototype
             // Grille ball centre on the mic axis; haptics measure the mouth distance
             // against this point minus MicrophoneGrilleRadius, so do not move it.
             private const float GrilleCenterZ = 0.145f;
+            private const float SwitchOffZ = 0.044f;
+            private const float SwitchOnZ = 0.052f;
+            private const float SwitchAnimationSpeed = 18f;
 
             private static readonly Color RingColor = new Color32(146, 156, 175, 255);
 
             private readonly Transform anchor;
             private readonly Transform grille;
+            private readonly Transform switchSlider;
             private readonly Transform ring;
             private readonly Material ringMaterial;
             private readonly Light glow;
@@ -806,11 +838,14 @@ namespace TsukiVox.AudioPrototype
             // the anchor's localPosition no longer equals the mount offset.
             private readonly Vector3 mountPosition;
             private readonly Quaternion mountRotation;
+            private float monitoringBlend;
+            private bool isMonitoring;
 
-            private MicProp(Transform anchor, Transform grille, Transform ring, Material ringMaterial, Light glow, GameObject visualRoot, Vector3 mountPosition, Quaternion mountRotation)
+            private MicProp(Transform anchor, Transform grille, Transform switchSlider, Transform ring, Material ringMaterial, Light glow, GameObject visualRoot, Vector3 mountPosition, Quaternion mountRotation)
             {
                 this.anchor = anchor;
                 this.grille = grille;
+                this.switchSlider = switchSlider;
                 this.ring = ring;
                 this.ringMaterial = ringMaterial;
                 this.glow = glow;
@@ -853,7 +888,7 @@ namespace TsukiVox.AudioPrototype
                 var switchPlate = MeshFactory.CreateBox(anchor, "mic switch plate", new Vector3(0.01f, 0.003f, 0.02f), bodyMaterial);
                 switchPlate.transform.localPosition = new Vector3(0f, 0.018f, 0.048f);
                 var switchSlider = MeshFactory.CreateBox(anchor, "mic switch slider", new Vector3(0.0055f, 0.003f, 0.0085f), steelMaterial);
-                switchSlider.transform.localPosition = new Vector3(0f, 0.0195f, 0.05f);
+                switchSlider.transform.localPosition = new Vector3(0f, 0.0195f, SwitchOffZ);
 
                 // Shoulder flares out toward the grille like a real mic body.
                 var shoulder = MeshFactory.CreateTaperedCylinder(anchor, "mic shoulder", 0.0195f, 0.0245f, 0.036f, 24, bodyMaterial);
@@ -890,7 +925,7 @@ namespace TsukiVox.AudioPrototype
                 glow.intensity = 0.58f;
                 glow.shadows = LightShadows.None;
 
-                return new MicProp(anchor, grille.transform, ring.transform, ringMaterial, glow, anchor.gameObject, localPosition, localRotation);
+                return new MicProp(anchor, grille.transform, switchSlider.transform, ring.transform, ringMaterial, glow, anchor.gameObject, localPosition, localRotation);
             }
 
             // Thin torus band encircling the mic axis at the given local Z. Used for
@@ -918,19 +953,36 @@ namespace TsukiVox.AudioPrototype
                 }
             }
 
+            public void SetMonitoringState(bool enabled, float deltaTime)
+            {
+                isMonitoring = enabled;
+                var target = enabled ? 1f : 0f;
+                var smoothing = 1f - Mathf.Exp(-SwitchAnimationSpeed * Mathf.Max(0f, deltaTime));
+                monitoringBlend = Mathf.Lerp(monitoringBlend, target, smoothing);
+
+                if (switchSlider != null)
+                {
+                    var sliderPosition = switchSlider.localPosition;
+                    sliderPosition.z = Mathf.Lerp(SwitchOffZ, SwitchOnZ, Mathf.SmoothStep(0f, 1f, monitoringBlend));
+                    switchSlider.localPosition = sliderPosition;
+                }
+            }
+
             public void ApplyFeedback(float level, float pulse)
             {
                 // src/feedback.ts: ring.scale = 1 + level*0.42 + pulse*0.03,
                 // emissiveIntensity = 0.8 + level*3, micGlow = 0.58 + level*1.9.
                 if (ring != null)
                 {
-                    ring.localScale = Vector3.one * (1f + level * 0.42f + pulse * 0.03f);
-                    PropMaterials.SetEmission(ringMaterial, RingColor, 0.8f + level * 3f);
+                    var activeLevel = isMonitoring ? level : 0f;
+                    var activePulse = isMonitoring ? pulse : 0f;
+                    ring.localScale = Vector3.one * (1f + activeLevel * 0.42f + activePulse * 0.03f);
+                    PropMaterials.SetEmission(ringMaterial, RingColor, isMonitoring ? 0.8f + activeLevel * 3f : 0.02f);
                 }
 
                 if (glow != null)
                 {
-                    glow.intensity = 0.58f + level * 1.9f;
+                    glow.intensity = isMonitoring ? 0.58f + level * 1.9f : 0f;
                 }
             }
         }
