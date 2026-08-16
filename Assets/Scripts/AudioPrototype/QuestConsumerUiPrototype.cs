@@ -264,6 +264,10 @@ namespace TsukiVox.AudioPrototype
         private Button openMicProtectionButton;
         private QuestUiSurface openMicProtectionSurface;
         private QuestUiIcon openMicProtectionIcon;
+        private TMP_Text ceilingStarsLabel;
+        private TMP_Text ceilingAuroraLabel;
+        private Toggle ceilingStarsToggle;
+        private Toggle ceilingAuroraToggle;
         private Toggle monitorOutputToggle;
         private Toggle safetyToggle;
         private Toggle nativeToggle;
@@ -1279,8 +1283,11 @@ namespace TsukiVox.AudioPrototype
             openMicProtectionIcon = EnsureIcon(openMicProtectionButton.transform, "Icon", QuestUiIconKind.Microphone, new Vector2(-70f, 0f), new Vector2(24f, 24f), Accent);
             CreateText(openMicProtectionButton.transform, "Label", "防碰撞", 17, FontStyle.Bold, new Vector2(22f, 0f), new Vector2(118f, 34f), TextAnchor.MiddleCenter, TextPrimary);
 
-            CreateText(settingsPage, "Request Mode Label", "点歌方式", 18, FontStyle.Bold, new Vector2(-394f, 132f), new Vector2(200f, 34f), TextAnchor.MiddleLeft, TextPrimary);
-            CreateText(settingsPage, "Request Mode Value", "直接请求", 17, FontStyle.Bold, new Vector2(390f, 132f), new Vector2(220f, 34f), TextAnchor.MiddleRight, AccentStrong);
+            CreateText(settingsPage, "Room Ambience Label", "房间氛围", 18, FontStyle.Bold, new Vector2(-394f, 132f), new Vector2(200f, 34f), TextAnchor.MiddleLeft, TextPrimary);
+            ceilingStarsLabel = CreateText(settingsPage, "Ceiling Stars Label", "星空", 17, FontStyle.Bold, new Vector2(92f, 132f), new Vector2(80f, 34f), TextAnchor.MiddleCenter, TextSecondary);
+            ceilingStarsToggle = CreateSwitch(settingsPage, "Ceiling Stars Switch", new Vector2(188f, 132f));
+            ceilingAuroraLabel = CreateText(settingsPage, "Ceiling Aurora Label", "极光", 17, FontStyle.Bold, new Vector2(314f, 132f), new Vector2(80f, 34f), TextAnchor.MiddleCenter, TextSecondary);
+            ceilingAuroraToggle = CreateSwitch(settingsPage, "Ceiling Aurora Switch", new Vector2(422f, 132f));
 
             CreateDivider(settingsPage, "Request Mode Divider", new Vector2(0f, 82f), new Vector2(ContentWidth, 1f));
             CreateText(settingsPage, "Audio Section", "音频高级设置", 16, FontStyle.Bold, new Vector2(-356f, 55f), new Vector2(280f, 30f), TextAnchor.MiddleLeft, TextSecondary);
@@ -1552,6 +1559,18 @@ namespace TsukiVox.AudioPrototype
             safetyToggle.onValueChanged.AddListener(value => audioPrototype?.SetSafetyLimiterEnabled(value));
             nativeToggle.onValueChanged.RemoveAllListeners();
             nativeToggle.onValueChanged.AddListener(value => audioPrototype?.SetPreferNativeBackend(value));
+            ceilingStarsToggle.onValueChanged.RemoveAllListeners();
+            ceilingStarsToggle.onValueChanged.AddListener(value =>
+            {
+                roomPrototype?.SetStarsEnabled(value);
+                RefreshSettings();
+            });
+            ceilingAuroraToggle.onValueChanged.RemoveAllListeners();
+            ceilingAuroraToggle.onValueChanged.AddListener(value =>
+            {
+                roomPrototype?.SetAuroraEnabled(value);
+                RefreshSettings();
+            });
 
             micProtectionToggle.onValueChanged.RemoveAllListeners();
             micProtectionToggle.onValueChanged.AddListener(value => handheldPropsPrototype?.SetMicFaceHapticsEnabled(value));
@@ -1998,6 +2017,22 @@ namespace TsukiVox.AudioPrototype
                 exitSurface.color = exitConfirmationActive ? WarmSurface : Surface;
             }
 
+            if (roomPrototype == null)
+            {
+                roomPrototype = FindAnyObjectByType<QuestKtvRoomPrototype>();
+                SubscribeRoom();
+            }
+
+            var celestialControlsAvailable = roomPrototype != null;
+            ceilingStarsToggle.interactable = celestialControlsAvailable;
+            ceilingAuroraToggle.interactable = celestialControlsAvailable;
+            ceilingStarsToggle.SetIsOnWithoutNotify(celestialControlsAvailable && roomPrototype.StarsEnabled);
+            ceilingAuroraToggle.SetIsOnWithoutNotify(celestialControlsAvailable && roomPrototype.AuroraEnabled);
+            RefreshSwitchVisual(ceilingStarsToggle, Warm);
+            RefreshSwitchVisual(ceilingAuroraToggle, AccentStrong);
+            ceilingStarsLabel.color = celestialControlsAvailable && roomPrototype.StarsEnabled ? TextPrimary : TextSecondary;
+            ceilingAuroraLabel.color = celestialControlsAvailable && roomPrototype.AuroraEnabled ? TextPrimary : TextSecondary;
+
             if (audioPrototype == null)
             {
                 return;
@@ -2216,7 +2251,7 @@ namespace TsukiVox.AudioPrototype
             }
             else if (restoreConfirmationActive)
             {
-                diagnosticsVideoText.text = "恢复全部默认设置：请再次点击确认\n媒体缓存不会被删除";
+                diagnosticsVideoText.text = "将恢复暗色主题、平板 30°、星空/极光开启\n媒体缓存不会被删除";
                 diagnosticsVideoText.color = Warm;
             }
             else if (maintenanceResultActive)
@@ -2923,12 +2958,17 @@ namespace TsukiVox.AudioPrototype
             tiltController?.RestoreDefaultSetting();
             var themeController = FindAnyObjectByType<QuestRoomThemeController>();
             themeController?.RestoreDefaultSetting();
+            if (roomPrototype == null)
+            {
+                roomPrototype = FindAnyObjectByType<QuestKtvRoomPrototype>();
+            }
+            roomPrototype?.RestoreCelestialDefaults();
             PlayerPrefs.Save();
 
             exitConfirmationExpiresAt = 0f;
             RefreshAppendKtvSearchToggle();
             SetMaintenanceResult(
-                "全部设置已恢复默认\n暗色主题 · 平板 30° · KTV 后缀关闭",
+                "全部设置已恢复默认\n暗色主题 · 平板 30° · 星空/极光开启 · KTV 后缀关闭",
                 false,
                 "all settings restored to defaults; media cache retained");
             RefreshAll();

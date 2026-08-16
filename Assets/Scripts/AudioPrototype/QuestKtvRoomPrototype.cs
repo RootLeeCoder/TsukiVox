@@ -25,8 +25,10 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 26;
+        public const int CurrentDesignRevision = 27;
         public const string ThemePrefsKey = "TsukiVox.RoomTheme";
+        public const string StarsPrefsKey = "TsukiVox.CeilingStarsEnabled";
+        public const string AuroraPrefsKey = "TsukiVox.CeilingAuroraEnabled";
 
         // Player start is the world/tracking origin; recentering returns the user to the sofa.
         public static readonly Vector3 PlayerStartPosition = Vector3.zero;
@@ -51,6 +53,8 @@ namespace TsukiVox.AudioPrototype
         private const string GeometryRootName = "Geometry";
         private const string FeedbackRootName = "Feedback";
         private const string AnchorsRootName = "Anchors";
+        private const string CeilingStarsName = "ceiling starfield";
+        private const string CeilingAuroraName = "ceiling aurora";
 
         private const float RoomWidth = 7.2f;
         private const float RoomHeight = 2.9f;
@@ -93,12 +97,20 @@ namespace TsukiVox.AudioPrototype
         private Light loungeGlow;
         private Light leftWallGlow;
         private Light rightWallGlow;
+        private MeshRenderer ceilingStarsRenderer;
+        private MeshRenderer ceilingAuroraRenderer;
         private float smoothedLevel;
         private RoomTheme currentTheme = RoomTheme.Dark;
+        private bool starsEnabled = true;
+        private bool auroraEnabled = true;
 
         public bool NeedsDesignRefresh => generatedDesignRevision < CurrentDesignRevision;
 
         public RoomTheme CurrentTheme => currentTheme;
+
+        public bool StarsEnabled => starsEnabled;
+
+        public bool AuroraEnabled => auroraEnabled;
 
         public event Action<RoomTheme> ThemeChanged;
 
@@ -165,10 +177,13 @@ namespace TsukiVox.AudioPrototype
             // Generated scenes are always saved with the dark baseline palette;
             // the bright theme is a runtime-only retint driven by PlayerPrefs.
             currentTheme = RoomTheme.Dark;
+            starsEnabled = true;
+            auroraEnabled = true;
             EnsureRoots();
             DetachControlCanvasFromGeneratedGeometry();
             RemoveLegacySceneProps();
             BuildRoom();
+            ApplyCelestialVisibility();
             ConfigureLighting();
             ApplyVideoScreenLayout();
             CreateAnchors();
@@ -183,6 +198,8 @@ namespace TsukiVox.AudioPrototype
             videoScreenPrototype = videoScreenPrototype != null ? videoScreenPrototype : FindAnyObjectByType<QuestVideoScreenPrototype>();
 
             currentTheme = LoadPersistedTheme();
+            starsEnabled = LoadPersistedToggle(StarsPrefsKey);
+            auroraEnabled = LoadPersistedToggle(AuroraPrefsKey);
             EnsureRoots();
             if (geometryRoot.childCount == 0 || NeedsDesignRefresh)
             {
@@ -205,6 +222,7 @@ namespace TsukiVox.AudioPrototype
                 }
             }
 
+            ApplyCelestialVisibility();
             ApplyVideoScreenLayout();
             CreateAnchors();
             ApplyFeedback(smoothedLevel);
@@ -232,6 +250,29 @@ namespace TsukiVox.AudioPrototype
             }
         }
 
+        public void SetStarsEnabled(bool enabled)
+        {
+            starsEnabled = enabled;
+            ApplyCelestialVisibility();
+            PersistToggle(StarsPrefsKey, enabled);
+        }
+
+        public void SetAuroraEnabled(bool enabled)
+        {
+            auroraEnabled = enabled;
+            ApplyCelestialVisibility();
+            PersistToggle(AuroraPrefsKey, enabled);
+        }
+
+        public void RestoreCelestialDefaults()
+        {
+            starsEnabled = true;
+            auroraEnabled = true;
+            ApplyCelestialVisibility();
+            PersistToggle(StarsPrefsKey, true);
+            PersistToggle(AuroraPrefsKey, true);
+        }
+
         private static RoomTheme LoadPersistedTheme()
         {
             if (!Application.isPlaying)
@@ -241,6 +282,22 @@ namespace TsukiVox.AudioPrototype
 
             var stored = PlayerPrefs.GetInt(ThemePrefsKey, (int)RoomTheme.Dark);
             return stored == (int)RoomTheme.Bright ? RoomTheme.Bright : RoomTheme.Dark;
+        }
+
+        private static bool LoadPersistedToggle(string key)
+        {
+            return !Application.isPlaying || PlayerPrefs.GetInt(key, 1) != 0;
+        }
+
+        private static void PersistToggle(string key, bool enabled)
+        {
+            if (!Application.isPlaying)
+            {
+                return;
+            }
+
+            PlayerPrefs.SetInt(key, enabled ? 1 : 0);
+            PlayerPrefs.Save();
         }
 
         private void RetintGeneratedMaterials(RoomTheme theme)
@@ -294,6 +351,23 @@ namespace TsukiVox.AudioPrototype
             loungeGlow = FindLight("V0.5 Lounge Glow");
             leftWallGlow = FindLight("V0.5 Left Wall Glow");
             rightWallGlow = FindLight("V0.5 Right Wall Glow");
+            var starsObject = feedbackRoot.Find(CeilingStarsName);
+            ceilingStarsRenderer = starsObject != null ? starsObject.GetComponent<MeshRenderer>() : null;
+            var auroraObject = feedbackRoot.Find(CeilingAuroraName);
+            ceilingAuroraRenderer = auroraObject != null ? auroraObject.GetComponent<MeshRenderer>() : null;
+        }
+
+        private void ApplyCelestialVisibility()
+        {
+            if (ceilingStarsRenderer != null)
+            {
+                ceilingStarsRenderer.gameObject.SetActive(starsEnabled);
+            }
+
+            if (ceilingAuroraRenderer != null)
+            {
+                ceilingAuroraRenderer.gameObject.SetActive(auroraEnabled);
+            }
         }
 
         private void BindLevelBar(string objectName)
@@ -320,12 +394,15 @@ namespace TsukiVox.AudioPrototype
             ClearChildren(geometryRoot);
             ClearChildren(feedbackRoot);
             levelBarFills.Clear();
+            ceilingStarsRenderer = null;
+            ceilingAuroraRenderer = null;
 
             var palette = RoomPalette.Create(currentTheme);
             levelBarFillMaterial = palette.Accent;
             lightStripMaterial = palette.Warm;
 
             BuildRoomShell(palette);
+            BuildCelestialCeiling(palette);
             BuildWallDecoration(palette);
             BuildFurniture(palette);
             BuildScreenSurround(palette);
@@ -389,47 +466,60 @@ namespace TsukiVox.AudioPrototype
                         radius,
                         0.015f,
                         new Vector3(x, RoomHeight - 0.02f, z),
-                        palette.Warm);
+                        palette.CeilingMoon);
                     downlightIndex += 1;
                 }
             }
 
-            CreateEllipticalCylinder(
+            var moonBacking = CreateCrescent(
                 geometryRoot,
-                "ceiling halo outer",
-                new Vector2(2.62f, 1.58f),
-                0.026f,
-                new Vector3(0f, RoomHeight - 0.065f, 1.7f),
-                palette.Warm,
-                false,
-                false);
-            CreateEllipticalCylinder(
-                geometryRoot,
-                "ceiling halo inner",
-                new Vector2(2.38f, 1.34f),
-                0.032f,
-                new Vector3(0f, RoomHeight - 0.082f, 1.7f),
-                palette.CeilingInset,
-                false,
-                false);
-            CreateEllipticalCylinder(
-                geometryRoot,
-                "ceiling moon medallion",
-                new Vector2(0.74f, 0.74f),
-                0.035f,
-                new Vector3(0f, RoomHeight - 0.105f, 1.7f),
+                "ceiling crescent backing",
+                0.72f,
+                0.69f,
+                0.3f,
+                0.045f,
+                new Vector3(0f, RoomHeight - 0.095f, 1.7f),
+                1f,
                 palette.FocalTrim,
                 false,
                 false);
-            CreateEllipticalCylinder(
+            moonBacking.transform.localRotation = Quaternion.Euler(90f, 0f, -18f);
+
+            var moonLight = CreateCrescent(
                 geometryRoot,
-                "ceiling moon light",
-                new Vector2(0.62f, 0.62f),
-                0.04f,
-                new Vector3(0f, RoomHeight - 0.128f, 1.7f),
-                palette.Warm,
+                "ceiling crescent light",
+                0.62f,
+                0.59f,
+                0.255f,
+                0.026f,
+                new Vector3(0f, RoomHeight - 0.126f, 1.7f),
+                1f,
+                palette.CeilingMoon,
                 false,
                 false);
+            moonLight.transform.localRotation = Quaternion.Euler(90f, 0f, -18f);
+        }
+
+        private void BuildCelestialCeiling(RoomPalette palette)
+        {
+            var effectSize = new Vector2(5.34f, 5.0f);
+            var effectCenter = new Vector3(0f, RoomHeight - 0.115f, 1.42f);
+            var aurora = CreateCeilingEffectPlane(
+                feedbackRoot,
+                CeilingAuroraName,
+                effectSize,
+                effectCenter,
+                palette.Aurora);
+            ceilingAuroraRenderer = aurora.GetComponent<MeshRenderer>();
+
+            effectCenter.y -= 0.006f;
+            var stars = CreateCeilingEffectPlane(
+                feedbackRoot,
+                CeilingStarsName,
+                effectSize,
+                effectCenter,
+                palette.Stars);
+            ceilingStarsRenderer = stars.GetComponent<MeshRenderer>();
         }
 
         private void BuildWallDecoration(RoomPalette palette)
@@ -1317,6 +1407,50 @@ namespace TsukiVox.AudioPrototype
             }
         }
 
+        private static GameObject CreateCeilingEffectPlane(
+            Transform parent,
+            string objectName,
+            Vector2 size,
+            Vector3 localPosition,
+            Material material)
+        {
+            var halfWidth = size.x * 0.5f;
+            var halfDepth = size.y * 0.5f;
+            var vertices = new List<Vector3>(4);
+            var normals = new List<Vector3>(4);
+            var uvs = new List<Vector2>(4);
+            var triangles = new List<int>(6);
+            AddMeshQuad(
+                vertices,
+                normals,
+                uvs,
+                triangles,
+                new Vector3(-halfWidth, 0f, -halfDepth),
+                new Vector3(halfWidth, 0f, -halfDepth),
+                new Vector3(halfWidth, 0f, halfDepth),
+                new Vector3(-halfWidth, 0f, halfDepth),
+                Vector3.down);
+
+            var mesh = new Mesh
+            {
+                name = $"{objectName} mesh",
+                vertices = vertices.ToArray(),
+                normals = normals.ToArray(),
+                uv = uvs.ToArray(),
+                triangles = triangles.ToArray(),
+            };
+            mesh.RecalculateBounds();
+
+            var plane = new GameObject(objectName);
+            plane.transform.SetParent(parent, false);
+            plane.transform.localPosition = localPosition;
+            plane.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var renderer = plane.AddComponent<MeshRenderer>();
+            ConfigureRenderer(renderer, material, false, false);
+            plane.isStatic = true;
+            return plane;
+        }
+
         private static GameObject CreateBox(
             Transform parent,
             string objectName,
@@ -2137,6 +2271,9 @@ namespace TsukiVox.AudioPrototype
             public Material Warm;
             public Material Neon;
             public Material Moon;
+            public Material CeilingMoon;
+            public Material Stars;
+            public Material Aurora;
             public Material Foliage;
             public Material Ceramic;
             public Material Citrus;
@@ -2194,6 +2331,9 @@ namespace TsukiVox.AudioPrototype
                         ["V0.5 Warm Light"] = new ThemedColor(GetWarmColor(theme), WarmLightBaseEmission),
                         ["V0.5 Neon"] = new ThemedColor(GetAccentColor(theme), 0.5f),
                         ["V0.5 Moon"] = new ThemedColor(Rgb(0xEEE2CC), 0.45f),
+                        ["V0.5 Ceiling Moon"] = new ThemedColor(Rgb(0xF1E6CF), 0.2f),
+                        ["V0.5 Ceiling Stars"] = new ThemedColor(Rgb(0xB9DCFF)),
+                        ["V0.5 Ceiling Aurora"] = new ThemedColor(Rgb(0x55D8C9)),
                         ["V0.5 Foliage"] = new ThemedColor(Rgb(0x75816D)),
                         ["V0.5 Ceramic"] = new ThemedColor(Rgb(0xEEECE7)),
                         ["V0.5 Citrus"] = new ThemedColor(Rgb(0xB89455)),
@@ -2233,6 +2373,9 @@ namespace TsukiVox.AudioPrototype
                     ["V0.5 Warm Light"] = new ThemedColor(GetWarmColor(theme), WarmLightBaseEmission),
                     ["V0.5 Neon"] = new ThemedColor(GetAccentColor(theme), 0.5f),
                     ["V0.5 Moon"] = new ThemedColor(Rgb(0xEDE2CC), 0.62f),
+                    ["V0.5 Ceiling Moon"] = new ThemedColor(Rgb(0xE9D8B9), 0.22f),
+                    ["V0.5 Ceiling Stars"] = new ThemedColor(Rgb(0x91C9FF)),
+                    ["V0.5 Ceiling Aurora"] = new ThemedColor(Rgb(0x4FD5C2)),
                     ["V0.5 Foliage"] = new ThemedColor(Rgb(0x1D2A22), 0.08f),
                     ["V0.5 Ceramic"] = new ThemedColor(Rgb(0xB8B2A5)),
                     ["V0.5 Citrus"] = new ThemedColor(Rgb(0x9B7B45)),
@@ -2275,6 +2418,29 @@ namespace TsukiVox.AudioPrototype
                     Warm = CreateMaterial("V0.5 Warm Light", colors, 0.35f, 0f),
                     Neon = CreateMaterial("V0.5 Neon", colors, 0.72f, 0.1f),
                     Moon = CreateMaterial("V0.5 Moon", colors, 0.55f, 0.08f),
+                    CeilingMoon = CreateMaterial("V0.5 Ceiling Moon", colors, 0.48f, 0.04f),
+                    Stars = CreateCelestialMaterial(
+                        "V0.5 Ceiling Stars",
+                        colors,
+                        Rgb(0xFFE6B7),
+                        0f,
+                        0.82f,
+                        30f,
+                        0.92f,
+                        0.12f,
+                        11.7f,
+                        3001),
+                    Aurora = CreateCelestialMaterial(
+                        "V0.5 Ceiling Aurora",
+                        colors,
+                        Rgb(0xA88CF5),
+                        1f,
+                        0.34f,
+                        4.6f,
+                        0.58f,
+                        0.12f,
+                        4.2f,
+                        3000),
                     Foliage = CreateMaterial("V0.5 Foliage", colors, 0.12f, 0f),
                     Ceramic = CreateMaterial("V0.5 Ceramic", colors, 0.45f, 0.05f),
                     Citrus = CreateMaterial("V0.5 Citrus", colors, 0.38f, 0.04f),
@@ -2341,6 +2507,42 @@ namespace TsukiVox.AudioPrototype
                     metallic,
                     emissionIntensity,
                     transparent);
+            }
+
+            private static Material CreateCelestialMaterial(
+                string materialName,
+                Dictionary<string, ThemedColor> colors,
+                Color secondaryColor,
+                float effectMode,
+                float intensity,
+                float scale,
+                float speed,
+                float density,
+                float seed,
+                int renderQueue)
+            {
+                var shader = Shader.Find("TsukiVox/Quest Celestial Ceiling");
+                if (shader == null)
+                {
+                    Debug.LogError("[TsukiVox Room] Quest Celestial Ceiling shader is unavailable.");
+                    return CreateMaterial(materialName, colors, 0.45f, 0f, true);
+                }
+
+                var material = new Material(shader)
+                {
+                    name = materialName,
+                    renderQueue = renderQueue,
+                    enableInstancing = true,
+                };
+                material.SetColor("_BaseColor", colors[materialName].Color);
+                material.SetColor("_SecondaryColor", secondaryColor);
+                material.SetFloat("_EffectMode", effectMode);
+                material.SetFloat("_Intensity", intensity);
+                material.SetFloat("_Scale", scale);
+                material.SetFloat("_Speed", speed);
+                material.SetFloat("_Density", density);
+                material.SetFloat("_Seed", seed);
+                return material;
             }
         }
     }

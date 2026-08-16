@@ -12,6 +12,7 @@ namespace TsukiVox.AudioPrototype.Editor
         private const string ScenePath = "Assets/Scenes/AudioPrototype.unity";
         private const string PreviewPath = "Logs/QuestUrpPreview.png";
         private const string LoungePreviewPath = "Logs/QuestUrpLoungePreview.png";
+        private const string CeilingPreviewPath = "Logs/QuestUrpCeilingPreview.png";
 
         [MenuItem("TsukiVox/Capture Quest Rendering Preview")]
         public static void CapturePreview()
@@ -81,6 +82,15 @@ namespace TsukiVox.AudioPrototype.Editor
                 linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
                 linearTexture.Apply(false, false);
                 WriteSrgbPng(linearTexture, outputTexture, LoungePreviewPath);
+
+                camera.transform.position = new Vector3(0f, 1.12f, 2.75f);
+                camera.transform.LookAt(new Vector3(0f, 2.82f, 1.46f));
+                camera.Render();
+                camera.Render();
+                RenderTexture.active = renderTexture;
+                linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
+                linearTexture.Apply(false, false);
+                WriteSrgbPng(linearTexture, outputTexture, CeilingPreviewPath);
             }
             finally
             {
@@ -97,7 +107,7 @@ namespace TsukiVox.AudioPrototype.Editor
 
             Debug.Log(
                 $"[TsukiVox URP] Captured rendering previews at {Path.GetFullPath(PreviewPath)} " +
-                $"and {Path.GetFullPath(LoungePreviewPath)}.");
+                $"{Path.GetFullPath(LoungePreviewPath)} and {Path.GetFullPath(CeilingPreviewPath)}.");
         }
 
         private static void WriteSrgbPng(Texture2D linearTexture, Texture2D outputTexture, string path)
