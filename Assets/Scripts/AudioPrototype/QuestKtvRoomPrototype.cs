@@ -25,7 +25,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 21;
+        public const int CurrentDesignRevision = 22;
         public const string ThemePrefsKey = "TsukiVox.RoomTheme";
 
         // Player start is the world/tracking origin; recentering returns the user to the sofa.
@@ -886,26 +886,32 @@ namespace TsukiVox.AudioPrototype
         {
             CreateCylinder(parent, "staff", 0.008f, 0.34f, new Vector3(0f, 0.57f, 0f), palette.FocalTrim);
             CreateCylinder(parent, "cradle", 0.07f, 0.014f, new Vector3(0f, 0.75f, 0f), palette.FocalTrim);
-            CreateSphere(
+            CreateCrescent(
                 parent,
-                "moon",
-                0.1f,
+                "crescent moon",
+                0.115f,
+                0.115f,
+                0.055f,
+                0.026f,
                 new Vector3(0f, 0.9f, 0f),
+                -side,
                 palette.Moon,
                 false,
                 false,
                 false);
-            var aura = CreateCylinder(
+            CreateCrescent(
                 parent,
-                "moon aura",
-                0.13f,
-                0.01f,
-                new Vector3(0f, 0.9f, 0.03f),
+                "crescent aura",
+                0.14f,
+                0.14f,
+                0.067f,
+                0.008f,
+                new Vector3(0f, 0.9f, 0.028f),
+                -side,
                 palette.Neon,
                 false,
                 false,
                 false);
-            aura.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
 
             for (var index = 0; index < 6; index += 1)
             {
@@ -1213,6 +1219,195 @@ namespace TsukiVox.AudioPrototype
                 castShadows,
                 receiveShadows,
                 staticGeometry);
+        }
+
+        private static GameObject CreateCrescent(
+            Transform parent,
+            string objectName,
+            float outerRadius,
+            float cutoutRadius,
+            float cutoutOffset,
+            float depth,
+            Vector3 localPosition,
+            float openingDirection,
+            Material material,
+            bool castShadows = true,
+            bool receiveShadows = true,
+            bool staticGeometry = true)
+        {
+            var crescent = new GameObject(objectName);
+            crescent.transform.SetParent(parent, false);
+            crescent.transform.localPosition = localPosition;
+            crescent.AddComponent<MeshFilter>().sharedMesh = CreateCrescentMesh(
+                objectName,
+                outerRadius,
+                cutoutRadius,
+                cutoutOffset,
+                depth,
+                openingDirection);
+            var renderer = crescent.AddComponent<MeshRenderer>();
+            ConfigureRenderer(renderer, material, castShadows, receiveShadows);
+            crescent.isStatic = staticGeometry;
+            return crescent;
+        }
+
+        private static Mesh CreateCrescentMesh(
+            string meshName,
+            float outerRadius,
+            float cutoutRadius,
+            float cutoutOffset,
+            float depth,
+            float openingDirection)
+        {
+            const int segmentCount = 24;
+            var safeOuterRadius = Mathf.Max(outerRadius, 0.001f);
+            var safeCutoutRadius = Mathf.Max(cutoutRadius, 0.001f);
+            var minimumOffset = Mathf.Abs(safeOuterRadius - safeCutoutRadius) + 0.0001f;
+            var maximumOffset = safeOuterRadius + safeCutoutRadius - 0.0001f;
+            var safeOffset = Mathf.Clamp(Mathf.Abs(cutoutOffset), minimumOffset, maximumOffset);
+            var safeDepth = Mathf.Max(depth, 0.001f);
+            var direction = openingDirection < 0f ? -1f : 1f;
+            var intersectionX =
+                (safeOuterRadius * safeOuterRadius - safeCutoutRadius * safeCutoutRadius + safeOffset * safeOffset) /
+                (2f * safeOffset);
+            var intersectionY = Mathf.Sqrt(Mathf.Max(
+                0f,
+                safeOuterRadius * safeOuterRadius - intersectionX * intersectionX));
+            var halfDepth = safeDepth * 0.5f;
+
+            var outerPoints = new Vector2[segmentCount + 1];
+            var innerPoints = new Vector2[segmentCount + 1];
+            for (var index = 0; index <= segmentCount; index += 1)
+            {
+                var y = Mathf.Lerp(-intersectionY, intersectionY, index / (float)segmentCount);
+                var outerX = -Mathf.Sqrt(Mathf.Max(0f, safeOuterRadius * safeOuterRadius - y * y));
+                var innerX = safeOffset - Mathf.Sqrt(Mathf.Max(0f, safeCutoutRadius * safeCutoutRadius - y * y));
+                outerPoints[index] = new Vector2(outerX * direction, y);
+                innerPoints[index] = new Vector2(innerX * direction, y);
+            }
+
+            var vertices = new List<Vector3>(segmentCount * 16);
+            var normals = new List<Vector3>(segmentCount * 16);
+            var uvs = new List<Vector2>(segmentCount * 16);
+            var triangles = new List<int>(segmentCount * 24);
+            var cutoutCenter = new Vector2(safeOffset * direction, 0f);
+
+            for (var index = 0; index < segmentCount; index += 1)
+            {
+                var outerBottom = outerPoints[index];
+                var outerTop = outerPoints[index + 1];
+                var innerBottom = innerPoints[index];
+                var innerTop = innerPoints[index + 1];
+
+                AddMeshQuad(
+                    vertices,
+                    normals,
+                    uvs,
+                    triangles,
+                    new Vector3(outerBottom.x, outerBottom.y, -halfDepth),
+                    new Vector3(innerBottom.x, innerBottom.y, -halfDepth),
+                    new Vector3(innerTop.x, innerTop.y, -halfDepth),
+                    new Vector3(outerTop.x, outerTop.y, -halfDepth),
+                    Vector3.back);
+                AddMeshQuad(
+                    vertices,
+                    normals,
+                    uvs,
+                    triangles,
+                    new Vector3(outerBottom.x, outerBottom.y, halfDepth),
+                    new Vector3(outerTop.x, outerTop.y, halfDepth),
+                    new Vector3(innerTop.x, innerTop.y, halfDepth),
+                    new Vector3(innerBottom.x, innerBottom.y, halfDepth),
+                    Vector3.forward);
+
+                var outerNormal2D = ((outerBottom + outerTop) * 0.5f).normalized;
+                AddMeshQuad(
+                    vertices,
+                    normals,
+                    uvs,
+                    triangles,
+                    new Vector3(outerBottom.x, outerBottom.y, -halfDepth),
+                    new Vector3(outerTop.x, outerTop.y, -halfDepth),
+                    new Vector3(outerTop.x, outerTop.y, halfDepth),
+                    new Vector3(outerBottom.x, outerBottom.y, halfDepth),
+                    new Vector3(outerNormal2D.x, outerNormal2D.y, 0f));
+
+                var innerMidpoint = (innerBottom + innerTop) * 0.5f;
+                var innerNormal2D = (cutoutCenter - innerMidpoint).normalized;
+                AddMeshQuad(
+                    vertices,
+                    normals,
+                    uvs,
+                    triangles,
+                    new Vector3(innerBottom.x, innerBottom.y, -halfDepth),
+                    new Vector3(innerBottom.x, innerBottom.y, halfDepth),
+                    new Vector3(innerTop.x, innerTop.y, halfDepth),
+                    new Vector3(innerTop.x, innerTop.y, -halfDepth),
+                    new Vector3(innerNormal2D.x, innerNormal2D.y, 0f));
+            }
+
+            var mesh = new Mesh
+            {
+                name = $"{meshName} mesh",
+                vertices = vertices.ToArray(),
+                normals = normals.ToArray(),
+                uv = uvs.ToArray(),
+                triangles = triangles.ToArray(),
+            };
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        private static void AddMeshQuad(
+            List<Vector3> vertices,
+            List<Vector3> normals,
+            List<Vector2> uvs,
+            List<int> triangles,
+            Vector3 a,
+            Vector3 b,
+            Vector3 c,
+            Vector3 d,
+            Vector3 normal)
+        {
+            var vertexOffset = vertices.Count;
+            vertices.Add(a);
+            vertices.Add(b);
+            vertices.Add(c);
+            vertices.Add(d);
+            for (var index = 0; index < 4; index += 1)
+            {
+                normals.Add(normal);
+            }
+
+            uvs.Add(new Vector2(0f, 0f));
+            uvs.Add(new Vector2(1f, 0f));
+            uvs.Add(new Vector2(1f, 1f));
+            uvs.Add(new Vector2(0f, 1f));
+
+            var windingNormal = Vector3.Cross(b - a, c - a);
+            if (windingNormal.sqrMagnitude <= 0.0000001f)
+            {
+                windingNormal = Vector3.Cross(c - a, d - a);
+            }
+
+            if (Vector3.Dot(windingNormal, normal) >= 0f)
+            {
+                triangles.Add(vertexOffset);
+                triangles.Add(vertexOffset + 1);
+                triangles.Add(vertexOffset + 2);
+                triangles.Add(vertexOffset);
+                triangles.Add(vertexOffset + 2);
+                triangles.Add(vertexOffset + 3);
+            }
+            else
+            {
+                triangles.Add(vertexOffset);
+                triangles.Add(vertexOffset + 2);
+                triangles.Add(vertexOffset + 1);
+                triangles.Add(vertexOffset);
+                triangles.Add(vertexOffset + 3);
+                triangles.Add(vertexOffset + 2);
+            }
         }
 
         private static GameObject CreateBeveledBox(
