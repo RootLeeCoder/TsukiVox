@@ -3,6 +3,17 @@ using UnityEngine.Rendering;
 
 namespace TsukiVox.AudioPrototype
 {
+    public enum QuestMaterialDetailMode
+    {
+        None = 0,
+        Wood = 1,
+        Fabric = 2,
+        BrushedMetal = 3,
+        Stone = 4,
+        Perforated = 5,
+        Plaster = 6,
+    }
+
     public static class QuestStylizedMaterial
     {
         public const string ShaderName = "TsukiVox/Quest Stylized Lit";
@@ -90,6 +101,40 @@ namespace TsukiVox.AudioPrototype
             material.EnableKeyword("_EMISSION");
         }
 
+        public static void ConfigureDetail(
+            Material material,
+            QuestMaterialDetailMode mode,
+            float scale,
+            float strength,
+            float verticalGradient = 0f)
+        {
+            if (material == null)
+            {
+                return;
+            }
+
+            SetFloat(material, "_DetailMode", (float)mode);
+            SetFloat(material, "_DetailScale", Mathf.Max(0.01f, scale));
+            SetFloat(material, "_DetailStrength", Mathf.Clamp01(strength));
+            SetFloat(material, "_VerticalGradient", Mathf.Clamp(verticalGradient, -1f, 1f));
+        }
+
+        public static void ConfigureLighting(
+            Material material,
+            float ambientFloor,
+            float indirectStrength,
+            float rimIntensity)
+        {
+            if (material == null)
+            {
+                return;
+            }
+
+            SetFloat(material, "_AmbientFloor", Mathf.Clamp(ambientFloor, 0f, 0.75f));
+            SetFloat(material, "_IndirectStrength", Mathf.Clamp(indirectStrength, 0f, 2f));
+            SetFloat(material, "_RimIntensity", Mathf.Clamp01(rimIntensity));
+        }
+
         private static Shader FindLitShader()
         {
             var shader = Shader.Find(ShaderName);
@@ -132,8 +177,8 @@ namespace TsukiVox.AudioPrototype
             SetFloat(material, "_ToonStep", Mathf.Lerp(0.44f, 0.36f, clampedMetallic));
             SetFloat(material, "_ToonFeather", Mathf.Lerp(0.16f, 0.075f, clampedMetallic));
             SetFloat(material, "_ToonStrength", Mathf.Lerp(0.62f, 0.78f, clampedMetallic));
-            SetFloat(material, "_IndirectStrength", 0.82f);
-            SetFloat(material, "_AmbientFloor", 0.32f);
+            SetFloat(material, "_IndirectStrength", 0.92f);
+            SetFloat(material, "_AmbientFloor", 0.38f);
             SetFloat(material, "_SpecularIntensity", Mathf.Lerp(0.12f, 0.92f, clampedMetallic) * Mathf.Lerp(0.68f, 1f, smoothness));
             SetFloat(material, "_ReflectionStrength", clampedMetallic * Mathf.Lerp(0.08f, 0.38f, smoothness));
             SetFloat(material, "_RimPower", Mathf.Lerp(5.5f, 3.8f, clampedMetallic));

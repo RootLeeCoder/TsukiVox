@@ -11,6 +11,7 @@ namespace TsukiVox.AudioPrototype.Editor
     {
         private const string ScenePath = "Assets/Scenes/AudioPrototype.unity";
         private const string PreviewPath = "Logs/QuestUrpPreview.png";
+        private const string LoungePreviewPath = "Logs/QuestUrpLoungePreview.png";
 
         [MenuItem("TsukiVox/Capture Quest Rendering Preview")]
         public static void CapturePreview()
@@ -45,6 +46,8 @@ namespace TsukiVox.AudioPrototype.Editor
             var previousTarget = camera.targetTexture;
             var previousStereoTarget = camera.stereoTargetEye;
             var previousActive = RenderTexture.active;
+            var previousPosition = camera.transform.position;
+            var previousRotation = camera.transform.rotation;
             var renderTexture = new RenderTexture(
                 width,
                 height,
@@ -69,11 +72,22 @@ namespace TsukiVox.AudioPrototype.Editor
                 linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
                 linearTexture.Apply(false, false);
                 WriteSrgbPng(linearTexture, outputTexture, PreviewPath);
+
+                camera.transform.position = new Vector3(2.72f, 1.58f, 3.72f);
+                camera.transform.LookAt(new Vector3(0f, 0.72f, -0.1f));
+                camera.Render();
+                camera.Render();
+                RenderTexture.active = renderTexture;
+                linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
+                linearTexture.Apply(false, false);
+                WriteSrgbPng(linearTexture, outputTexture, LoungePreviewPath);
             }
             finally
             {
                 camera.targetTexture = previousTarget;
                 camera.stereoTargetEye = previousStereoTarget;
+                camera.transform.position = previousPosition;
+                camera.transform.rotation = previousRotation;
                 RenderTexture.active = previousActive;
                 UnityEngine.Object.DestroyImmediate(linearTexture);
                 UnityEngine.Object.DestroyImmediate(outputTexture);
@@ -81,7 +95,9 @@ namespace TsukiVox.AudioPrototype.Editor
                 UnityEngine.Object.DestroyImmediate(renderTexture);
             }
 
-            Debug.Log($"[TsukiVox URP] Captured rendering preview at {Path.GetFullPath(PreviewPath)}.");
+            Debug.Log(
+                $"[TsukiVox URP] Captured rendering previews at {Path.GetFullPath(PreviewPath)} " +
+                $"and {Path.GetFullPath(LoungePreviewPath)}.");
         }
 
         private static void WriteSrgbPng(Texture2D linearTexture, Texture2D outputTexture, string path)

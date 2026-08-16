@@ -10,6 +10,10 @@ Shader "TsukiVox/Quest Stylized Lit"
         _ToonStrength("Toon Strength", Range(0, 1)) = 0.68
         _IndirectStrength("Indirect Light", Range(0, 2)) = 0.82
         _AmbientFloor("Ambient Floor", Range(0, 0.5)) = 0.32
+        [Enum(None,0,Wood,1,Fabric,2,BrushedMetal,3,Stone,4,Perforated,5,Plaster,6)] _DetailMode("Surface Detail", Float) = 0
+        _DetailScale("Detail Scale", Range(0.01, 120)) = 1
+        _DetailStrength("Detail Strength", Range(0, 0.5)) = 0
+        _VerticalGradient("Vertical Gradient", Range(-1, 1)) = 0
         _Metallic("Metallic", Range(0, 1)) = 0
         _Smoothness("Smoothness", Range(0, 1)) = 0.35
         _SpecularIntensity("Specular", Range(0, 2)) = 0.25
@@ -56,6 +60,10 @@ Shader "TsukiVox/Quest Stylized Lit"
             half _ToonStrength;
             half _IndirectStrength;
             half _AmbientFloor;
+            half _DetailMode;
+            half _DetailScale;
+            half _DetailStrength;
+            half _VerticalGradient;
             half _Metallic;
             half _Smoothness;
             half _SpecularIntensity;
@@ -79,6 +87,91 @@ Shader "TsukiVox/Quest Stylized Lit"
         half4 SampleBase(float2 uv)
         {
             return SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, uv) * _BaseColor;
+        }
+
+        float2 GetPlanarCoordinates(float3 positionWS, half3 normalWS)
+        {
+            half3 axisWeight = abs(normalWS);
+            if (axisWeight.y >= axisWeight.x && axisWeight.y >= axisWeight.z)
+            {
+                return positionWS.xz;
+            }
+
+            if (axisWeight.x >= axisWeight.z)
+            {
+                return positionWS.zy;
+            }
+
+            return positionWS.xy;
+        }
+
+        half TriangleWave(float value)
+        {
+            return abs(frac(value) - 0.5h) * 2.0h;
+        }
+
+        half EvaluateSurfaceDetail(float2 coordinates)
+        {
+            float2 detail = coordinates * max(_DetailScale, 0.01h);
+            if (_DetailMode < 0.5h)
+            {
+                return 0.5h;
+            }
+
+            if (_DetailMode < 1.5h)
+            {
+                half grain = 0.5h + 0.5h * sin(
+                    detail.y * 2.1h +
+                    sin(detail.x * 0.42h) * 1.35h +
+                    sin(detail.y * 0.13h) * 0.55h);
+                half pore = TriangleWave(detail.x * 0.19h + detail.y * 0.055h);
+                return saturate(grain * 0.72h + pore * 0.28h);
+            }
+
+            if (_DetailMode < 2.5h)
+            {
+                half warp = smoothstep(0.68h, 1.0h, TriangleWave(detail.x));
+                half weft = smoothstep(0.68h, 1.0h, TriangleWave(detail.y + 0.5h));
+                return saturate(0.32h + max(warp, weft) * 0.68h);
+            }
+
+            if (_DetailMode < 3.5h)
+            {
+                half broad = TriangleWave(detail.y * 0.12h + sin(detail.x * 0.025h));
+                half fine = TriangleWave(detail.y * 1.7h);
+                return saturate(broad * 0.62h + fine * 0.38h);
+            }
+
+            if (_DetailMode < 4.5h)
+            {
+                half veinDistance = abs(sin(
+                    detail.x * 0.62h +
+                    detail.y * 0.31h +
+                    sin(detail.y * 0.19h) * 1.5h));
+                half vein = 1.0h - smoothstep(0.0h, 0.13h, veinDistance);
+                half cloud = 0.5h + 0.5h * sin(detail.x * 0.17h - detail.y * 0.23h);
+                return saturate(0.34h + cloud * 0.34h + vein * 0.32h);
+            }
+
+            if (_DetailMode < 5.5h)
+            {
+                float2 cell = frac(detail) - 0.5h;
+                half hole = 1.0h - smoothstep(0.12h, 0.22h, dot(cell, cell));
+                return 0.72h - hole * 0.72h;
+            }
+
+            half lowFrequency = TriangleWave(detail.x * 0.23h + detail.y * 0.17h);
+            half highFrequency = TriangleWave(detail.x * 0.91h - detail.y * 0.73h);
+            return saturate(lowFrequency * 0.68h + highFrequency * 0.32h);
+        }
+
+        half3 ApplySurfaceDetail(half3 color, float3 positionWS, half3 normalWS)
+        {
+            half detail = EvaluateSurfaceDetail(GetPlanarCoordinates(positionWS, normalWS));
+            half signedDetail = detail * 2.0h - 1.0h;
+            half height = saturate((positionWS.y + 0.2h) / 3.2h);
+            half heightMultiplier = 1.0h + (height - 0.45h) * _VerticalGradient * 0.34h;
+            return max(color * (1.0h + signedDetail * _DetailStrength) * heightMultiplier, 0.0h.xxx);
         }
 
         void ApplyAlphaClip(half alpha)
@@ -198,6 +291,7 @@ Shader "TsukiVox/Quest Stylized Lit"
                 ApplyAlphaClip(baseSample.a);
 
                 half3 normalWS = NormalizeNormalPerPixel(input.normalWS);
+                baseSample.rgb = ApplySurfaceDetail(baseSample.rgb, input.positionWS, normalWS);
                 half3 viewDirectionWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
                 float3 directDiffuse = 0;
                 float3 directSpecular = 0;
