@@ -25,7 +25,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 24;
+        public const int CurrentDesignRevision = 25;
         public const string ThemePrefsKey = "TsukiVox.RoomTheme";
 
         // Player start is the world/tracking origin; recentering returns the user to the sofa.
@@ -266,7 +266,7 @@ namespace TsukiVox.AudioPrototype
                     continue;
                 }
 
-                material.color = themedColor.Color;
+                QuestStylizedMaterial.SetBaseColor(material, themedColor.Color);
                 if (themedColor.EmissionIntensity > 0f)
                 {
                     SetEmission(material, themedColor.Color, themedColor.EmissionIntensity);
@@ -1955,17 +1955,7 @@ namespace TsukiVox.AudioPrototype
 
         private static void SetEmission(Material material, Color color, float intensity)
         {
-            if (material == null)
-            {
-                return;
-            }
-
-            if (material.HasProperty("_EmissionColor"))
-            {
-                material.SetColor("_EmissionColor", color * Mathf.Max(0f, intensity));
-            }
-
-            material.EnableKeyword("_EMISSION");
+            QuestStylizedMaterial.SetEmission(material, color, intensity);
         }
 
         /// <summary>
@@ -2158,41 +2148,13 @@ namespace TsukiVox.AudioPrototype
                 float emissionIntensity = 0f,
                 bool transparent = false)
             {
-                var shader = Shader.Find("Standard");
-                var material = new Material(shader)
-                {
-                    name = materialName,
-                    color = color,
-                };
-
-                if (material.HasProperty("_Metallic"))
-                {
-                    material.SetFloat("_Metallic", metallic);
-                }
-
-                if (material.HasProperty("_Glossiness"))
-                {
-                    material.SetFloat("_Glossiness", smoothness);
-                }
-
-                if (emissionIntensity > 0f)
-                {
-                    SetEmission(material, color, emissionIntensity);
-                }
-
-                if (transparent)
-                {
-                    material.SetFloat("_Mode", 3f);
-                    material.SetInt("_SrcBlend", (int)BlendMode.One);
-                    material.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
-                    material.SetInt("_ZWrite", 0);
-                    material.DisableKeyword("_ALPHATEST_ON");
-                    material.DisableKeyword("_ALPHABLEND_ON");
-                    material.EnableKeyword("_ALPHAPREMULTIPLY_ON");
-                    material.renderQueue = (int)RenderQueue.Transparent;
-                }
-
-                return material;
+                return QuestStylizedMaterial.CreateLit(
+                    materialName,
+                    color,
+                    1f - smoothness,
+                    metallic,
+                    emissionIntensity,
+                    transparent);
             }
         }
     }

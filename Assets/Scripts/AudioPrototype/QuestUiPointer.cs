@@ -798,7 +798,12 @@ namespace TsukiVox.AudioPrototype
 
             if (pointerMaterial == null)
             {
-                var shader = Shader.Find("Unlit/Color");
+                var shader = Shader.Find("Universal Render Pipeline/Unlit");
+                if (shader == null)
+                {
+                    shader = Shader.Find("Unlit/Color");
+                }
+
                 if (shader == null)
                 {
                     shader = Shader.Find("Sprites/Default");

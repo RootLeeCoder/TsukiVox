@@ -2141,7 +2141,7 @@ namespace TsukiVox.AudioPrototype
 
             if (shader == null)
             {
-                shader = Shader.Find("Standard");
+                shader = Shader.Find("Universal Render Pipeline/Simple Lit");
             }
 
             var material = new Material(shader)

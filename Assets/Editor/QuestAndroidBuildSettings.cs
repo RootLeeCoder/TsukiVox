@@ -23,6 +23,7 @@ namespace TsukiVox.AudioPrototype.Editor
                 return;
             }
 
+            QuestUrpProjectSettings.EnsureConfigured();
             PlayerSettings.companyName = "TsukiVox";
             PlayerSettings.productName = "TsukiVox Quest";
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "com.tsukivox.audio");

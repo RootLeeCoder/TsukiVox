@@ -864,10 +864,10 @@ namespace TsukiVox.AudioPrototype
                 // Painted-metal charcoal body, dark steel hardware, a two-tone steel
                 // grille and the emissive status ring. Few shared materials keep the
                 // prop cheap on Quest.
-                var bodyMaterial = PropMaterials.Standard("V0.6 Mic Body", new Color(0.075f, 0.08f, 0.085f, 1f), 0.55f, 0.55f);
-                var steelMaterial = PropMaterials.Standard("V0.6 Mic Dark Steel", new Color(0.26f, 0.28f, 0.3f, 1f), 0.38f, 0.85f);
-                var grilleMaterial = PropMaterials.Standard("V0.6 Mic Grille", new Color(0.3f, 0.32f, 0.34f, 1f), 0.45f, 0.9f);
-                var grilleWireMaterial = PropMaterials.Standard("V0.6 Mic Grille Wire", new Color(0.52f, 0.55f, 0.58f, 1f), 0.3f, 0.95f);
+                var bodyMaterial = PropMaterials.Lit("V0.6 Mic Body", new Color(0.075f, 0.08f, 0.085f, 1f), 0.55f, 0.55f);
+                var steelMaterial = PropMaterials.Lit("V0.6 Mic Dark Steel", new Color(0.26f, 0.28f, 0.3f, 1f), 0.38f, 0.85f);
+                var grilleMaterial = PropMaterials.Lit("V0.6 Mic Grille", new Color(0.3f, 0.32f, 0.34f, 1f), 0.45f, 0.9f);
+                var grilleWireMaterial = PropMaterials.Lit("V0.6 Mic Grille Wire", new Color(0.52f, 0.55f, 0.58f, 1f), 0.3f, 0.95f);
                 var ringMaterial = PropMaterials.Emissive("V0.6 Mic Ring", RingColor, 0.8f, 0.1f);
 
                 // Base cap at the pinky end, slightly wider than the grip and narrowing
@@ -1029,7 +1029,7 @@ namespace TsukiVox.AudioPrototype
                 anchor.localRotation = localRotation;
 
                 var startColor = GlowstickColorOptions[DefaultGlowstickColorIndex].Value;
-                var handleMaterial = PropMaterials.Standard("V0.6 Glowstick Handle", new Color(0.012f, 0.016f, 0.02f, 1f), 0.44f, 0.16f);
+                var handleMaterial = PropMaterials.Lit("V0.6 Glowstick Handle", new Color(0.012f, 0.016f, 0.02f, 1f), 0.44f, 0.16f);
                 var outerMaterial = PropMaterials.AdditiveShell("V0.6 Glowstick Shell", startColor, 0.38f);
                 var coreMaterial = PropMaterials.Emissive("V0.6 Glowstick Core", startColor, 2.0f, 0f);
 
@@ -1135,89 +1135,46 @@ namespace TsukiVox.AudioPrototype
             }
         }
 
-        /// <summary>Shared material factory for the handheld props (built-in Standard pipeline).</summary>
+        /// <summary>Shared material factory for the handheld props.</summary>
         private static class PropMaterials
         {
-            public static Material Standard(string materialName, Color color, float roughness, float metallic)
+            public static Material Lit(string materialName, Color color, float roughness, float metallic)
             {
-                var material = new Material(Shader.Find("Standard"))
-                {
-                    name = materialName,
-                    color = color,
-                };
-                ApplySurface(material, roughness, metallic);
-                return material;
+                return QuestStylizedMaterial.CreateLit(materialName, color, roughness, metallic);
             }
 
             public static Material Emissive(string materialName, Color color, float emissionIntensity, float metallic)
             {
-                var material = Standard(materialName, color, 0.28f, metallic);
-                material.name = materialName;
-                SetEmission(material, color, emissionIntensity);
-                return material;
+                return QuestStylizedMaterial.CreateLit(
+                    materialName,
+                    color,
+                    0.28f,
+                    metallic,
+                    emissionIntensity);
             }
 
             public static Material AdditiveShell(string materialName, Color color, float alpha)
             {
-                var material = new Material(Shader.Find("Standard"))
-                {
-                    name = materialName,
-                    color = color,
-                };
-
-                // Transparent, additive-flavoured emissive shell that never writes depth.
-                material.SetFloat("_Mode", 3f);
-                material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
-                material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One);
-                material.SetInt("_ZWrite", 0);
-                material.DisableKeyword("_ALPHATEST_ON");
-                material.EnableKeyword("_ALPHABLEND_ON");
-                material.EnableKeyword("_ALPHAPREMULTIPLY_ON");
-                material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-                ApplySurface(material, 0.35f, 0f);
-                SetEmission(material, color, 1.0f);
+                var material = QuestStylizedMaterial.CreateLit(
+                    materialName,
+                    color,
+                    0.35f,
+                    0f,
+                    1f,
+                    true,
+                    true);
                 SetAlpha(material, alpha);
                 return material;
             }
 
             public static void SetEmission(Material material, Color color, float intensity)
             {
-                if (material == null)
-                {
-                    return;
-                }
-
-                if (material.HasProperty("_EmissionColor"))
-                {
-                    material.SetColor("_EmissionColor", color * Mathf.Max(0f, intensity));
-                }
-
-                material.EnableKeyword("_EMISSION");
+                QuestStylizedMaterial.SetEmission(material, color, intensity);
             }
 
             public static void SetAlpha(Material material, float alpha)
             {
-                if (material == null)
-                {
-                    return;
-                }
-
-                var color = material.color;
-                color.a = Mathf.Clamp01(alpha);
-                material.color = color;
-            }
-
-            private static void ApplySurface(Material material, float roughness, float metallic)
-            {
-                if (material.HasProperty("_Metallic"))
-                {
-                    material.SetFloat("_Metallic", metallic);
-                }
-
-                if (material.HasProperty("_Glossiness"))
-                {
-                    material.SetFloat("_Glossiness", Mathf.Clamp01(1f - roughness));
-                }
+                QuestStylizedMaterial.SetAlpha(material, alpha);
             }
         }
 
