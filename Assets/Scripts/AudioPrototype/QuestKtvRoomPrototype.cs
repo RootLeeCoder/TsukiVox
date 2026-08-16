@@ -25,7 +25,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 23;
+        public const int CurrentDesignRevision = 24;
         public const string ThemePrefsKey = "TsukiVox.RoomTheme";
 
         // Player start is the world/tracking origin; recentering returns the user to the sofa.
@@ -38,6 +38,15 @@ namespace TsukiVox.AudioPrototype
         private const float ScreenSafeScale = 0.96f;
         public static readonly Vector2 ScreenMatteSize = new Vector2(3.8f, 2.1375f);
         public static readonly Vector2 ScreenSafeSize = ScreenMatteSize * ScreenSafeScale;
+        public static readonly Vector3 LeftSpeakerPosition = new Vector3(-2.78f, 2.38f, 4.7f);
+        public static readonly Vector3 RightSpeakerPosition = new Vector3(2.78f, 2.38f, 4.7f);
+        public static readonly Vector3 SpeakerAudioPosition =
+            (LeftSpeakerPosition + RightSpeakerPosition) * 0.5f;
+        public const float SpeakerSpatialBlend = 0.82f;
+        public const float SpeakerStereoSpreadDegrees = 62f;
+        public const float SpeakerMinDistance = 4.5f;
+        public const float SpeakerMaxDistance = 12f;
+        public const float SpeakerReverbZoneMix = 0.2f;
 
         private const string GeometryRootName = "Geometry";
         private const string FeedbackRootName = "Feedback";
@@ -322,6 +331,7 @@ namespace TsukiVox.AudioPrototype
             BuildScreenSurround(palette);
             BuildLevelBars(palette);
             BuildLightStrips(palette);
+            BuildAudioEnvironment();
             BuildPerformanceArea(palette);
             BuildCornerDressing(palette);
         }
@@ -612,8 +622,8 @@ namespace TsukiVox.AudioPrototype
             CreateSpeakerAcousticPanel(palette, "left speaker acoustic panel", -2.68f);
             CreateSpeakerAcousticPanel(palette, "right speaker acoustic panel", 2.68f);
 
-            CreateSpeaker(palette, "left speaker", -2.78f);
-            CreateSpeaker(palette, "right speaker", 2.78f);
+            CreateSpeaker(palette, "left speaker", LeftSpeakerPosition.x);
+            CreateSpeaker(palette, "right speaker", RightSpeakerPosition.x);
         }
 
         private void CreateSpeakerAcousticPanel(RoomPalette palette, string objectName, float x)
@@ -640,8 +650,8 @@ namespace TsukiVox.AudioPrototype
 
         private void CreateSpeaker(RoomPalette palette, string objectName, float x)
         {
-            const float speakerY = 2.38f;
-            const float speakerZ = FrontWallZ - 0.3f;
+            var speakerY = SpeakerAudioPosition.y;
+            var speakerZ = SpeakerAudioPosition.z;
             var side = Mathf.Sign(x);
 
             CreateSpeakerMount(palette, objectName, x, speakerY);
@@ -791,6 +801,18 @@ namespace TsukiVox.AudioPrototype
             CreateBeveledBox(feedbackRoot, "ceiling light strip", new Vector3(6.2f, 0.07f, 0.07f), new Vector3(0f, RoomHeight - 0.08f, FrontWallZ - 0.3f), palette.Warm, 0.01f, false, false, false);
             CreateBeveledBox(feedbackRoot, "left light strip", new Vector3(0.07f, 0.07f, sideStripLength), new Vector3(-RoomWidth * 0.5f + 0.06f, RoomHeight - 0.12f, sideStripCenterZ), palette.Warm, 0.01f, false, false, false);
             CreateBeveledBox(feedbackRoot, "right light strip", new Vector3(0.07f, 0.07f, sideStripLength), new Vector3(RoomWidth * 0.5f - 0.06f, RoomHeight - 0.12f, sideStripCenterZ), palette.Warm, 0.01f, false, false, false);
+        }
+
+        private void BuildAudioEnvironment()
+        {
+            var reverbObject = new GameObject("small room reflections");
+            reverbObject.transform.SetParent(feedbackRoot, false);
+            reverbObject.transform.localPosition = new Vector3(0f, RoomHeight * 0.5f, (BackWallZ + FrontWallZ) * 0.5f);
+
+            var reverbZone = reverbObject.AddComponent<AudioReverbZone>();
+            reverbZone.reverbPreset = AudioReverbPreset.Livingroom;
+            reverbZone.minDistance = 4.2f;
+            reverbZone.maxDistance = 5.6f;
         }
 
         private void BuildPerformanceArea(RoomPalette palette)

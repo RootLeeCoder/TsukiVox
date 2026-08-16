@@ -68,6 +68,14 @@ namespace TsukiVox.AudioPrototype
         [SerializeField, Range(0f, 1f)] private float echoAmount = 0.3f;
         [SerializeField, Range(0f, 1f)] private float dynamicsAmount = 0.65f;
 
+        [Header("Voice Speaker Spatial Audio")]
+        [SerializeField] private bool spatialVoiceEnabled = true;
+        [SerializeField, Range(0f, 1f)] private float voiceSpatialBlend = QuestKtvRoomPrototype.SpeakerSpatialBlend;
+        [SerializeField, Range(0f, 360f)] private float voiceStereoSpread = QuestKtvRoomPrototype.SpeakerStereoSpreadDegrees;
+        [SerializeField, Min(0.1f)] private float voiceMinDistance = QuestKtvRoomPrototype.SpeakerMinDistance;
+        [SerializeField, Min(0.2f)] private float voiceMaxDistance = QuestKtvRoomPrototype.SpeakerMaxDistance;
+        [SerializeField, Range(0f, 1.1f)] private float voiceReverbZoneMix = QuestKtvRoomPrototype.SpeakerReverbZoneMix;
+
         [Header("Distance Monitoring")]
         [SerializeField] private bool distanceMonitoringEnabled = true;
         [SerializeField, Range(0.02f, 0.15f)] private float distanceFullGainClearance = DefaultDistanceFullGainClearance;
@@ -196,6 +204,24 @@ namespace TsukiVox.AudioPrototype
         public bool IsSafetyLimiterEnabled => safetyLimiterEnabled;
 
         public bool PrefersNativeOboeBackend => preferNativeOboeBackend;
+
+        public bool IsSpatialVoiceEnabled => spatialVoiceEnabled;
+
+        public bool IsNativeBackendSelectable => !spatialVoiceEnabled && NativeOboeDryMonitor.IsAvailable;
+
+        public Vector3 VoiceEmitterPosition => monitorSource != null
+            ? monitorSource.transform.position
+            : QuestKtvRoomPrototype.SpeakerAudioPosition;
+
+        public float VoiceSpatialBlend => monitorSource != null ? monitorSource.spatialBlend : 0f;
+
+        public float VoiceStereoSpread => monitorSource != null ? monitorSource.spread : 0f;
+
+        public float VoiceMinDistance => monitorSource != null ? monitorSource.minDistance : 0f;
+
+        public float VoiceMaxDistance => monitorSource != null ? monitorSource.maxDistance : 0f;
+
+        public float VoiceReverbZoneMix => monitorSource != null ? monitorSource.reverbZoneMix : 0f;
 
         private void Reset()
         {
@@ -519,13 +545,27 @@ namespace TsukiVox.AudioPrototype
                 ? gameObject.GetComponent<AudioLowPassFilter>() ?? gameObject.AddComponent<AudioLowPassFilter>()
                 : lowPassFilter;
 
+            monitorSource.transform.SetPositionAndRotation(
+                QuestKtvRoomPrototype.SpeakerAudioPosition,
+                Quaternion.identity);
             monitorSource.playOnAwake = false;
             monitorSource.loop = true;
-            monitorSource.spatialBlend = 0f;
+            monitorSource.spatialBlend = spatialVoiceEnabled ? Mathf.Clamp01(voiceSpatialBlend) : 0f;
+            monitorSource.spread = spatialVoiceEnabled ? Mathf.Clamp(voiceStereoSpread, 0f, 360f) : 0f;
+            monitorSource.panStereo = 0f;
+            monitorSource.spatialize = false;
+            monitorSource.spatializePostEffects = false;
+            monitorSource.dopplerLevel = 0f;
+            monitorSource.rolloffMode = AudioRolloffMode.Logarithmic;
+            monitorSource.minDistance = Mathf.Max(0.1f, voiceMinDistance);
+            monitorSource.maxDistance = Mathf.Max(monitorSource.minDistance + 0.1f, voiceMaxDistance);
             monitorSource.priority = 0;
             monitorSource.bypassListenerEffects = false;
             monitorSource.bypassEffects = false;
-            monitorSource.bypassReverbZones = true;
+            monitorSource.bypassReverbZones = !spatialVoiceEnabled;
+            monitorSource.reverbZoneMix = spatialVoiceEnabled
+                ? Mathf.Clamp(voiceReverbZoneMix, 0f, 1.1f)
+                : 0f;
         }
 
         private void EnsureAudioListener()
@@ -677,16 +717,25 @@ namespace TsukiVox.AudioPrototype
             monitorSource.Play();
             isMonitoring = true;
             activeBackend = NativeAudioBackend.UnityMicrophone;
-            backendNote = "Unity Microphone backend.";
+            backendNote = spatialVoiceEnabled
+                ? "Unity Microphone backend. Voice is emitted from the wall speakers."
+                : "Unity Microphone backend.";
             lastReadPosition = Microphone.GetPosition(activeDevice);
-            SetStatus(vocalProcessorEnabled
-                ? "Unity monitoring with KTV reverb/echo active. Keep headset volume low while tuning."
-                : "Unity dry monitoring. Keep headset volume low while tuning.");
+            SetStatus(spatialVoiceEnabled
+                ? "Unity monitoring is routed through the wall speakers. Keep headset volume low while tuning."
+                : vocalProcessorEnabled
+                    ? "Unity monitoring with KTV reverb/echo active. Keep headset volume low while tuning."
+                    : "Unity dry monitoring. Keep headset volume low while tuning.");
             RefreshUi();
         }
 
         private bool TryStartNativeMonitoring()
         {
+            if (spatialVoiceEnabled)
+            {
+                return false;
+            }
+
             if (!preferNativeOboeBackend || !NativeOboeDryMonitor.IsAvailable)
             {
                 return false;
@@ -807,6 +856,16 @@ namespace TsukiVox.AudioPrototype
 
         private void ApplyNativePreference(bool enabled)
         {
+            if (enabled && spatialVoiceEnabled)
+            {
+                preferNativeOboeBackend = false;
+                nativeToggle?.SetIsOnWithoutNotify(false);
+                backendNote = "Native Oboe is unavailable while wall-speaker voice positioning is enabled.";
+                SetStatus("Spatial voice monitoring requires the Unity microphone backend.");
+                RefreshUi();
+                return;
+            }
+
             preferNativeOboeBackend = enabled;
             nativeToggle?.SetIsOnWithoutNotify(preferNativeOboeBackend);
 
@@ -1119,6 +1178,7 @@ namespace TsukiVox.AudioPrototype
             if (nativeToggle != null)
             {
                 nativeToggle.SetIsOnWithoutNotify(preferNativeOboeBackend);
+                nativeToggle.interactable = IsNativeBackendSelectable;
             }
         }
 
@@ -1163,6 +1223,32 @@ namespace TsukiVox.AudioPrototype
             }
             metricsBuilder.Append("\nBackend ");
             metricsBuilder.Append(activeBackend == NativeAudioBackend.NativeOboeDryMonitor ? "Native Oboe Dry" : "Unity Microphone");
+            metricsBuilder.Append("\nVoice spatial ");
+            metricsBuilder.Append(spatialVoiceEnabled ? "wall speakers" : "disabled");
+            if (monitorSource != null)
+            {
+                var emitterPosition = monitorSource.transform.position;
+                metricsBuilder.Append("  emitter ");
+                metricsBuilder.Append(emitterPosition.x.ToString("0.00"));
+                metricsBuilder.Append(",");
+                metricsBuilder.Append(emitterPosition.y.ToString("0.00"));
+                metricsBuilder.Append(",");
+                metricsBuilder.Append(emitterPosition.z.ToString("0.00"));
+                metricsBuilder.Append("\nSpatial blend/spread ");
+                metricsBuilder.Append(monitorSource.spatialBlend.ToString("0.00"));
+                metricsBuilder.Append("/");
+                metricsBuilder.Append(monitorSource.spread.ToString("0"));
+                metricsBuilder.Append(" deg  distance ");
+                metricsBuilder.Append(monitorSource.minDistance.ToString("0.0"));
+                metricsBuilder.Append("-");
+                metricsBuilder.Append(monitorSource.maxDistance.ToString("0.0"));
+                metricsBuilder.Append(" m  room send ");
+                metricsBuilder.Append(monitorSource.reverbZoneMix.ToString("0.00"));
+            }
+            if (spatialVoiceEnabled)
+            {
+                metricsBuilder.Append("\nNative Oboe disabled: no Unity spatial routing");
+            }
 
             if (activeBackend == NativeAudioBackend.NativeOboeDryMonitor)
             {

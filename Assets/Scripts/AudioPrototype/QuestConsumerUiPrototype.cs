@@ -1286,7 +1286,7 @@ namespace TsukiVox.AudioPrototype
             CreateText(settingsPage, "Audio Section", "音频高级设置", 16, FontStyle.Bold, new Vector2(-356f, 55f), new Vector2(280f, 30f), TextAnchor.MiddleLeft, TextSecondary);
             CreateSettingToggle(settingsPage, "Monitor Output", "返听输出", "关闭后仍保留麦克风输入", 12f, out monitorOutputToggle);
             CreateSettingToggle(settingsPage, "Safety Limiter", "安全保护", "建议始终保持开启", -56f, out safetyToggle);
-            CreateSettingToggle(settingsPage, "Native Backend", "Native 低延迟", "原声路径，不包含 KTV 效果", -124f, out nativeToggle);
+            CreateSettingToggle(settingsPage, "Native Backend", "Native 低延迟", "空间返听模式下不可用", -124f, out nativeToggle);
 
             CreateDivider(settingsPage, "Audio Divider", new Vector2(0f, -184f), new Vector2(ContentWidth, 1f));
             openDiagnosticsButton = CreateSurfaceButton(settingsPage, "Open Diagnostics", new Vector2(-116f, -228f), new Vector2(760f, 72f), Surface, Line);
@@ -1824,11 +1824,13 @@ namespace TsukiVox.AudioPrototype
                 distanceMonitoringStatusText.color = AccentStrong;
             }
 
-            voiceMixerFooterText.text = audioPrototype.PrefersNativeOboeBackend
-                ? "Native 低延迟仅提供原声；距离跟随仍然生效"
-                : audioPrototype.IsSafetyReducingGain
-                    ? "安全保护正在降低返听增益"
-                    : "距离跟随只调整返听增益";
+            voiceMixerFooterText.text = audioPrototype.IsSafetyReducingGain
+                ? "安全保护正在降低返听增益"
+                : audioPrototype.IsSpatialVoiceEnabled
+                    ? "人声已定位至墙面音箱 · 距离跟随只调整增益"
+                    : audioPrototype.PrefersNativeOboeBackend
+                        ? "Native 低延迟仅提供原声；距离跟随仍然生效"
+                        : "距离跟随只调整返听增益";
             voiceMixerFooterText.color = audioPrototype.IsSafetyReducingGain ? Warm : TextSecondary;
 
             for (var index = 0; index < presetButtons.Length; index += 1)
@@ -2004,6 +2006,7 @@ namespace TsukiVox.AudioPrototype
             monitorOutputToggle.SetIsOnWithoutNotify(audioPrototype.IsMonitorOutputEnabled);
             safetyToggle.SetIsOnWithoutNotify(audioPrototype.IsSafetyLimiterEnabled);
             nativeToggle.SetIsOnWithoutNotify(audioPrototype.PrefersNativeOboeBackend);
+            nativeToggle.interactable = audioPrototype.IsNativeBackendSelectable;
             RefreshSwitchVisual(monitorOutputToggle, Accent);
             RefreshSwitchVisual(safetyToggle, Accent);
             RefreshSwitchVisual(nativeToggle, Accent);
@@ -2232,6 +2235,7 @@ namespace TsukiVox.AudioPrototype
             rawDiagnosticsText.text =
                 $"构建信息  {QuestBuildInfo.RawSummary}\n" +
                 $"音频后端  {audioPrototype?.ActiveBackendName ?? "missing"}\n" +
+                $"人声定位  {(audioPrototype == null ? "missing" : audioPrototype.IsSpatialVoiceEnabled ? "墙面音箱" : "off")}\n" +
                 $"人声预设  {audioPrototype?.CurrentPresetName ?? "missing"}\n" +
                 $"输入/输出  {(audioPrototype?.InputLevel ?? 0f):P0} / {(audioPrototype?.OutputLevel ?? 0f):P0}\n" +
                 $"主页音量  视频 {(videoScreenPrototype?.VideoVolume ?? 0f):P0} · 人声 {(audioPrototype?.MonitorVolume ?? 0f):P0} · 前级 {(audioPrototype?.MonitorPreGainDecibels ?? -80f):+0.0;-0.0;0.0} dB\n" +

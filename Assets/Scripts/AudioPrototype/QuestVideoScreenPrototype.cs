@@ -41,6 +41,13 @@ namespace TsukiVox.AudioPrototype
         [Header("Audio")]
         [SerializeField, Range(0f, 1f)] private float videoVolume = DefaultVideoVolume;
 
+        [Header("Speaker Spatial Audio")]
+        [SerializeField, Range(0f, 1f)] private float speakerSpatialBlend = QuestKtvRoomPrototype.SpeakerSpatialBlend;
+        [SerializeField, Range(0f, 360f)] private float speakerStereoSpread = QuestKtvRoomPrototype.SpeakerStereoSpreadDegrees;
+        [SerializeField, Min(0.1f)] private float speakerMinDistance = QuestKtvRoomPrototype.SpeakerMinDistance;
+        [SerializeField, Min(0.2f)] private float speakerMaxDistance = QuestKtvRoomPrototype.SpeakerMaxDistance;
+        [SerializeField, Range(0f, 1.1f)] private float speakerReverbZoneMix = QuestKtvRoomPrototype.SpeakerReverbZoneMix;
+
         [Header("Screen")]
         [SerializeField] private RawImage screenImage;
         [SerializeField] private MeshRenderer screenRenderer;
@@ -306,6 +313,8 @@ namespace TsukiVox.AudioPrototype
 
         private void EnsureVideoPlayer()
         {
+            transform.SetPositionAndRotation(QuestKtvRoomPrototype.SpeakerAudioPosition, Quaternion.identity);
+
             videoPlayer = GetComponent<VideoPlayer>();
             if (videoPlayer == null)
             {
@@ -320,9 +329,18 @@ namespace TsukiVox.AudioPrototype
 
             videoAudioSource.playOnAwake = false;
             videoAudioSource.loop = false;
-            videoAudioSource.spatialBlend = 0f;
+            videoAudioSource.spatialBlend = Mathf.Clamp01(speakerSpatialBlend);
+            videoAudioSource.spread = Mathf.Clamp(speakerStereoSpread, 0f, 360f);
+            videoAudioSource.panStereo = 0f;
+            videoAudioSource.spatialize = false;
+            videoAudioSource.spatializePostEffects = false;
+            videoAudioSource.dopplerLevel = 0f;
+            videoAudioSource.rolloffMode = AudioRolloffMode.Logarithmic;
+            videoAudioSource.minDistance = Mathf.Max(0.1f, speakerMinDistance);
+            videoAudioSource.maxDistance = Mathf.Max(videoAudioSource.minDistance + 0.1f, speakerMaxDistance);
             videoAudioSource.priority = 64;
-            videoAudioSource.bypassReverbZones = true;
+            videoAudioSource.bypassReverbZones = false;
+            videoAudioSource.reverbZoneMix = Mathf.Clamp(speakerReverbZoneMix, 0f, 1.1f);
             videoAudioSource.volume = videoVolume;
 
             videoPlayer.playOnAwake = false;
@@ -1636,6 +1654,21 @@ namespace TsukiVox.AudioPrototype
             debugBuilder.AppendLine($"persistentDataPath {Application.persistentDataPath}");
             debugBuilder.AppendLine($"status {lastStatusMessage}");
             debugBuilder.AppendLine($"videoVolume {videoVolume:0.000}");
+            if (videoAudioSource == null)
+            {
+                debugBuilder.AppendLine("speakerAudioSource missing");
+            }
+            else
+            {
+                var emitterPosition = videoAudioSource.transform.position;
+                debugBuilder.AppendLine($"speakerEmitter {emitterPosition.x:0.000},{emitterPosition.y:0.000},{emitterPosition.z:0.000}");
+                debugBuilder.AppendLine($"speakerSpatialBlend {videoAudioSource.spatialBlend:0.000}");
+                debugBuilder.AppendLine($"speakerSpreadDegrees {videoAudioSource.spread:0.0}");
+                debugBuilder.AppendLine($"speakerDistance {videoAudioSource.minDistance:0.00}-{videoAudioSource.maxDistance:0.00} {videoAudioSource.rolloffMode}");
+                debugBuilder.AppendLine($"speakerDoppler {videoAudioSource.dopplerLevel:0.000}");
+                debugBuilder.AppendLine($"speakerReverbZoneMix {videoAudioSource.reverbZoneMix:0.000}");
+                debugBuilder.AppendLine($"speakerSpatializer {videoAudioSource.spatialize}");
+            }
 
             var state = playlistPrototype != null ? playlistPrototype.CurrentState : null;
             var item = state?.CurrentItem;

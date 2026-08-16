@@ -297,6 +297,15 @@ namespace TsukiVox.AudioPrototype
                 debugBuilder.AppendLine($"audioWaitingForPermission {audioPrototype.IsWaitingForPermission}");
                 debugBuilder.AppendLine($"audioSafetyReducingGain {audioPrototype.IsSafetyReducingGain}");
                 debugBuilder.AppendLine($"audioBackend {audioPrototype.ActiveBackendName}");
+                var voiceEmitter = audioPrototype.VoiceEmitterPosition;
+                debugBuilder.AppendLine($"audioVoiceSpatialEnabled {audioPrototype.IsSpatialVoiceEnabled}");
+                debugBuilder.AppendLine($"audioVoiceEmitter {voiceEmitter.x:0.000},{voiceEmitter.y:0.000},{voiceEmitter.z:0.000}");
+                debugBuilder.AppendLine(
+                    $"audioVoiceSpatial blend {audioPrototype.VoiceSpatialBlend:0.000} " +
+                    $"spread {audioPrototype.VoiceStereoSpread:0.0} " +
+                    $"distance {audioPrototype.VoiceMinDistance:0.00}-{audioPrototype.VoiceMaxDistance:0.00} " +
+                    $"reverbZoneMix {audioPrototype.VoiceReverbZoneMix:0.000}");
+                debugBuilder.AppendLine($"audioNativeBackendSelectable {audioPrototype.IsNativeBackendSelectable}");
                 debugBuilder.AppendLine($"audioPreset {audioPrototype.CurrentPresetName}");
                 debugBuilder.AppendLine($"audioMonitorVolume {audioPrototype.MonitorVolume:0.000}");
                 debugBuilder.AppendLine(
