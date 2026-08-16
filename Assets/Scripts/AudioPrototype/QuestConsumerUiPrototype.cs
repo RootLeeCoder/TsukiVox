@@ -2024,13 +2024,17 @@ namespace TsukiVox.AudioPrototype
             }
 
             var celestialControlsAvailable = roomPrototype != null;
-            ceilingStarsToggle.interactable = celestialControlsAvailable;
+            var starsAvailable = celestialControlsAvailable && roomPrototype.StarsAvailable;
+            ceilingStarsToggle.interactable = starsAvailable;
             ceilingAuroraToggle.interactable = celestialControlsAvailable;
             ceilingStarsToggle.SetIsOnWithoutNotify(celestialControlsAvailable && roomPrototype.StarsEnabled);
             ceilingAuroraToggle.SetIsOnWithoutNotify(celestialControlsAvailable && roomPrototype.AuroraEnabled);
             RefreshSwitchVisual(ceilingStarsToggle, Warm);
             RefreshSwitchVisual(ceilingAuroraToggle, AccentStrong);
-            ceilingStarsLabel.color = celestialControlsAvailable && roomPrototype.StarsEnabled ? TextPrimary : TextSecondary;
+            ceilingStarsLabel.color = !starsAvailable
+                ? TextFaint
+                : roomPrototype.StarsEnabled ? TextPrimary : TextSecondary;
+            ceilingAuroraLabel.text = celestialControlsAvailable && roomPrototype.CurrentTheme == RoomTheme.Bright ? "火烧云" : "极光";
             ceilingAuroraLabel.color = celestialControlsAvailable && roomPrototype.AuroraEnabled ? TextPrimary : TextSecondary;
 
             if (audioPrototype == null)
@@ -2251,7 +2255,7 @@ namespace TsukiVox.AudioPrototype
             }
             else if (restoreConfirmationActive)
             {
-                diagnosticsVideoText.text = "将恢复暗色主题、平板 30°、星空/极光开启\n媒体缓存不会被删除";
+                diagnosticsVideoText.text = "将恢复月夜主题、平板 30°、星空/极光开启\n媒体缓存不会被删除";
                 diagnosticsVideoText.color = Warm;
             }
             else if (maintenanceResultActive)
@@ -2968,7 +2972,7 @@ namespace TsukiVox.AudioPrototype
             exitConfirmationExpiresAt = 0f;
             RefreshAppendKtvSearchToggle();
             SetMaintenanceResult(
-                "全部设置已恢复默认\n暗色主题 · 平板 30° · 星空/极光开启 · KTV 后缀关闭",
+                "全部设置已恢复默认\n月夜主题 · 平板 30° · 星空/极光开启 · KTV 后缀关闭",
                 false,
                 "all settings restored to defaults; media cache retained");
             RefreshAll();

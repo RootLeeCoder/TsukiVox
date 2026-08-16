@@ -4,12 +4,14 @@ Shader "TsukiVox/Quest Celestial Ceiling"
     {
         [MainColor] _BaseColor("Primary Color", Color) = (0.65, 0.85, 1, 1)
         [HDR] _SecondaryColor("Secondary Color", Color) = (1, 0.82, 0.62, 1)
-        [Enum(Stars,0,Aurora,1)] _EffectMode("Effect", Float) = 0
+        [Enum(Stars,0,Aurora,1,SunsetClouds,2)] _EffectMode("Effect", Float) = 0
         _Intensity("Intensity", Range(0, 2)) = 0.7
         _Scale("Scale", Range(1, 64)) = 24
         _Speed("Speed", Range(0, 4)) = 1
         _Density("Density", Range(0.01, 0.5)) = 0.12
         _Seed("Seed", Float) = 1
+        [HideInInspector] _SrcBlend("Source Blend", Float) = 5
+        [HideInInspector] _DstBlend("Destination Blend", Float) = 1
     }
 
     SubShader
@@ -26,7 +28,7 @@ Shader "TsukiVox/Quest Celestial Ceiling"
             Name "CelestialCeiling"
             Tags { "LightMode" = "UniversalForward" }
 
-            Blend SrcAlpha One
+            Blend [_SrcBlend] [_DstBlend]
             ZWrite Off
             ZTest LEqual
             Cull Off
@@ -117,6 +119,32 @@ Shader "TsukiVox/Quest Celestial Ceiling"
                 return half4(auroraColor, saturate(mask * _Intensity));
             }
 
+            half4 DrawSunsetClouds(float2 uv)
+            {
+                half time = _Time.y * _Speed;
+                half x = (uv.x + time * 0.055h) * _Scale;
+                half broadWave = sin(x * 0.74h - time * 0.68h + sin(x * 0.23h + time * 0.92h)) * 0.105h;
+                half fineWave = sin(x * 1.82h - time * 1.35h) * 0.042h;
+
+                half upperCenter = 0.58h + broadWave + fineWave;
+                half upperBand = 1.0h - smoothstep(0.035h, 0.19h, abs(uv.y - upperCenter));
+                half lowerCenter = 0.37h - broadWave * 0.66h + sin(x * 1.16h + time * 1.1h) * 0.05h;
+                half lowerBand = 1.0h - smoothstep(0.03h, 0.16h, abs(uv.y - lowerCenter));
+
+                half billow = 0.52h + 0.48h *
+                    (sin(uv.x * 31.0h - time * 2.1h + sin(uv.x * 8.0h + time * 0.75h)) * 0.5h + 0.5h);
+                half emberRipple = 0.74h + 0.26h * sin(uv.x * 12.0h + uv.y * 8.0h + time * 1.45h);
+                half breathing = 0.88h + 0.12h * sin(time * 1.05h + uv.x * 4.0h);
+                half mask = saturate(upperBand * 0.74h + lowerBand * 0.5h) *
+                    billow * emberRipple * breathing * EdgeFade(uv);
+
+                half colorBlend = saturate(uv.y * 0.92h + broadWave * 1.7h + 0.08h);
+                half3 cloudColor = lerp(_BaseColor.rgb, _SecondaryColor.rgb, colorBlend);
+                half warmCore = saturate(upperBand * (1.0h - colorBlend) * 0.28h);
+                cloudColor = lerp(cloudColor, half3(1.0h, 0.78h, 0.4h), warmCore);
+                return half4(cloudColor, saturate(mask * _Intensity));
+            }
+
             Varyings CelestialVertex(Attributes input)
             {
                 Varyings output = (Varyings)0;
@@ -132,7 +160,12 @@ Shader "TsukiVox/Quest Celestial Ceiling"
             {
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
-                return _EffectMode < 0.5h ? DrawStars(input.uv) : DrawAurora(input.uv);
+                if (_EffectMode < 0.5h)
+                {
+                    return DrawStars(input.uv);
+                }
+
+                return _EffectMode < 1.5h ? DrawAurora(input.uv) : DrawSunsetClouds(input.uv);
             }
             ENDHLSL
         }

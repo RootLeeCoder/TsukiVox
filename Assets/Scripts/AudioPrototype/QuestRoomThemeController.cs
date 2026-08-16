@@ -7,7 +7,7 @@ namespace TsukiVox.AudioPrototype
     /// <summary>
     /// Two-button room theme switch on the coffee table's left-front corner,
     /// mirroring the tablet tilt switch on the right-front corner. Clicking a
-    /// button retints the KTV room palette in place and persists the choice.
+    /// button applies the matching room palette and celestial set, then persists the choice.
     /// </summary>
     public sealed class QuestRoomThemeController : MonoBehaviour
     {
@@ -18,7 +18,7 @@ namespace TsukiVox.AudioPrototype
 
         private const float SwitchCanvasScale = 0.001f;
 
-        private static readonly string[] ThemeLabels = { "暗色\n夜场", "亮色\n日光" };
+        private static readonly string[] ThemeLabels = { "月夜", "日光" };
 
 
         [Header("Scene References")]

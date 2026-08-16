@@ -13,6 +13,8 @@ namespace TsukiVox.AudioPrototype.Editor
         private const string PreviewPath = "Logs/QuestUrpPreview.png";
         private const string LoungePreviewPath = "Logs/QuestUrpLoungePreview.png";
         private const string CeilingPreviewPath = "Logs/QuestUrpCeilingPreview.png";
+        private const string BrightPreviewPath = "Logs/QuestUrpBrightPreview.png";
+        private const string BrightCeilingPreviewPath = "Logs/QuestUrpBrightCeilingPreview.png";
 
         [MenuItem("TsukiVox/Capture Quest Rendering Preview")]
         public static void CapturePreview()
@@ -27,6 +29,7 @@ namespace TsukiVox.AudioPrototype.Editor
             }
 
             room.ConfigureSceneReferences();
+            ValidateCelestialTheme(room, RoomTheme.Dark);
 
             var shader = Shader.Find(QuestStylizedMaterial.ShaderName);
             if (shader == null || !shader.isSupported)
@@ -49,6 +52,7 @@ namespace TsukiVox.AudioPrototype.Editor
             var previousActive = RenderTexture.active;
             var previousPosition = camera.transform.position;
             var previousRotation = camera.transform.rotation;
+            var previousTheme = room.CurrentTheme;
             var renderTexture = new RenderTexture(
                 width,
                 height,
@@ -83,17 +87,36 @@ namespace TsukiVox.AudioPrototype.Editor
                 linearTexture.Apply(false, false);
                 WriteSrgbPng(linearTexture, outputTexture, LoungePreviewPath);
 
-                camera.transform.position = new Vector3(0f, 1.12f, 2.75f);
-                camera.transform.LookAt(new Vector3(0f, 2.82f, 1.46f));
+                camera.transform.position = new Vector3(0f, 1.12f, -0.05f);
+                camera.transform.LookAt(new Vector3(0f, 2.82f, 2.28f));
                 camera.Render();
                 camera.Render();
                 RenderTexture.active = renderTexture;
                 linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
                 linearTexture.Apply(false, false);
                 WriteSrgbPng(linearTexture, outputTexture, CeilingPreviewPath);
+
+                room.ApplyTheme(RoomTheme.Bright);
+                ValidateCelestialTheme(room, RoomTheme.Bright);
+                camera.Render();
+                camera.Render();
+                RenderTexture.active = renderTexture;
+                linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
+                linearTexture.Apply(false, false);
+                WriteSrgbPng(linearTexture, outputTexture, BrightCeilingPreviewPath);
+
+                camera.transform.position = previousPosition;
+                camera.transform.rotation = previousRotation;
+                camera.Render();
+                camera.Render();
+                RenderTexture.active = renderTexture;
+                linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
+                linearTexture.Apply(false, false);
+                WriteSrgbPng(linearTexture, outputTexture, BrightPreviewPath);
             }
             finally
             {
+                room.ApplyTheme(previousTheme);
                 camera.targetTexture = previousTarget;
                 camera.stereoTargetEye = previousStereoTarget;
                 camera.transform.position = previousPosition;
@@ -107,7 +130,44 @@ namespace TsukiVox.AudioPrototype.Editor
 
             Debug.Log(
                 $"[TsukiVox URP] Captured rendering previews at {Path.GetFullPath(PreviewPath)} " +
-                $"{Path.GetFullPath(LoungePreviewPath)} and {Path.GetFullPath(CeilingPreviewPath)}.");
+                $"{Path.GetFullPath(LoungePreviewPath)}, {Path.GetFullPath(CeilingPreviewPath)} and " +
+                $"{Path.GetFullPath(BrightPreviewPath)}, {Path.GetFullPath(BrightCeilingPreviewPath)}.");
+        }
+
+        private static void ValidateCelestialTheme(QuestKtvRoomPrototype room, RoomTheme theme)
+        {
+            var moonNight = theme == RoomTheme.Dark;
+            AssertActiveState(room, "ceiling moon fixture", moonNight);
+            AssertActiveState(room, "ceiling sun fixture", !moonNight);
+            AssertActiveState(room, "ceiling starfield", moonNight);
+            AssertActiveState(room, "ceiling aurora", moonNight);
+            AssertActiveState(room, "ceiling sunset clouds", !moonNight);
+            AssertActiveState(room, "left corner moon relic", moonNight);
+            AssertActiveState(room, "right corner moon relic", moonNight);
+            AssertActiveState(room, "left corner sun relic", !moonNight);
+            AssertActiveState(room, "right corner sun relic", !moonNight);
+        }
+
+        private static void AssertActiveState(QuestKtvRoomPrototype room, string objectName, bool expectedActive)
+        {
+            var transforms = room.GetComponentsInChildren<Transform>(true);
+            for (var index = 0; index < transforms.Length; index += 1)
+            {
+                if (transforms[index].name != objectName)
+                {
+                    continue;
+                }
+
+                if (transforms[index].gameObject.activeInHierarchy != expectedActive)
+                {
+                    throw new InvalidOperationException(
+                        $"Celestial object '{objectName}' active state did not match the selected room theme.");
+                }
+
+                return;
+            }
+
+            throw new InvalidOperationException($"Celestial object '{objectName}' was not generated.");
         }
 
         private static void WriteSrgbPng(Texture2D linearTexture, Texture2D outputTexture, string path)
