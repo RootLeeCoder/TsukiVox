@@ -17,6 +17,7 @@ namespace TsukiVox.AudioPrototype.Editor
         private const string BrightPreviewPath = "Logs/QuestUrpBrightPreview.png";
         private const string BrightCeilingPreviewPath = "Logs/QuestUrpBrightCeilingPreview.png";
         private const string StageLightingPanelPreviewPath = "Logs/QuestStageLightingPanelPreview.png";
+        private const string SettingsPanelPreviewPath = "Logs/QuestSettingsPanelPreview.png";
 
         [MenuItem("TsukiVox/Capture Quest Rendering Preview")]
         public static void CapturePreview()
@@ -138,6 +139,7 @@ namespace TsukiVox.AudioPrototype.Editor
 
                 var pageRects = controlCanvas.GetComponentsInChildren<RectTransform>(true);
                 RectTransform stageLightingPage = null;
+                RectTransform settingsPage = null;
                 for (var index = 0; index < pageRects.Length; index += 1)
                 {
                     if (pageRects[index].parent == null || pageRects[index].parent.name != "Consumer UI" ||
@@ -146,19 +148,13 @@ namespace TsukiVox.AudioPrototype.Editor
                         continue;
                     }
 
-                    var isStageLightingPage = pageRects[index].name == "Stage Lighting Page";
-                    pageRects[index].gameObject.SetActive(isStageLightingPage);
-                    var group = pageRects[index].GetComponent<CanvasGroup>();
-                    if (group != null)
-                    {
-                        group.alpha = isStageLightingPage ? 1f : 0f;
-                        group.interactable = isStageLightingPage;
-                        group.blocksRaycasts = isStageLightingPage;
-                    }
-
-                    if (isStageLightingPage)
+                    if (pageRects[index].name == "Stage Lighting Page")
                     {
                         stageLightingPage = pageRects[index];
+                    }
+                    else if (pageRects[index].name == "Settings Page")
+                    {
+                        settingsPage = pageRects[index];
                     }
                 }
 
@@ -166,6 +162,12 @@ namespace TsukiVox.AudioPrototype.Editor
                 {
                     throw new InvalidOperationException("Stage Lighting control page was not generated.");
                 }
+                if (settingsPage == null)
+                {
+                    throw new InvalidOperationException("Settings control page was not generated.");
+                }
+
+                SetPreviewPage(pageRects, "Stage Lighting Page");
 
                 var queueButton = controlCanvas.transform.Find("Panel/Consumer UI/Open Queue Drawer");
                 if (queueButton != null)
@@ -185,6 +187,15 @@ namespace TsukiVox.AudioPrototype.Editor
                 linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
                 linearTexture.Apply(false, false);
                 WriteSrgbPng(linearTexture, outputTexture, StageLightingPanelPreviewPath);
+
+                SetPreviewPage(pageRects, "Settings Page");
+                ValidateSettingsPage(settingsPage);
+                camera.Render();
+                camera.Render();
+                RenderTexture.active = renderTexture;
+                linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
+                linearTexture.Apply(false, false);
+                WriteSrgbPng(linearTexture, outputTexture, SettingsPanelPreviewPath);
             }
             finally
             {
@@ -205,7 +216,60 @@ namespace TsukiVox.AudioPrototype.Editor
                 $"[TsukiVox URP] Captured rendering previews at {Path.GetFullPath(PreviewPath)} " +
                 $"{Path.GetFullPath(LoungePreviewPath)}, {Path.GetFullPath(CeilingPreviewPath)} and " +
                 $"{Path.GetFullPath(BrightPreviewPath)}, {Path.GetFullPath(BrightCeilingPreviewPath)}, " +
-                $"{Path.GetFullPath(StageLightingPanelPreviewPath)}.");
+                $"{Path.GetFullPath(StageLightingPanelPreviewPath)}, {Path.GetFullPath(SettingsPanelPreviewPath)}.");
+        }
+
+        private static void SetPreviewPage(RectTransform[] pages, string visiblePageName)
+        {
+            for (var index = 0; index < pages.Length; index += 1)
+            {
+                if (pages[index].parent == null || pages[index].parent.name != "Consumer UI" ||
+                    !pages[index].name.EndsWith(" Page", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var isVisible = pages[index].name == visiblePageName;
+                pages[index].gameObject.SetActive(isVisible);
+                var group = pages[index].GetComponent<CanvasGroup>();
+                if (group != null)
+                {
+                    group.alpha = isVisible ? 1f : 0f;
+                    group.interactable = isVisible;
+                    group.blocksRaycasts = isVisible;
+                }
+            }
+        }
+
+        private static void ValidateSettingsPage(RectTransform settingsPage)
+        {
+            var legacyNames = new[] { "Request Mode Label", "Request Mode Value" };
+            for (var index = 0; index < legacyNames.Length; index += 1)
+            {
+                var legacy = settingsPage.Find(legacyNames[index]);
+                if (legacy != null && legacy.gameObject.activeSelf)
+                {
+                    throw new InvalidOperationException(
+                        $"Legacy settings control '{legacyNames[index]}' overlaps the room ambience row.");
+                }
+            }
+
+            var requiredNames = new[]
+            {
+                "Room Ambience Label",
+                "Ceiling Stars Label",
+                "Ceiling Stars Switch",
+                "Ceiling Aurora Label",
+                "Ceiling Aurora Switch",
+            };
+            for (var index = 0; index < requiredNames.Length; index += 1)
+            {
+                if (settingsPage.Find(requiredNames[index]) == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Settings room ambience row is missing '{requiredNames[index]}'.");
+                }
+            }
         }
 
         private static void ValidateCelestialTheme(QuestKtvRoomPrototype room, RoomTheme theme)

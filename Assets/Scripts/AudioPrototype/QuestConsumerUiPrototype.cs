@@ -1310,6 +1310,9 @@ namespace TsukiVox.AudioPrototype
 
         private void BuildSettingsPage()
         {
+            SetChildActive(settingsPage, "Request Mode Label", false);
+            SetChildActive(settingsPage, "Request Mode Value", false);
+
             BuildSubpageHeader(settingsPage, "设置", out settingsBackButton);
             openStageLightingButton = CreateSurfaceButton(settingsPage, "Open Stage Lighting", new Vector2(-78f, 232f), new Vector2(176f, 52f), Surface, Line);
             openStageLightingSurface = openStageLightingButton.targetGraphic as QuestUiSurface;
