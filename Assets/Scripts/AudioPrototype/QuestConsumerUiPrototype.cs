@@ -96,6 +96,7 @@ namespace TsukiVox.AudioPrototype
             SongSearch,
             Voice,
             Settings,
+            StageLighting,
             MicProtection,
             MicMouthPoint,
         }
@@ -106,6 +107,7 @@ namespace TsukiVox.AudioPrototype
         private RectTransform songSearchPage;
         private RectTransform voicePage;
         private RectTransform settingsPage;
+        private RectTransform stageLightingPage;
         private RectTransform micProtectionPage;
         private RectTransform micMouthPointPage;
         private RectTransform queueScrim;
@@ -122,6 +124,7 @@ namespace TsukiVox.AudioPrototype
         private CanvasGroup songSearchGroup;
         private CanvasGroup voiceGroup;
         private CanvasGroup settingsGroup;
+        private CanvasGroup stageLightingGroup;
         private CanvasGroup micProtectionGroup;
         private CanvasGroup micMouthPointGroup;
         private CanvasGroup queueScrimGroup;
@@ -137,6 +140,7 @@ namespace TsukiVox.AudioPrototype
         private QuestHandheldPropsPrototype handheldPropsPrototype;
         private QuestAppShellPrototype appShellPrototype;
         private QuestKtvRoomPrototype roomPrototype;
+        private QuestStageLightingPrototype stageLightingPrototype;
         private QuestKtvRoomPrototype subscribedRoom;
         private QuestUiThemePalette palette = QuestUiThemePalette.For(RoomTheme.Dark);
         private readonly Dictionary<UnityEngine.Object, ThemeColorRole> themeBindings = new Dictionary<UnityEngine.Object, ThemeColorRole>();
@@ -163,6 +167,7 @@ namespace TsukiVox.AudioPrototype
         private QuestUiSurface queueDrawerButtonSurface;
         private Button songSearchPageButton;
         private Button settingsPageButton;
+        private Button stageLightingPageButton;
         private Button replayButton;
         private Button previousButton;
         private Button playPauseButton;
@@ -256,6 +261,8 @@ namespace TsukiVox.AudioPrototype
         private bool searchResultSkeletonVisible;
 
         private Button settingsBackButton;
+        private Button openStageLightingButton;
+        private QuestUiSurface openStageLightingSurface;
         private Button playBuiltInDefaultButton;
         private QuestUiIcon playBuiltInDefaultIcon;
         private TMP_Text playBuiltInDefaultText;
@@ -276,6 +283,29 @@ namespace TsukiVox.AudioPrototype
         private Button exitApplicationButton;
         private QuestUiIcon exitApplicationIcon;
         private TMP_Text exitApplicationText;
+
+        private Button stageLightingBackButton;
+        private Toggle stageLightingToggle;
+        private TMP_Text stageLightingStatusText;
+        private TMP_Text stageLightingPresetStatusText;
+        private TMP_Text stageLightingColorNameText;
+        private Slider stageLightingIntensitySlider;
+        private Slider stageLightingSpeedSlider;
+        private Slider stageLightingWidthSlider;
+        private Slider stageLightingRangeSlider;
+        private TMP_Text stageLightingIntensityValueText;
+        private TMP_Text stageLightingSpeedValueText;
+        private TMP_Text stageLightingWidthValueText;
+        private TMP_Text stageLightingRangeValueText;
+        private Toggle stageLightingMotionToggle;
+        private Toggle stageLightingPulseToggle;
+        private Toggle stageLightingBeamsToggle;
+        private readonly Button[] stageLightingPresetButtons = new Button[4];
+        private readonly QuestUiSurface[] stageLightingPresetSurfaces = new QuestUiSurface[4];
+        private readonly TMP_Text[] stageLightingPresetLabels = new TMP_Text[4];
+        private readonly Button[] stageLightingColorButtons = new Button[5];
+        private readonly QuestUiSurface[] stageLightingColorSurfaces = new QuestUiSurface[5];
+        private readonly Outline[] stageLightingColorOutlines = new Outline[5];
 
         private Button micProtectionBackButton;
         private Button openMicMouthPointButton;
@@ -327,6 +357,7 @@ namespace TsukiVox.AudioPrototype
         private QuestUiIcon enqueueFlyerFallbackIcon;
 
         private UiPage currentPage;
+        private UiPage stageLightingReturnPage = UiPage.Home;
         private bool isConfigured;
         private bool rawDetailsVisible;
         private bool queueDrawerVisible;
@@ -356,7 +387,8 @@ namespace TsukiVox.AudioPrototype
             QuestPlaylistPrototype playlist,
             QuestVideoScreenPrototype video,
             QuestAppShellPrototype appShell,
-            QuestKtvRoomPrototype room)
+            QuestKtvRoomPrototype room,
+            QuestStageLightingPrototype stageLighting)
         {
             var requiresBuild = consumerRoot == null || targetPanel != panel || consumerRoot.parent != targetPanel;
             if (roomPrototype != room)
@@ -371,6 +403,7 @@ namespace TsukiVox.AudioPrototype
             videoScreenPrototype = video;
             handheldPropsPrototype = FindAnyObjectByType<QuestHandheldPropsPrototype>();
             appShellPrototype = appShell;
+            stageLightingPrototype = stageLighting;
             palette = QuestUiThemePalette.For(roomPrototype != null ? roomPrototype.CurrentTheme : RoomTheme.Dark);
             uiFont = ResolveUiFont();
             appendKtvToSearch = PlayerPrefs.GetInt(AppendKtvSearchPrefsKey, 0) != 0;
@@ -494,6 +527,7 @@ namespace TsukiVox.AudioPrototype
             songSearchPage = EnsurePage(consumerRoot, "Song Search Page", out songSearchGroup);
             voicePage = EnsurePage(consumerRoot, "Voice Page", out voiceGroup);
             settingsPage = EnsurePage(consumerRoot, "Settings Page", out settingsGroup);
+            stageLightingPage = EnsurePage(consumerRoot, "Stage Lighting Page", out stageLightingGroup);
             micProtectionPage = EnsurePage(consumerRoot, "Mic Protection Page", out micProtectionGroup);
             micMouthPointPage = EnsurePage(consumerRoot, "Mic Mouth Point Page", out micMouthPointGroup);
             SetChildActive(consumerRoot, "Queue Page", false);
@@ -502,6 +536,7 @@ namespace TsukiVox.AudioPrototype
             BuildSongSearchPage();
             BuildVoicePage();
             BuildSettingsPage();
+            BuildStageLightingPage();
             BuildMicProtectionPage();
             BuildMicMouthPointPage();
             BuildQueueDrawer();
@@ -529,12 +564,14 @@ namespace TsukiVox.AudioPrototype
             CreateText(homePage, "Brand CN", "月读声域", 16, FontStyle.Normal, new Vector2(-356f, 216f), new Vector2(180f, 24f), TextAnchor.MiddleLeft, TextSecondary);
 
             connectionDot = EnsureSurface(EnsureRect(homePage, "Connection Dot", new Vector2(84f, 232f), new Vector2(12f, 12f)), Accent, 6f, false);
-            connectionText = CreateText(homePage, "Connection", "直接请求已就绪", 17, FontStyle.Normal, new Vector2(196f, 232f), new Vector2(190f, 36f), TextAnchor.MiddleLeft, TextPrimary);
+            connectionText = CreateText(homePage, "Connection", "直接请求已就绪", 17, FontStyle.Normal, new Vector2(182f, 232f), new Vector2(168f, 36f), TextAnchor.MiddleLeft, TextPrimary);
             SetChildActive(homePage, "Header Hover Label", false);
 
-            songSearchPageButton = CreateIconButton(homePage, "Open Song Search", QuestUiIconKind.Search, new Vector2(336f, 232f), new Vector2(64f, 64f), Accent, AccentInk, out _);
-            settingsPageButton = CreateIconButton(homePage, "Open Settings", QuestUiIconKind.Settings, new Vector2(480f, 232f), new Vector2(64f, 64f), Surface, TextPrimary, out _);
+            songSearchPageButton = CreateIconButton(homePage, "Open Song Search", QuestUiIconKind.Search, new Vector2(306f, 232f), new Vector2(52f, 52f), Accent, AccentInk, out _);
+            stageLightingPageButton = CreateIconButton(homePage, "Open Stage Lighting", QuestUiIconKind.Spotlight, new Vector2(366f, 232f), new Vector2(52f, 52f), Surface, TextPrimary, out _);
+            settingsPageButton = CreateIconButton(homePage, "Open Settings", QuestUiIconKind.Settings, new Vector2(486f, 232f), new Vector2(52f, 52f), Surface, TextPrimary, out _);
             ConfigureHover(songSearchPageButton, null, string.Empty);
+            ConfigureHover(stageLightingPageButton, null, string.Empty);
             ConfigureHover(settingsPageButton, null, string.Empty);
 
             songMetaText = CreateText(homePage, "Song Meta", "播放队列为空", 18, FontStyle.Bold, new Vector2(-270f, 150f), new Vector2(450f, 32f), TextAnchor.MiddleLeft, Accent);
@@ -1011,15 +1048,15 @@ namespace TsukiVox.AudioPrototype
                 consumerRoot,
                 "Open Queue Drawer",
                 QuestUiIconKind.Queue,
-                new Vector2(408f, 232f),
-                new Vector2(64f, 64f),
+                new Vector2(426f, 232f),
+                new Vector2(52f, 52f),
                 Surface,
                 TextPrimary,
                 out _);
             queueDrawerButtonSurface = queueDrawerButton.targetGraphic as QuestUiSurface;
             ConfigureHover(queueDrawerButton, null, string.Empty);
 
-            queueBadge = EnsureRect(queueDrawerButton.transform, "Badge", new Vector2(25f, 25f), new Vector2(24f, 24f));
+            queueBadge = EnsureRect(queueDrawerButton.transform, "Badge", new Vector2(20f, 20f), new Vector2(20f, 20f));
             EnsureSurface(queueBadge, Accent, 12f, false);
             queueBadgeText = CreateText(queueBadge, "Label", "0", 14, FontStyle.Bold, Vector2.zero, queueBadge.sizeDelta, TextAnchor.MiddleCenter, AccentInk);
 
@@ -1274,6 +1311,10 @@ namespace TsukiVox.AudioPrototype
         private void BuildSettingsPage()
         {
             BuildSubpageHeader(settingsPage, "设置", out settingsBackButton);
+            openStageLightingButton = CreateSurfaceButton(settingsPage, "Open Stage Lighting", new Vector2(-78f, 232f), new Vector2(176f, 52f), Surface, Line);
+            openStageLightingSurface = openStageLightingButton.targetGraphic as QuestUiSurface;
+            EnsureIcon(openStageLightingButton.transform, "Icon", QuestUiIconKind.Spotlight, new Vector2(-60f, 0f), new Vector2(24f, 24f), Accent);
+            CreateText(openStageLightingButton.transform, "Label", "舞台灯光", 17, FontStyle.Bold, new Vector2(22f, 0f), new Vector2(108f, 34f), TextAnchor.MiddleCenter, TextPrimary);
             playBuiltInDefaultButton = CreateSurfaceButton(settingsPage, "Play Built-in Default", new Vector2(118f, 232f), new Vector2(196f, 52f), Surface, Line);
             playBuiltInDefaultIcon = EnsureIcon(playBuiltInDefaultButton.transform, "Icon", QuestUiIconKind.Play, new Vector2(-72f, 0f), new Vector2(24f, 24f), Accent);
             playBuiltInDefaultText = CreateText(playBuiltInDefaultButton.transform, "Label", "播放内置视频", 16, FontStyle.Bold, new Vector2(18f, 0f), new Vector2(124f, 34f), TextAnchor.MiddleCenter, TextPrimary);
@@ -1304,6 +1345,78 @@ namespace TsukiVox.AudioPrototype
             exitApplicationButton = CreateSurfaceButton(settingsPage, "Exit Application", new Vector2(388f, -228f), new Vector2(216f, 72f), Surface, Line);
             exitApplicationIcon = EnsureIcon(exitApplicationButton.transform, "Icon", QuestUiIconKind.Power, new Vector2(-72f, 0f), new Vector2(24f, 24f), Warm);
             exitApplicationText = CreateText(exitApplicationButton.transform, "Label", "退出应用", 17, FontStyle.Bold, new Vector2(30f, 0f), new Vector2(132f, 34f), TextAnchor.MiddleCenter, TextPrimary);
+        }
+
+        private void BuildStageLightingPage()
+        {
+            BuildSubpageHeader(stageLightingPage, "舞台灯光", out stageLightingBackButton);
+
+            EnsureIcon(stageLightingPage, "Status Icon", QuestUiIconKind.Spotlight, new Vector2(-458f, 144f), new Vector2(34f, 34f), AccentStrong);
+            CreateText(stageLightingPage, "Enable Title", "Livehouse 灯组", 21, FontStyle.Bold, new Vector2(-326f, 151f), new Vector2(230f, 36f), TextAnchor.MiddleLeft, TextPrimary);
+            CreateText(stageLightingPage, "Enable Hint", "6 台灯具 · 4 盏动态射灯", 15, FontStyle.Normal, new Vector2(-276f, 122f), new Vector2(330f, 26f), TextAnchor.MiddleLeft, TextSecondary);
+            stageLightingStatusText = CreateText(stageLightingPage, "Status", "演出中", 17, FontStyle.Bold, new Vector2(330f, 140f), new Vector2(140f, 34f), TextAnchor.MiddleRight, AccentStrong);
+            stageLightingToggle = CreateSwitch(stageLightingPage, "Stage Lighting Switch", new Vector2(460f, 140f));
+            CreateDivider(stageLightingPage, "Enable Divider", new Vector2(0f, 96f), new Vector2(ContentWidth, 1f));
+
+            CreateText(stageLightingPage, "Preset Label", "场景", 17, FontStyle.Bold, new Vector2(-438f, 59f), new Vector2(100f, 30f), TextAnchor.MiddleLeft, TextSecondary);
+            var presetNames = new[] { "氛围", "LIVE", "极光", "高潮" };
+            for (var index = 0; index < stageLightingPresetButtons.Length; index += 1)
+            {
+                var x = -250f + index * 154f;
+                var button = CreateSurfaceButton(stageLightingPage, $"Lighting Preset {index}", new Vector2(x, 59f), new Vector2(142f, 42f), Surface, Line);
+                stageLightingPresetButtons[index] = button;
+                stageLightingPresetSurfaces[index] = button.targetGraphic as QuestUiSurface;
+                stageLightingPresetLabels[index] = CreateText(button.transform, "Label", presetNames[index], 16, FontStyle.Bold, Vector2.zero, new Vector2(118f, 30f), TextAnchor.MiddleCenter, TextPrimary);
+            }
+            stageLightingPresetStatusText = CreateText(stageLightingPage, "Preset Status", "LIVE", 15, FontStyle.Bold, new Vector2(426f, 59f), new Vector2(120f, 30f), TextAnchor.MiddleRight, AccentStrong);
+
+            CreateText(stageLightingPage, "Color Label", "颜色", 17, FontStyle.Bold, new Vector2(-438f, 7f), new Vector2(100f, 30f), TextAnchor.MiddleLeft, TextSecondary);
+            var colorNames = new[] { "海洋", "霓虹", "日落", "冰白", "光谱" };
+            for (var index = 0; index < stageLightingColorButtons.Length; index += 1)
+            {
+                var look = (StageLightingColorLook)index;
+                var swatchColor = QuestStageLightingPrototype.GetColorLookSwatch(look);
+                var button = CreateSurfaceButton(stageLightingPage, $"Lighting Color {index}", new Vector2(-250f + index * 74f, 7f), new Vector2(54f, 38f), swatchColor, Line);
+                var surface = button.targetGraphic as QuestUiSurface;
+                stageLightingColorButtons[index] = button;
+                stageLightingColorSurfaces[index] = surface;
+                stageLightingColorOutlines[index] = button.GetComponent<Outline>();
+                themeBindings.Remove(surface);
+                if (look == StageLightingColorLook.Spectrum)
+                {
+                    EnsureIcon(button.transform, "Spectrum", QuestUiIconKind.Sparkles, Vector2.zero, new Vector2(22f, 22f), AccentInk);
+                }
+            }
+            stageLightingColorNameText = CreateText(stageLightingPage, "Color Name", "霓虹", 16, FontStyle.Bold, new Vector2(348f, 7f), new Vector2(220f, 30f), TextAnchor.MiddleRight, TextPrimary);
+            for (var index = 0; index < stageLightingColorButtons.Length; index += 1)
+            {
+                ConfigureHover(stageLightingColorButtons[index], stageLightingColorNameText, colorNames[index]);
+            }
+            CreateDivider(stageLightingPage, "Color Divider", new Vector2(0f, -30f), new Vector2(ContentWidth, 1f));
+
+            CreateText(stageLightingPage, "Intensity Label", "强度", 16, FontStyle.Bold, new Vector2(-446f, -70f), new Vector2(88f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            stageLightingIntensitySlider = CreateSlider(stageLightingPage, "Lighting Intensity", new Vector2(-282f, -70f), new Vector2(220f, 42f), true, Accent, AccentStrong);
+            stageLightingIntensityValueText = CreateText(stageLightingPage, "Intensity Value", "72%", 16, FontStyle.Bold, new Vector2(-125f, -70f), new Vector2(74f, 30f), TextAnchor.MiddleRight, AccentStrong);
+
+            CreateText(stageLightingPage, "Speed Label", "速度", 16, FontStyle.Bold, new Vector2(-34f, -70f), new Vector2(88f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            stageLightingSpeedSlider = CreateSlider(stageLightingPage, "Lighting Speed", new Vector2(130f, -70f), new Vector2(220f, 42f), true, Warm, Warm);
+            stageLightingSpeedValueText = CreateText(stageLightingPage, "Speed Value", "52%", 16, FontStyle.Bold, new Vector2(287f, -70f), new Vector2(74f, 30f), TextAnchor.MiddleRight, Warm);
+
+            CreateText(stageLightingPage, "Width Label", "光束", 16, FontStyle.Bold, new Vector2(-446f, -132f), new Vector2(88f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            stageLightingWidthSlider = CreateSlider(stageLightingPage, "Lighting Width", new Vector2(-282f, -132f), new Vector2(220f, 42f), true, Accent, AccentStrong);
+            stageLightingWidthValueText = CreateText(stageLightingPage, "Width Value", "34°", 16, FontStyle.Bold, new Vector2(-125f, -132f), new Vector2(74f, 30f), TextAnchor.MiddleRight, AccentStrong);
+
+            CreateText(stageLightingPage, "Range Label", "幅度", 16, FontStyle.Bold, new Vector2(-34f, -132f), new Vector2(88f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            stageLightingRangeSlider = CreateSlider(stageLightingPage, "Lighting Range", new Vector2(130f, -132f), new Vector2(220f, 42f), true, Warm, Warm);
+            stageLightingRangeValueText = CreateText(stageLightingPage, "Range Value", "62%", 16, FontStyle.Bold, new Vector2(287f, -132f), new Vector2(74f, 30f), TextAnchor.MiddleRight, Warm);
+
+            CreateDivider(stageLightingPage, "Control Divider", new Vector2(0f, -178f), new Vector2(ContentWidth, 1f));
+            CreateText(stageLightingPage, "Motion Label", "自动扫动", 16, FontStyle.Bold, new Vector2(-414f, -226f), new Vector2(132f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            stageLightingMotionToggle = CreateSwitch(stageLightingPage, "Lighting Motion Switch", new Vector2(-270f, -226f));
+            CreateText(stageLightingPage, "Pulse Label", "节拍脉冲", 16, FontStyle.Bold, new Vector2(-100f, -226f), new Vector2(132f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            stageLightingPulseToggle = CreateSwitch(stageLightingPage, "Lighting Pulse Switch", new Vector2(44f, -226f));
+            CreateText(stageLightingPage, "Beams Label", "烟雾光束", 16, FontStyle.Bold, new Vector2(336f, -226f), new Vector2(150f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            stageLightingBeamsToggle = CreateSwitch(stageLightingPage, "Lighting Beams Switch", new Vector2(460f, -226f));
         }
 
         private void BuildMicProtectionPage()
@@ -1453,10 +1566,13 @@ namespace TsukiVox.AudioPrototype
             WireButton(queueScrimButton, () => SetQueueDrawerVisible(false));
             WireButton(enqueueConfirmationButton, () => SetQueueDrawerVisible(true));
             WireButton(settingsPageButton, () => ShowPage(UiPage.Settings));
+            WireButton(stageLightingPageButton, () => OpenStageLightingPage(UiPage.Home));
             WireButton(voicePageButton, () => ShowPage(UiPage.Voice));
             WireButton(voiceBackButton, () => ShowPage(UiPage.Home));
             WireButton(songSearchBackButton, () => ShowPage(UiPage.Home));
             WireButton(settingsBackButton, () => ShowPage(UiPage.Home));
+            WireButton(openStageLightingButton, () => OpenStageLightingPage(UiPage.Settings));
+            WireButton(stageLightingBackButton, () => ShowPage(stageLightingReturnPage));
             WireButton(playBuiltInDefaultButton, () => videoScreenPrototype?.ToggleBuiltInDefaultPlayback());
             WireButton(stopBuiltInDefaultButton, () => videoScreenPrototype?.StopBuiltInDefault());
             WireButton(openMicProtectionButton, () => ShowPage(UiPage.MicProtection));
@@ -1572,6 +1688,45 @@ namespace TsukiVox.AudioPrototype
                 RefreshSettings();
             });
 
+            stageLightingToggle.onValueChanged.RemoveAllListeners();
+            stageLightingToggle.onValueChanged.AddListener(value =>
+            {
+                stageLightingPrototype?.SetLightingEnabled(value);
+                RefreshStageLighting();
+            });
+            for (var index = 0; index < stageLightingPresetButtons.Length; index += 1)
+            {
+                var preset = (StageLightingPreset)index;
+                WireButton(stageLightingPresetButtons[index], () =>
+                {
+                    stageLightingPrototype?.ApplyPreset(preset);
+                    RefreshStageLighting();
+                });
+            }
+            for (var index = 0; index < stageLightingColorButtons.Length; index += 1)
+            {
+                var look = (StageLightingColorLook)index;
+                WireButton(stageLightingColorButtons[index], () =>
+                {
+                    stageLightingPrototype?.SetColorLook(look);
+                    RefreshStageLighting();
+                });
+            }
+            stageLightingIntensitySlider.onValueChanged.RemoveAllListeners();
+            stageLightingIntensitySlider.onValueChanged.AddListener(value => stageLightingPrototype?.SetIntensity(value));
+            stageLightingSpeedSlider.onValueChanged.RemoveAllListeners();
+            stageLightingSpeedSlider.onValueChanged.AddListener(value => stageLightingPrototype?.SetMovementSpeed(value));
+            stageLightingWidthSlider.onValueChanged.RemoveAllListeners();
+            stageLightingWidthSlider.onValueChanged.AddListener(value => stageLightingPrototype?.SetBeamWidth(value));
+            stageLightingRangeSlider.onValueChanged.RemoveAllListeners();
+            stageLightingRangeSlider.onValueChanged.AddListener(value => stageLightingPrototype?.SetMotionRange(value));
+            stageLightingMotionToggle.onValueChanged.RemoveAllListeners();
+            stageLightingMotionToggle.onValueChanged.AddListener(value => stageLightingPrototype?.SetAutomaticMotion(value));
+            stageLightingPulseToggle.onValueChanged.RemoveAllListeners();
+            stageLightingPulseToggle.onValueChanged.AddListener(value => stageLightingPrototype?.SetBeatPulse(value));
+            stageLightingBeamsToggle.onValueChanged.RemoveAllListeners();
+            stageLightingBeamsToggle.onValueChanged.AddListener(value => stageLightingPrototype?.SetBeamsVisible(value));
+
             micProtectionToggle.onValueChanged.RemoveAllListeners();
             micProtectionToggle.onValueChanged.AddListener(value => handheldPropsPrototype?.SetMicFaceHapticsEnabled(value));
             micWarningDistanceSlider.onValueChanged.RemoveAllListeners();
@@ -1613,6 +1768,7 @@ namespace TsukiVox.AudioPrototype
             RefreshVoice();
             RefreshQueue();
             RefreshSettings();
+            RefreshStageLighting();
             RefreshMicProtection();
             RefreshMicMouthPoint();
             RefreshDiagnostics();
@@ -1978,6 +2134,17 @@ namespace TsukiVox.AudioPrototype
         private void RefreshSettings()
         {
             settingsBuildText.text = QuestBuildInfo.SettingsSummary;
+            if (stageLightingPrototype == null)
+            {
+                stageLightingPrototype = FindAnyObjectByType<QuestStageLightingPrototype>();
+            }
+            if (openStageLightingButton != null)
+            {
+                openStageLightingButton.interactable = stageLightingPrototype != null;
+                openStageLightingSurface.color = stageLightingPrototype != null && stageLightingPrototype.LightingEnabled
+                    ? palette.EnabledSurface
+                    : Surface;
+            }
             if (playBuiltInDefaultButton != null)
             {
                 var isBuiltInDefaultActive = videoScreenPrototype != null && videoScreenPrototype.IsPlayingBuiltInDefault;
@@ -2049,6 +2216,89 @@ namespace TsukiVox.AudioPrototype
             RefreshSwitchVisual(monitorOutputToggle, Accent);
             RefreshSwitchVisual(safetyToggle, Accent);
             RefreshSwitchVisual(nativeToggle, Accent);
+        }
+
+        private void RefreshStageLighting()
+        {
+            if (stageLightingPrototype == null)
+            {
+                stageLightingPrototype = FindAnyObjectByType<QuestStageLightingPrototype>();
+            }
+
+            var available = stageLightingPrototype != null;
+            var enabled = available && stageLightingPrototype.LightingEnabled;
+            stageLightingToggle.interactable = available;
+            stageLightingToggle.SetIsOnWithoutNotify(enabled);
+            RefreshSwitchVisual(stageLightingToggle, AccentStrong);
+            stageLightingStatusText.text = !available ? "灯组不可用" : enabled ? "演出中" : "已关闭";
+            stageLightingStatusText.color = enabled ? AccentStrong : TextSecondary;
+
+            var preset = available ? stageLightingPrototype.CurrentPreset : StageLightingPreset.Custom;
+            var presetNames = new[] { "氛围", "LIVE", "极光", "高潮" };
+            for (var index = 0; index < stageLightingPresetButtons.Length; index += 1)
+            {
+                var selected = preset == (StageLightingPreset)index;
+                stageLightingPresetButtons[index].interactable = available;
+                stageLightingPresetSurfaces[index].color = selected ? Accent : Surface;
+                stageLightingPresetLabels[index].color = selected ? AccentInk : enabled ? TextPrimary : TextSecondary;
+                stageLightingPresetButtons[index].colors = CreateButtonColors(stageLightingPresetSurfaces[index].color);
+                var outline = stageLightingPresetButtons[index].GetComponent<Outline>();
+                if (outline != null)
+                {
+                    outline.effectColor = selected ? AccentStrong : Line;
+                    outline.effectDistance = selected ? new Vector2(2f, -2f) : new Vector2(1f, -1f);
+                }
+            }
+            stageLightingPresetStatusText.text = preset == StageLightingPreset.Custom
+                ? "自定义"
+                : presetNames[Mathf.Clamp((int)preset, 0, presetNames.Length - 1)];
+            stageLightingPresetStatusText.color = available ? AccentStrong : TextFaint;
+
+            var selectedLook = available ? stageLightingPrototype.ColorLook : StageLightingColorLook.Neon;
+            var colorNames = new[] { "海洋", "霓虹", "日落", "冰白", "光谱" };
+            for (var index = 0; index < stageLightingColorButtons.Length; index += 1)
+            {
+                var swatchColor = QuestStageLightingPrototype.GetColorLookSwatch((StageLightingColorLook)index);
+                stageLightingColorButtons[index].interactable = enabled;
+                stageLightingColorSurfaces[index].color = swatchColor;
+                stageLightingColorButtons[index].colors = CreateButtonColors(swatchColor);
+                var selected = selectedLook == (StageLightingColorLook)index;
+                stageLightingColorOutlines[index].effectColor = selected ? AccentStrong : Line;
+                stageLightingColorOutlines[index].effectDistance = selected ? new Vector2(2f, -2f) : new Vector2(1f, -1f);
+            }
+            stageLightingColorNameText.text = colorNames[Mathf.Clamp((int)selectedLook, 0, colorNames.Length - 1)];
+            stageLightingColorNameText.color = enabled ? TextPrimary : TextFaint;
+
+            var lightingIntensity = available ? stageLightingPrototype.Intensity : 0f;
+            var lightingSpeed = available ? stageLightingPrototype.MovementSpeed : 0f;
+            var lightingWidth = available ? stageLightingPrototype.BeamWidth : 0f;
+            var lightingRange = available ? stageLightingPrototype.MotionRange : 0f;
+            stageLightingIntensitySlider.interactable = enabled;
+            stageLightingSpeedSlider.interactable = enabled;
+            stageLightingWidthSlider.interactable = enabled;
+            stageLightingRangeSlider.interactable = enabled;
+            stageLightingIntensitySlider.SetValueWithoutNotify(lightingIntensity);
+            stageLightingSpeedSlider.SetValueWithoutNotify(lightingSpeed);
+            stageLightingWidthSlider.SetValueWithoutNotify(lightingWidth);
+            stageLightingRangeSlider.SetValueWithoutNotify(lightingRange);
+            stageLightingIntensityValueText.text = $"{Mathf.RoundToInt(lightingIntensity * 100f)}%";
+            stageLightingSpeedValueText.text = $"{Mathf.RoundToInt(lightingSpeed * 100f)}%";
+            stageLightingWidthValueText.text = $"{Mathf.RoundToInt(Mathf.Lerp(20f, 46f, lightingWidth))}°";
+            stageLightingRangeValueText.text = $"{Mathf.RoundToInt(lightingRange * 100f)}%";
+            stageLightingIntensityValueText.color = enabled ? AccentStrong : TextFaint;
+            stageLightingSpeedValueText.color = enabled ? Warm : TextFaint;
+            stageLightingWidthValueText.color = enabled ? AccentStrong : TextFaint;
+            stageLightingRangeValueText.color = enabled ? Warm : TextFaint;
+
+            stageLightingMotionToggle.interactable = enabled;
+            stageLightingPulseToggle.interactable = enabled;
+            stageLightingBeamsToggle.interactable = enabled;
+            stageLightingMotionToggle.SetIsOnWithoutNotify(available && stageLightingPrototype.AutomaticMotion);
+            stageLightingPulseToggle.SetIsOnWithoutNotify(available && stageLightingPrototype.BeatPulse);
+            stageLightingBeamsToggle.SetIsOnWithoutNotify(available && stageLightingPrototype.BeamsVisible);
+            RefreshSwitchVisual(stageLightingMotionToggle, AccentStrong);
+            RefreshSwitchVisual(stageLightingPulseToggle, Warm);
+            RefreshSwitchVisual(stageLightingBeamsToggle, AccentStrong);
         }
 
         private void RefreshMicProtection()
@@ -2255,7 +2505,7 @@ namespace TsukiVox.AudioPrototype
             }
             else if (restoreConfirmationActive)
             {
-                diagnosticsVideoText.text = "将恢复月夜主题、平板 30°、星空/极光开启\n媒体缓存不会被删除";
+                diagnosticsVideoText.text = "将恢复月夜主题、平板 30°、星空/极光与 LIVE 灯光\n媒体缓存不会被删除";
                 diagnosticsVideoText.color = Warm;
             }
             else if (maintenanceResultActive)
@@ -2329,6 +2579,12 @@ namespace TsukiVox.AudioPrototype
         {
             // 启动时输入和结果都保持为空，由用户输入或选择拼音候选。
             ShowPage(UiPage.SongSearch);
+        }
+
+        private void OpenStageLightingPage(UiPage returnPage)
+        {
+            stageLightingReturnPage = returnPage == UiPage.Settings ? UiPage.Settings : UiPage.Home;
+            ShowPage(UiPage.StageLighting);
         }
 
         private void ClearSearchResults()
@@ -2967,12 +3223,17 @@ namespace TsukiVox.AudioPrototype
                 roomPrototype = FindAnyObjectByType<QuestKtvRoomPrototype>();
             }
             roomPrototype?.RestoreCelestialDefaults();
+            if (stageLightingPrototype == null)
+            {
+                stageLightingPrototype = FindAnyObjectByType<QuestStageLightingPrototype>();
+            }
+            stageLightingPrototype?.RestoreDefaultSettings();
             PlayerPrefs.Save();
 
             exitConfirmationExpiresAt = 0f;
             RefreshAppendKtvSearchToggle();
             SetMaintenanceResult(
-                "全部设置已恢复默认\n月夜主题 · 平板 30° · 星空/极光开启 · KTV 后缀关闭",
+                "全部设置已恢复默认\n月夜主题 · 平板 30° · 星空/极光开启 · LIVE 灯光开启",
                 false,
                 "all settings restored to defaults; media cache retained");
             RefreshAll();
@@ -3384,6 +3645,7 @@ namespace TsukiVox.AudioPrototype
             SetPageGroupImmediate(songSearchGroup, page == UiPage.SongSearch);
             SetPageGroupImmediate(voiceGroup, page == UiPage.Voice);
             SetPageGroupImmediate(settingsGroup, page == UiPage.Settings);
+            SetPageGroupImmediate(stageLightingGroup, page == UiPage.StageLighting);
             SetPageGroupImmediate(micProtectionGroup, page == UiPage.MicProtection);
             SetPageGroupImmediate(micMouthPointGroup, page == UiPage.MicMouthPoint);
             SetMicFaceMouthMarkerForPage(page);
@@ -3774,6 +4036,7 @@ namespace TsukiVox.AudioPrototype
                 UiPage.Voice => voiceGroup,
                 UiPage.SongSearch => songSearchGroup,
                 UiPage.Settings => settingsGroup,
+                UiPage.StageLighting => stageLightingGroup,
                 UiPage.MicProtection => micProtectionGroup,
                 UiPage.MicMouthPoint => micMouthPointGroup,
                 _ => homeGroup,

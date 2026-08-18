@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using TsukiVox.AudioPrototype;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -15,6 +16,7 @@ namespace TsukiVox.AudioPrototype.Editor
         private const string CeilingPreviewPath = "Logs/QuestUrpCeilingPreview.png";
         private const string BrightPreviewPath = "Logs/QuestUrpBrightPreview.png";
         private const string BrightCeilingPreviewPath = "Logs/QuestUrpBrightCeilingPreview.png";
+        private const string StageLightingPanelPreviewPath = "Logs/QuestStageLightingPanelPreview.png";
 
         [MenuItem("TsukiVox/Capture Quest Rendering Preview")]
         public static void CapturePreview()
@@ -29,7 +31,13 @@ namespace TsukiVox.AudioPrototype.Editor
             }
 
             room.ConfigureSceneReferences();
+            var appShell = QuestAppShellPrototype.EnsureSceneShell();
             ValidateCelestialTheme(room, RoomTheme.Dark);
+            var stageLighting = QuestStageLightingPrototype.EnsureSceneLighting(
+                room,
+                UnityEngine.Object.FindAnyObjectByType<QuestAudioPrototype>());
+            stageLighting.ApplyPreset(StageLightingPreset.Live);
+            appShell.ConfigureSceneReferences();
 
             var shader = Shader.Find(QuestStylizedMaterial.ShaderName);
             if (shader == null || !shader.isSupported)
@@ -52,6 +60,7 @@ namespace TsukiVox.AudioPrototype.Editor
             var previousActive = RenderTexture.active;
             var previousPosition = camera.transform.position;
             var previousRotation = camera.transform.rotation;
+            var previousFieldOfView = camera.fieldOfView;
             var previousTheme = room.CurrentTheme;
             var renderTexture = new RenderTexture(
                 width,
@@ -113,6 +122,68 @@ namespace TsukiVox.AudioPrototype.Editor
                 linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
                 linearTexture.Apply(false, false);
                 WriteSrgbPng(linearTexture, outputTexture, BrightPreviewPath);
+
+                var controlCanvas = UnityEngine.Object.FindAnyObjectByType<QuestAppShellPrototype>()
+                    ?.GetComponent<QuestConsumerUiPrototype>()
+                    ?.GetComponentInParent<Canvas>();
+                controlCanvas = controlCanvas != null
+                    ? controlCanvas
+                    : UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsInactive.Include)
+                        .FirstOrDefault(item => item.name == "Prototype Canvas");
+                if (controlCanvas == null)
+                {
+                    throw new InvalidOperationException("AudioPrototype scene has no control Canvas.");
+                }
+
+                var pageRects = controlCanvas.GetComponentsInChildren<RectTransform>(true);
+                RectTransform stageLightingPage = null;
+                for (var index = 0; index < pageRects.Length; index += 1)
+                {
+                    if (pageRects[index].parent == null || pageRects[index].parent.name != "Consumer UI" ||
+                        !pageRects[index].name.EndsWith(" Page", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    var isStageLightingPage = pageRects[index].name == "Stage Lighting Page";
+                    pageRects[index].gameObject.SetActive(isStageLightingPage);
+                    var group = pageRects[index].GetComponent<CanvasGroup>();
+                    if (group != null)
+                    {
+                        group.alpha = isStageLightingPage ? 1f : 0f;
+                        group.interactable = isStageLightingPage;
+                        group.blocksRaycasts = isStageLightingPage;
+                    }
+
+                    if (isStageLightingPage)
+                    {
+                        stageLightingPage = pageRects[index];
+                    }
+                }
+
+                if (stageLightingPage == null)
+                {
+                    throw new InvalidOperationException("Stage Lighting control page was not generated.");
+                }
+
+                var queueButton = controlCanvas.transform.Find("Panel/Consumer UI/Open Queue Drawer");
+                if (queueButton != null)
+                {
+                    queueButton.gameObject.SetActive(false);
+                }
+
+                var canvasTransform = controlCanvas.transform;
+                camera.transform.position = canvasTransform.position - canvasTransform.forward * 0.95f;
+                camera.transform.rotation = Quaternion.LookRotation(
+                    canvasTransform.position - camera.transform.position,
+                    canvasTransform.up);
+                camera.fieldOfView = 52f;
+                camera.Render();
+                camera.Render();
+                RenderTexture.active = renderTexture;
+                linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
+                linearTexture.Apply(false, false);
+                WriteSrgbPng(linearTexture, outputTexture, StageLightingPanelPreviewPath);
             }
             finally
             {
@@ -121,6 +192,7 @@ namespace TsukiVox.AudioPrototype.Editor
                 camera.stereoTargetEye = previousStereoTarget;
                 camera.transform.position = previousPosition;
                 camera.transform.rotation = previousRotation;
+                camera.fieldOfView = previousFieldOfView;
                 RenderTexture.active = previousActive;
                 UnityEngine.Object.DestroyImmediate(linearTexture);
                 UnityEngine.Object.DestroyImmediate(outputTexture);
@@ -131,7 +203,8 @@ namespace TsukiVox.AudioPrototype.Editor
             Debug.Log(
                 $"[TsukiVox URP] Captured rendering previews at {Path.GetFullPath(PreviewPath)} " +
                 $"{Path.GetFullPath(LoungePreviewPath)}, {Path.GetFullPath(CeilingPreviewPath)} and " +
-                $"{Path.GetFullPath(BrightPreviewPath)}, {Path.GetFullPath(BrightCeilingPreviewPath)}.");
+                $"{Path.GetFullPath(BrightPreviewPath)}, {Path.GetFullPath(BrightCeilingPreviewPath)}, " +
+                $"{Path.GetFullPath(StageLightingPanelPreviewPath)}.");
         }
 
         private static void ValidateCelestialTheme(QuestKtvRoomPrototype room, RoomTheme theme)

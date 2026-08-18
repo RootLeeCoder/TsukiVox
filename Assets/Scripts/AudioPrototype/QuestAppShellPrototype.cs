@@ -40,6 +40,7 @@ namespace TsukiVox.AudioPrototype
         [SerializeField] private QuestConsumerUiPrototype consumerUi;
         [SerializeField] private QuestTabletTiltController tabletTiltController;
         [SerializeField] private QuestRoomThemeController roomThemeController;
+        [SerializeField] private QuestStageLightingPrototype stageLightingPrototype;
 
         [Header("Runtime")]
         [SerializeField] private bool organizePanelOnAwake = true;
@@ -91,6 +92,7 @@ namespace TsukiVox.AudioPrototype
             playlistPrototype = playlistPrototype != null ? playlistPrototype : QuestPlaylistPrototype.EnsureScenePrototype();
             videoScreenPrototype = videoScreenPrototype != null ? videoScreenPrototype : QuestVideoScreenPrototype.EnsureScenePrototype();
             var ktvRoom = QuestKtvRoomPrototype.EnsureSceneRoom();
+            stageLightingPrototype = QuestStageLightingPrototype.EnsureSceneLighting(ktvRoom, audioPrototype);
             var palette = QuestUiThemePalette.For(ktvRoom != null ? ktvRoom.CurrentTheme : RoomTheme.Dark);
 
             controlCanvas = controlCanvas != null ? controlCanvas : FindOrCreateControlCanvas();
@@ -137,7 +139,14 @@ namespace TsukiVox.AudioPrototype
             WireVideoDebugToggle();
             consumerUi = consumerUi != null ? consumerUi : GetComponent<QuestConsumerUiPrototype>();
             consumerUi = consumerUi != null ? consumerUi : gameObject.AddComponent<QuestConsumerUiPrototype>();
-            consumerUi.Configure(panel, audioPrototype, playlistPrototype, videoScreenPrototype, this, ktvRoom);
+            consumerUi.Configure(
+                panel,
+                audioPrototype,
+                playlistPrototype,
+                videoScreenPrototype,
+                this,
+                ktvRoom,
+                stageLightingPrototype);
             RefreshAppStatus();
         }
 
@@ -255,6 +264,14 @@ namespace TsukiVox.AudioPrototype
             debugBuilder.AppendLine($"playlistPrototype {playlistPrototype != null}");
             debugBuilder.AppendLine($"videoScreenPrototype {videoScreenPrototype != null}");
             debugBuilder.AppendLine($"tabletTilt {(tabletTiltController == null ? "missing" : $"{tabletTiltController.CurrentTiltAngle:0}deg step {tabletTiltController.CurrentStepIndex} animating {tabletTiltController.IsAnimating}")}");
+            var stageLightingStatus = stageLightingPrototype == null
+                ? "missing"
+                : $"enabled {stageLightingPrototype.LightingEnabled} " +
+                  $"preset {stageLightingPrototype.CurrentPreset} color {stageLightingPrototype.ColorLook} " +
+                  $"intensity {stageLightingPrototype.Intensity:0.00} speed {stageLightingPrototype.MovementSpeed:0.00} " +
+                  $"width {stageLightingPrototype.BeamWidth:0.00} range {stageLightingPrototype.MotionRange:0.00} " +
+                  $"motion {stageLightingPrototype.AutomaticMotion} pulse {stageLightingPrototype.BeatPulse} beams {stageLightingPrototype.BeamsVisible}";
+            debugBuilder.AppendLine($"stageLighting {stageLightingStatus}");
 
             var handheldProps = FindAnyObjectByType<QuestHandheldPropsPrototype>();
             if (handheldProps != null)

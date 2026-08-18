@@ -31,6 +31,7 @@ namespace TsukiVox.AudioPrototype
         Power,
         Crosshair,
         SlidersHorizontal,
+        Spotlight,
     }
 
     /// <summary>
@@ -107,6 +108,14 @@ namespace TsukiVox.AudioPrototype
                     AddLine(vertexHelper, rect, 2f, 5f, 6f, 5f, thickness);
                     AddLine(vertexHelper, rect, 19f, 3f, 19f, 6f, thickness);
                     AddLine(vertexHelper, rect, 17.5f, 4.5f, 20.5f, 4.5f, thickness);
+                    break;
+                case QuestUiIconKind.Spotlight:
+                    AddPolyline(vertexHelper, rect, thickness, 6f, 3f, 18f, 3f, 20f, 10f, 4f, 10f, 6f, 3f);
+                    AddLine(vertexHelper, rect, 12f, 10f, 12f, 14f, thickness);
+                    AddLine(vertexHelper, rect, 12f, 14f, 7f, 21f, thickness);
+                    AddLine(vertexHelper, rect, 12f, 14f, 17f, 21f, thickness);
+                    AddLine(vertexHelper, rect, 3f, 21f, 5f, 17.5f, thickness);
+                    AddLine(vertexHelper, rect, 21f, 21f, 19f, 17.5f, thickness);
                     break;
                 case QuestUiIconKind.Plus:
                     AddLine(vertexHelper, rect, 12f, 5f, 12f, 19f, thickness);
