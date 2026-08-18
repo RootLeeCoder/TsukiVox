@@ -30,7 +30,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestStageLightingPrototype : MonoBehaviour
     {
         public const string RigRootName = "Livehouse Stage Lighting";
-        public const int CurrentDesignRevision = 1;
+        public const int CurrentDesignRevision = 2;
 
         private const string EnabledPrefsKey = "TsukiVox.StageLighting.Enabled";
         private const string PresetPrefsKey = "TsukiVox.StageLighting.Preset";
@@ -44,12 +44,15 @@ namespace TsukiVox.AudioPrototype
         private const string BeamsVisiblePrefsKey = "TsukiVox.StageLighting.BeamsVisible";
         private const string BeamShaderName = "TsukiVox/Quest Stage Beam";
         private const float StageFloorHeight = 0.13f;
+        private const float TrussDepth = 2.35f;
+        private const float TrussWingCenter = 1.875f;
+        private const float TrussWingLength = 1.55f;
 
         private static readonly Vector3[] FixturePositions =
         {
             new Vector3(-2.1f, 2.62f, 2.35f),
-            new Vector3(-0.72f, 2.62f, 2.35f),
-            new Vector3(0.72f, 2.62f, 2.35f),
+            new Vector3(-1.42f, 2.62f, 2.35f),
+            new Vector3(1.42f, 2.62f, 2.35f),
             new Vector3(2.1f, 2.62f, 2.35f),
             new Vector3(-3.18f, 2.38f, 3.72f),
             new Vector3(3.18f, 2.38f, 3.72f),
@@ -332,14 +335,8 @@ namespace TsukiVox.AudioPrototype
             ClearChildren(rigRoot);
             CreateResources();
 
-            CreateBox(rigRoot, "truss upper rail", new Vector3(5.3f, 0.055f, 0.055f), new Vector3(0f, 2.78f, 2.35f), bracketMaterial);
-            CreateBox(rigRoot, "truss lower rail", new Vector3(5.3f, 0.055f, 0.055f), new Vector3(0f, 2.64f, 2.35f), bracketMaterial);
-            for (var index = 0; index < 9; index += 1)
-            {
-                var x = -2.4f + index * 0.6f;
-                var brace = CreateBox(rigRoot, $"truss brace {index}", new Vector3(0.035f, 0.18f, 0.035f), new Vector3(x, 2.71f, 2.35f), bracketMaterial);
-                brace.transform.localRotation = Quaternion.Euler(0f, 0f, index % 2 == 0 ? 32f : -32f);
-            }
+            CreateTrussWing("left", -TrussWingCenter, false);
+            CreateTrussWing("right", TrussWingCenter, true);
 
             for (var index = 0; index < fixtures.Length; index += 1)
             {
@@ -347,6 +344,53 @@ namespace TsukiVox.AudioPrototype
             }
 
             generatedDesignRevision = CurrentDesignRevision;
+        }
+
+        private void CreateTrussWing(string side, float centerX, bool mirrorBraces)
+        {
+            CreateBox(
+                rigRoot,
+                $"{side} truss upper rail",
+                new Vector3(TrussWingLength, 0.055f, 0.055f),
+                new Vector3(centerX, 2.78f, TrussDepth),
+                bracketMaterial);
+            CreateBox(
+                rigRoot,
+                $"{side} truss lower rail",
+                new Vector3(TrussWingLength, 0.055f, 0.055f),
+                new Vector3(centerX, 2.64f, TrussDepth),
+                bracketMaterial);
+
+            const int braceCount = 4;
+            const float braceInset = 0.11f;
+            var usableLength = TrussWingLength - braceInset * 2f;
+            for (var index = 0; index < braceCount; index += 1)
+            {
+                var normalized = index / (float)(braceCount - 1);
+                var x = centerX - usableLength * 0.5f + normalized * usableLength;
+                var alternatesForward = (index % 2 == 0) ^ mirrorBraces;
+                var brace = CreateBox(
+                    rigRoot,
+                    $"{side} truss brace {index}",
+                    new Vector3(0.035f, 0.18f, 0.035f),
+                    new Vector3(x, 2.71f, TrussDepth),
+                    bracketMaterial);
+                brace.transform.localRotation = Quaternion.Euler(0f, 0f, alternatesForward ? 32f : -32f);
+            }
+
+            var hangerOffset = TrussWingLength * 0.5f - 0.08f;
+            CreateBox(
+                rigRoot,
+                $"{side} truss outer hanger",
+                new Vector3(0.045f, 0.16f, 0.045f),
+                new Vector3(centerX + (centerX < 0f ? -hangerOffset : hangerOffset), 2.85f, TrussDepth),
+                bracketMaterial);
+            CreateBox(
+                rigRoot,
+                $"{side} truss inner hanger",
+                new Vector3(0.045f, 0.16f, 0.045f),
+                new Vector3(centerX + (centerX < 0f ? hangerOffset : -hangerOffset), 2.85f, TrussDepth),
+                bracketMaterial);
         }
 
         private void BindRig()

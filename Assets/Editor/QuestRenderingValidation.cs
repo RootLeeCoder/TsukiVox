@@ -36,6 +36,7 @@ namespace TsukiVox.AudioPrototype.Editor
             var stageLighting = QuestStageLightingPrototype.EnsureSceneLighting(
                 room,
                 UnityEngine.Object.FindAnyObjectByType<QuestAudioPrototype>());
+            ValidateSplitTruss(stageLighting);
             stageLighting.ApplyPreset(StageLightingPreset.Live);
             appShell.ConfigureSceneReferences();
 
@@ -219,6 +220,35 @@ namespace TsukiVox.AudioPrototype.Editor
             AssertActiveState(room, "right corner moon relic", moonNight);
             AssertActiveState(room, "left corner sun relic", !moonNight);
             AssertActiveState(room, "right corner sun relic", !moonNight);
+        }
+
+        private static void ValidateSplitTruss(QuestStageLightingPrototype stageLighting)
+        {
+            var rig = stageLighting.transform.Find(QuestStageLightingPrototype.RigRootName);
+            if (rig == null)
+            {
+                throw new InvalidOperationException("Stage lighting rig was not generated.");
+            }
+
+            var requiredParts = new[]
+            {
+                "left truss upper rail",
+                "left truss lower rail",
+                "right truss upper rail",
+                "right truss lower rail",
+            };
+            for (var index = 0; index < requiredParts.Length; index += 1)
+            {
+                if (rig.Find(requiredParts[index]) == null)
+                {
+                    throw new InvalidOperationException($"Stage lighting rig is missing '{requiredParts[index]}'.");
+                }
+            }
+
+            if (rig.Find("truss upper rail") != null || rig.Find("truss lower rail") != null)
+            {
+                throw new InvalidOperationException("Legacy full-width truss rails still obstruct the ceiling logo.");
+            }
         }
 
         private static void AssertActiveState(QuestKtvRoomPrototype room, string objectName, bool expectedActive)
