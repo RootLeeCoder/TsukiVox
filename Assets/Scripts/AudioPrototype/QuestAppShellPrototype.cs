@@ -2,8 +2,6 @@ using System;
 using System.IO;
 using System.Text;
 using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 namespace TsukiVox.AudioPrototype
@@ -850,19 +848,7 @@ namespace TsukiVox.AudioPrototype
 
         private static void EnsureEventSystem()
         {
-            if (EventSystem.current != null)
-            {
-                if (EventSystem.current.GetComponent<InputSystemUIInputModule>() == null)
-                {
-                    EventSystem.current.gameObject.AddComponent<InputSystemUIInputModule>();
-                }
-
-                return;
-            }
-
-            var eventSystemObject = new GameObject("EventSystem");
-            eventSystemObject.AddComponent<EventSystem>();
-            eventSystemObject.AddComponent<InputSystemUIInputModule>();
+            QuestUiPointer.EnsureSceneEventSystem();
         }
 
         private static string SanitizeLine(string text)

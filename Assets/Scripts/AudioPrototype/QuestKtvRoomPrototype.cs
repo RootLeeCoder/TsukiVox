@@ -25,7 +25,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 29;
+        public const int CurrentDesignRevision = 30;
         public const string ThemePrefsKey = "TsukiVox.RoomTheme";
         public const string StarsPrefsKey = "TsukiVox.CeilingStarsEnabled";
         public const string AuroraPrefsKey = "TsukiVox.CeilingAuroraEnabled";
@@ -789,8 +789,8 @@ namespace TsukiVox.AudioPrototype
             tableRoot.SetParent(geometryRoot, false);
             tableRoot.localPosition = new Vector3(0f, 0f, 1.1f);
 
-            // A veined stone slab and recessed brass frame give the table enough
-            // visual weight to support the physical control panel.
+            // Keep the stone uninterrupted so the tablet reads as a distinct object
+            // when it lies flat, rather than blending into a dark inset tray.
             const float frameOuterX = 2.16f;
             const float frameOuterZ = 1.08f;
             const float railWidth = 0.07f;
@@ -800,7 +800,6 @@ namespace TsukiVox.AudioPrototype
             var railCenterZ = frameOuterZ * 0.5f - railWidth * 0.5f;
 
             CreateBeveledBox(tableRoot, "moonstone top", new Vector3(2.08f, 0.075f, 1f), new Vector3(0f, 0.5575f, 0f), palette.Stone, 0.035f);
-            CreateBeveledBox(tableRoot, "moonstone reveal", new Vector3(1.88f, 0.014f, 0.8f), new Vector3(0f, 0.602f, 0f), palette.Table, 0.006f, false, false);
             CreateTrimBox(tableRoot, "table rim front", new Vector3(frameOuterX, railHeight, railWidth), new Vector3(0f, frameCenterY, railCenterZ), palette.Trim, 0.012f);
             CreateTrimBox(tableRoot, "table rim back", new Vector3(frameOuterX, railHeight, railWidth), new Vector3(0f, frameCenterY, -railCenterZ), palette.Trim, 0.012f);
             CreateTrimBox(tableRoot, "table rim left", new Vector3(railWidth, railHeight, frameOuterZ - railWidth * 2f), new Vector3(-railCenterX, frameCenterY, 0f), palette.Trim, 0.012f);
@@ -825,7 +824,7 @@ namespace TsukiVox.AudioPrototype
 
             // The tablet uses the same XY plane as the world-space control Canvas.
             // Its dark screen sits just behind that plane to avoid depth fighting.
-            CreateBeveledBox(tabletAnchor, "tablet body", new Vector3(1.42f, 0.78f, 0.045f), new Vector3(0f, 0f, 0.0315f), palette.Table, 0.025f, true, true, false);
+            CreateBeveledBox(tabletAnchor, "tablet body", new Vector3(1.42f, 0.78f, 0.045f), new Vector3(0f, 0f, 0.0315f), palette.TabletBody, 0.025f, true, true, false);
             CreateBeveledBox(tabletAnchor, "tablet screen", new Vector3(1.30f, 0.66f, 0.008f), new Vector3(0f, 0f, 0.005f), palette.ScreenFrame, 0.018f, false, false, false);
             var leftHinge = CreateCylinder(tabletPivot, "tablet hinge left", 0.03f, 0.14f, new Vector3(-0.60f, 0f, 0.025f), palette.Trim, true, true, false);
             leftHinge.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
@@ -2494,6 +2493,7 @@ namespace TsukiVox.AudioPrototype
             public Material SofaShadow;
             public Material Pillow;
             public Material Table;
+            public Material TabletBody;
             public Material Stone;
             public Material Glass;
             public Material SpeakerCabinet;
@@ -2556,7 +2556,8 @@ namespace TsukiVox.AudioPrototype
                         ["V0.5 Sofa Shadow"] = new ThemedColor(Rgb(0x8A7775)),
                         ["V0.5 Accent Pillow"] = new ThemedColor(Rgb(0xB89D78)),
                         ["V0.5 Table"] = new ThemedColor(Rgb(0xA99B87)),
-                        ["V0.5 Moonstone"] = new ThemedColor(Rgb(0xC4C1C3)),
+                        ["V0.5 Tablet Body"] = new ThemedColor(Rgb(0x565B63)),
+                        ["V0.5 Moonstone"] = new ThemedColor(Rgb(0xD1CECC)),
                         ["V0.5 Smoked Glass"] = new ThemedColor(Rgb(0xD8DCE2, 0.45f)),
                         ["V0.5 Speaker Cabinet"] = new ThemedColor(Rgb(0x25282D)),
                         ["V0.5 Speaker Grille"] = new ThemedColor(Rgb(0x0D0F12)),
@@ -2600,7 +2601,8 @@ namespace TsukiVox.AudioPrototype
                     ["V0.5 Sofa Shadow"] = new ThemedColor(Rgb(0x251C22)),
                     ["V0.5 Accent Pillow"] = new ThemedColor(Rgb(0x967853)),
                     ["V0.5 Table"] = new ThemedColor(Rgb(0x252932)),
-                    ["V0.5 Moonstone"] = new ThemedColor(Rgb(0x68646D)),
+                    ["V0.5 Tablet Body"] = new ThemedColor(Rgb(0x303640)),
+                    ["V0.5 Moonstone"] = new ThemedColor(Rgb(0x77737C)),
                     ["V0.5 Smoked Glass"] = new ThemedColor(Rgb(0x202834, 0.68f)),
                     ["V0.5 Speaker Cabinet"] = new ThemedColor(Rgb(0x111318)),
                     ["V0.5 Speaker Grille"] = new ThemedColor(Rgb(0x050608)),
@@ -2647,6 +2649,7 @@ namespace TsukiVox.AudioPrototype
                     SofaShadow = CreateMaterial("V0.5 Sofa Shadow", colors, 0.1f, 0f),
                     Pillow = CreateMaterial("V0.5 Accent Pillow", colors, 0.2f, 0f),
                     Table = CreateMaterial("V0.5 Table", colors, 0.58f, 0.22f),
+                    TabletBody = CreateMaterial("V0.5 Tablet Body", colors, 0.48f, 0.38f),
                     Stone = CreateMaterial("V0.5 Moonstone", colors, 0.7f, 0.08f),
                     Glass = CreateMaterial("V0.5 Smoked Glass", colors, 0.82f, 0.18f, true),
                     SpeakerCabinet = CreateMaterial("V0.5 Speaker Cabinet", colors, 0.24f, 0.08f),
@@ -2720,6 +2723,7 @@ namespace TsukiVox.AudioPrototype
                 QuestStylizedMaterial.ConfigureDetail(palette.Sofa, QuestMaterialDetailMode.Fabric, 44f, 0.055f, 0.08f);
                 QuestStylizedMaterial.ConfigureDetail(palette.SofaHighlight, QuestMaterialDetailMode.Fabric, 44f, 0.05f, 0.08f);
                 QuestStylizedMaterial.ConfigureDetail(palette.Pillow, QuestMaterialDetailMode.Fabric, 48f, 0.06f, 0.1f);
+                QuestStylizedMaterial.ConfigureDetail(palette.TabletBody, QuestMaterialDetailMode.BrushedMetal, 54f, 0.045f, 0.06f);
                 QuestStylizedMaterial.ConfigureDetail(palette.Stone, QuestMaterialDetailMode.Stone, 2.6f, 0.11f, 0.06f);
                 QuestStylizedMaterial.ConfigureDetail(palette.SpeakerGrille, QuestMaterialDetailMode.Perforated, 28f, 0.24f);
                 QuestStylizedMaterial.ConfigureDetail(palette.SpeakerHardware, QuestMaterialDetailMode.BrushedMetal, 52f, 0.08f);

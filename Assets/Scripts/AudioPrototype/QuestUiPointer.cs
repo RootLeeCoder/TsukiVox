@@ -73,6 +73,44 @@ namespace TsukiVox.AudioPrototype
             return pointer;
         }
 
+        public static EventSystem EnsureSceneEventSystem()
+        {
+            var eventSystems = FindObjectsByType<EventSystem>(FindObjectsInactive.Include);
+            var primary = ResolvePrimaryEventSystem(eventSystems);
+            if (primary == null)
+            {
+                var eventSystemObject = new GameObject("EventSystem");
+                primary = eventSystemObject.AddComponent<EventSystem>();
+            }
+
+            primary.enabled = true;
+            primary.sendNavigationEvents = false;
+            RemoveStandaloneInputModules(primary.gameObject);
+            EnsureSingleInputSystemModule(primary.gameObject);
+
+            for (var index = 0; index < eventSystems.Length; index += 1)
+            {
+                var duplicate = eventSystems[index];
+                if (duplicate == null || duplicate == primary)
+                {
+                    continue;
+                }
+
+                DisableInputModules(duplicate.gameObject);
+                duplicate.enabled = false;
+                if (IsDedicatedEventSystemObject(duplicate.gameObject))
+                {
+                    DestroyForCurrentMode(duplicate.gameObject);
+                    continue;
+                }
+
+                DestroyInputModules(duplicate.gameObject);
+                DestroyForCurrentMode(duplicate);
+            }
+
+            return primary;
+        }
+
         private void Awake()
         {
             ConfigureSceneReferences();
@@ -887,25 +925,93 @@ namespace TsukiVox.AudioPrototype
 
         private static void EnsureEventSystem()
         {
+            EnsureSceneEventSystem();
+        }
+
+        private static EventSystem ResolvePrimaryEventSystem(EventSystem[] eventSystems)
+        {
             if (EventSystem.current != null)
             {
-                var standalone = EventSystem.current.GetComponent<StandaloneInputModule>();
-                if (standalone != null)
-                {
-                    DestroyForCurrentMode(standalone);
-                }
+                return EventSystem.current;
+            }
 
-                if (EventSystem.current.GetComponent<InputSystemUIInputModule>() == null)
+            for (var index = 0; index < eventSystems.Length; index += 1)
+            {
+                if (eventSystems[index] != null && eventSystems[index].isActiveAndEnabled)
                 {
-                    EventSystem.current.gameObject.AddComponent<InputSystemUIInputModule>();
+                    return eventSystems[index];
                 }
+            }
 
+            return eventSystems.Length > 0 ? eventSystems[0] : null;
+        }
+
+        private static void EnsureSingleInputSystemModule(GameObject eventSystemObject)
+        {
+            var modules = eventSystemObject.GetComponents<InputSystemUIInputModule>();
+            if (modules.Length == 0)
+            {
+                eventSystemObject.AddComponent<InputSystemUIInputModule>();
                 return;
             }
 
-            var eventSystemObject = new GameObject("EventSystem");
-            eventSystemObject.AddComponent<EventSystem>();
-            eventSystemObject.AddComponent<InputSystemUIInputModule>();
+            modules[0].enabled = true;
+            for (var index = 1; index < modules.Length; index += 1)
+            {
+                modules[index].enabled = false;
+                DestroyForCurrentMode(modules[index]);
+            }
+        }
+
+        private static void RemoveStandaloneInputModules(GameObject eventSystemObject)
+        {
+            var modules = eventSystemObject.GetComponents<StandaloneInputModule>();
+            for (var index = 0; index < modules.Length; index += 1)
+            {
+                modules[index].enabled = false;
+                DestroyForCurrentMode(modules[index]);
+            }
+        }
+
+        private static void DisableInputModules(GameObject eventSystemObject)
+        {
+            var modules = eventSystemObject.GetComponents<BaseInputModule>();
+            for (var index = 0; index < modules.Length; index += 1)
+            {
+                modules[index].enabled = false;
+            }
+        }
+
+        private static void DestroyInputModules(GameObject eventSystemObject)
+        {
+            var modules = eventSystemObject.GetComponents<BaseInputModule>();
+            for (var index = 0; index < modules.Length; index += 1)
+            {
+                DestroyForCurrentMode(modules[index]);
+            }
+        }
+
+        private static bool IsDedicatedEventSystemObject(GameObject eventSystemObject)
+        {
+            if (eventSystemObject.name != "EventSystem")
+            {
+                return false;
+            }
+
+            var components = eventSystemObject.GetComponents<Component>();
+            for (var index = 0; index < components.Length; index += 1)
+            {
+                if (components[index] is Transform ||
+                    components[index] is EventSystem ||
+                    components[index] is BaseInputModule)
+                {
+                    continue;
+                }
+
+                return false;
+            }
+
+            return true;
         }
 
         private static void DestroyForCurrentMode(Object target)

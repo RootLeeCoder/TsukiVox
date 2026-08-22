@@ -4,7 +4,6 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.InputSystem.UI;
 using UnityEngine.SpatialTracking;
 using UnityEngine.UI;
 using UnityEngine.Video;
@@ -34,9 +33,19 @@ namespace TsukiVox.AudioPrototype.Editor
                 return;
             }
 
+            var eventSystemCount = Object.FindObjectsByType<EventSystem>(FindObjectsInactive.Include).Length;
+            QuestUiPointer.EnsureSceneEventSystem();
+
             var room = Object.FindAnyObjectByType<QuestKtvRoomPrototype>();
             if (room == null || !room.NeedsDesignRefresh)
             {
+                if (eventSystemCount != 1)
+                {
+                    EditorSceneManager.MarkSceneDirty(activeScene);
+                    EditorSceneManager.SaveScene(activeScene);
+                    Debug.Log($"Removed {Mathf.Max(0, eventSystemCount - 1)} duplicate EventSystem object(s) from {ScenePath}.");
+                }
+
                 return;
             }
 
@@ -366,9 +375,7 @@ namespace TsukiVox.AudioPrototype.Editor
 
         private static void CreateEventSystem()
         {
-            var eventSystemObject = new GameObject("EventSystem");
-            eventSystemObject.AddComponent<EventSystem>();
-            eventSystemObject.AddComponent<InputSystemUIInputModule>();
+            QuestUiPointer.EnsureSceneEventSystem();
         }
 
         private static void CreateQuestPointer(GameObject canvasObject)

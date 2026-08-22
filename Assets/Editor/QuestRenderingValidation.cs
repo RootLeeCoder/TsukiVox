@@ -16,6 +16,8 @@ namespace TsukiVox.AudioPrototype.Editor
         private const string CeilingPreviewPath = "Logs/QuestUrpCeilingPreview.png";
         private const string BrightPreviewPath = "Logs/QuestUrpBrightPreview.png";
         private const string BrightCeilingPreviewPath = "Logs/QuestUrpBrightCeilingPreview.png";
+        private const string FlatTabletDarkPreviewPath = "Logs/QuestFlatTabletDarkPreview.png";
+        private const string FlatTabletBrightPreviewPath = "Logs/QuestFlatTabletBrightPreview.png";
         private const string StageLightingPanelPreviewPath = "Logs/QuestStageLightingPanelPreview.png";
         private const string SettingsPanelPreviewPath = "Logs/QuestSettingsPanelPreview.png";
 
@@ -40,6 +42,12 @@ namespace TsukiVox.AudioPrototype.Editor
             ValidateSplitTruss(stageLighting);
             stageLighting.ApplyPreset(StageLightingPreset.Live);
             appShell.ConfigureSceneReferences();
+            var coffeeTable = FindRequiredDescendant(room.transform, "coffee table");
+            var tabletPivot = FindRequiredDescendant(coffeeTable, QuestTabletTiltController.TabletPivotName);
+            var tabletBody = FindRequiredDescendant(tabletPivot, "tablet body");
+            var moonstoneTop = FindRequiredDescendant(coffeeTable, "moonstone top");
+            ValidateCoffeeTableStructure(coffeeTable, tabletBody, moonstoneTop);
+            ValidateCoffeeTableContrast(tabletBody, moonstoneTop, RoomTheme.Dark);
 
             var shader = Shader.Find(QuestStylizedMaterial.ShaderName);
             if (shader == null || !shader.isSupported)
@@ -64,6 +72,7 @@ namespace TsukiVox.AudioPrototype.Editor
             var previousRotation = camera.transform.rotation;
             var previousFieldOfView = camera.fieldOfView;
             var previousTheme = room.CurrentTheme;
+            var previousTabletRotation = tabletPivot.localRotation;
             var renderTexture = new RenderTexture(
                 width,
                 height,
@@ -98,8 +107,21 @@ namespace TsukiVox.AudioPrototype.Editor
                 linearTexture.Apply(false, false);
                 WriteSrgbPng(linearTexture, outputTexture, LoungePreviewPath);
 
+                tabletPivot.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                camera.transform.position = new Vector3(0f, 1.36f, -0.12f);
+                camera.transform.LookAt(new Vector3(0f, 0.61f, 1.1f));
+                camera.fieldOfView = 56f;
+                camera.Render();
+                camera.Render();
+                RenderTexture.active = renderTexture;
+                linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
+                linearTexture.Apply(false, false);
+                WriteSrgbPng(linearTexture, outputTexture, FlatTabletDarkPreviewPath);
+                tabletPivot.localRotation = previousTabletRotation;
+
                 camera.transform.position = new Vector3(0f, 1.12f, -0.05f);
                 camera.transform.LookAt(new Vector3(0f, 2.82f, 2.28f));
+                camera.fieldOfView = previousFieldOfView;
                 camera.Render();
                 camera.Render();
                 RenderTexture.active = renderTexture;
@@ -109,6 +131,7 @@ namespace TsukiVox.AudioPrototype.Editor
 
                 room.ApplyTheme(RoomTheme.Bright);
                 ValidateCelestialTheme(room, RoomTheme.Bright);
+                ValidateCoffeeTableContrast(tabletBody, moonstoneTop, RoomTheme.Bright);
                 camera.Render();
                 camera.Render();
                 RenderTexture.active = renderTexture;
@@ -124,6 +147,18 @@ namespace TsukiVox.AudioPrototype.Editor
                 linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
                 linearTexture.Apply(false, false);
                 WriteSrgbPng(linearTexture, outputTexture, BrightPreviewPath);
+
+                tabletPivot.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                camera.transform.position = new Vector3(0f, 1.36f, -0.12f);
+                camera.transform.LookAt(new Vector3(0f, 0.61f, 1.1f));
+                camera.fieldOfView = 56f;
+                camera.Render();
+                camera.Render();
+                RenderTexture.active = renderTexture;
+                linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
+                linearTexture.Apply(false, false);
+                WriteSrgbPng(linearTexture, outputTexture, FlatTabletBrightPreviewPath);
+                tabletPivot.localRotation = previousTabletRotation;
 
                 var controlCanvas = UnityEngine.Object.FindAnyObjectByType<QuestAppShellPrototype>()
                     ?.GetComponent<QuestConsumerUiPrototype>()
@@ -205,6 +240,7 @@ namespace TsukiVox.AudioPrototype.Editor
                 camera.transform.position = previousPosition;
                 camera.transform.rotation = previousRotation;
                 camera.fieldOfView = previousFieldOfView;
+                tabletPivot.localRotation = previousTabletRotation;
                 RenderTexture.active = previousActive;
                 UnityEngine.Object.DestroyImmediate(linearTexture);
                 UnityEngine.Object.DestroyImmediate(outputTexture);
@@ -216,7 +252,73 @@ namespace TsukiVox.AudioPrototype.Editor
                 $"[TsukiVox URP] Captured rendering previews at {Path.GetFullPath(PreviewPath)} " +
                 $"{Path.GetFullPath(LoungePreviewPath)}, {Path.GetFullPath(CeilingPreviewPath)} and " +
                 $"{Path.GetFullPath(BrightPreviewPath)}, {Path.GetFullPath(BrightCeilingPreviewPath)}, " +
+                $"{Path.GetFullPath(FlatTabletDarkPreviewPath)}, {Path.GetFullPath(FlatTabletBrightPreviewPath)}, " +
                 $"{Path.GetFullPath(StageLightingPanelPreviewPath)}, {Path.GetFullPath(SettingsPanelPreviewPath)}.");
+        }
+
+        private static void ValidateCoffeeTableStructure(
+            Transform coffeeTable,
+            Transform tabletBody,
+            Transform moonstoneTop)
+        {
+            if (coffeeTable.GetComponentsInChildren<Transform>(true).Any(item => item.name == "moonstone reveal"))
+            {
+                throw new InvalidOperationException("Coffee table still contains the legacy dark moonstone reveal.");
+            }
+
+            var tabletMaterial = GetRequiredMaterial(tabletBody);
+            var stoneMaterial = GetRequiredMaterial(moonstoneTop);
+            if (tabletMaterial.name != "V0.5 Tablet Body")
+            {
+                throw new InvalidOperationException($"Tablet body uses unexpected material {tabletMaterial.name}.");
+            }
+
+            if (stoneMaterial.name != "V0.5 Moonstone" || tabletMaterial == stoneMaterial)
+            {
+                throw new InvalidOperationException("Tablet body and coffee-table stone must use independent materials.");
+            }
+        }
+
+        private static void ValidateCoffeeTableContrast(
+            Transform tabletBody,
+            Transform moonstoneTop,
+            RoomTheme theme)
+        {
+            var tabletColor = GetBaseColor(GetRequiredMaterial(tabletBody));
+            var stoneColor = GetBaseColor(GetRequiredMaterial(moonstoneTop));
+            var tabletValue = Mathf.Max(tabletColor.r, tabletColor.g, tabletColor.b);
+            var stoneValue = Mathf.Max(stoneColor.r, stoneColor.g, stoneColor.b);
+            if (Mathf.Abs(tabletValue - stoneValue) < 0.2f)
+            {
+                throw new InvalidOperationException($"{theme} tablet body does not contrast enough with the coffee-table stone.");
+            }
+        }
+
+        private static Transform FindRequiredDescendant(Transform root, string objectName)
+        {
+            var result = root.GetComponentsInChildren<Transform>(true).FirstOrDefault(item => item.name == objectName);
+            if (result == null)
+            {
+                throw new InvalidOperationException($"Required rendering object {objectName} was not generated.");
+            }
+
+            return result;
+        }
+
+        private static Material GetRequiredMaterial(Transform target)
+        {
+            var renderer = target.GetComponent<MeshRenderer>();
+            if (renderer == null || renderer.sharedMaterial == null)
+            {
+                throw new InvalidOperationException($"Rendering object {target.name} has no material.");
+            }
+
+            return renderer.sharedMaterial;
+        }
+
+        private static Color GetBaseColor(Material material)
+        {
+            return material.HasProperty("_BaseColor") ? material.GetColor("_BaseColor") : material.color;
         }
 
         private static void SetPreviewPage(RectTransform[] pages, string visiblePageName)
