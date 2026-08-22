@@ -5,6 +5,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.InputSystem.XR;
+using UnityEngine.Rendering;
 using UnityEngine.UI;
 
 using InputSystemCommonUsages = UnityEngine.InputSystem.CommonUsages;
@@ -55,7 +56,9 @@ namespace TsukiVox.AudioPrototype
         private GameObject draggedObject;
         private LineRenderer pointerLine;
         private Transform reticle;
+        private MeshRenderer reticleRenderer;
         private Material pointerMaterial;
+        private MaterialPropertyBlock pointerProperties;
         private float nextCanvasRefreshAt;
 
         public static QuestUiPointer EnsureScenePointer()
@@ -820,6 +823,11 @@ namespace TsukiVox.AudioPrototype
                 reticle = transform.Find("Quest UI Reticle");
             }
 
+            if (reticleRenderer == null && reticle != null)
+            {
+                reticleRenderer = reticle.GetComponent<MeshRenderer>();
+            }
+
             if (pointerMaterial == null)
             {
                 pointerMaterial = pointerLine != null ? pointerLine.sharedMaterial : null;
@@ -827,11 +835,6 @@ namespace TsukiVox.AudioPrototype
                 {
                     pointerMaterial = existingRenderer.sharedMaterial;
                 }
-            }
-
-            if (pointerLine != null && reticle != null)
-            {
-                return;
             }
 
             if (pointerMaterial == null)
@@ -849,6 +852,7 @@ namespace TsukiVox.AudioPrototype
 
                 pointerMaterial = new Material(shader)
                 {
+                    name = "TsukiVox UI Pointer",
                     color = PointerIdleColor,
                 };
             }
@@ -867,6 +871,10 @@ namespace TsukiVox.AudioPrototype
                 pointerLine.enabled = false;
             }
 
+            pointerLine.sharedMaterial = pointerMaterial;
+            pointerLine.generateLightingData = false;
+            ConfigurePointerRenderer(pointerLine);
+
             if (reticle == null)
             {
                 var reticleObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -877,13 +885,15 @@ namespace TsukiVox.AudioPrototype
                 var collider = reticleObject.GetComponent<Collider>();
                 DestroyForCurrentMode(collider);
 
-                var renderer = reticleObject.GetComponent<MeshRenderer>();
-                if (renderer != null)
-                {
-                    renderer.sharedMaterial = pointerMaterial;
-                }
+                reticleRenderer = reticleObject.GetComponent<MeshRenderer>();
 
                 reticleObject.SetActive(false);
+            }
+
+            if (reticleRenderer != null)
+            {
+                reticleRenderer.sharedMaterial = pointerMaterial;
+                ConfigurePointerRenderer(reticleRenderer);
             }
         }
 
@@ -892,10 +902,7 @@ namespace TsukiVox.AudioPrototype
             // The grip toggle now controls ray visibility; always draw when a pose is active.
             EnsurePointerVisuals();
             var color = !hasCanvasHit ? PointerMissColor : pressed ? PointerPressedColor : hasTarget ? PointerHoverColor : PointerIdleColor;
-            if (pointerMaterial != null)
-            {
-                pointerMaterial.color = color;
-            }
+            ApplyPointerColor(color);
 
             pointerLine.enabled = true;
             pointerLine.SetPosition(0, origin);
@@ -906,6 +913,25 @@ namespace TsukiVox.AudioPrototype
                 reticle.gameObject.SetActive(hasCanvasHit);
                 reticle.position = endPoint;
             }
+        }
+
+        private void ApplyPointerColor(Color color)
+        {
+            pointerProperties ??= new MaterialPropertyBlock();
+            pointerProperties.Clear();
+            pointerProperties.SetColor("_Color", color);
+            pointerProperties.SetColor("_BaseColor", color);
+            pointerLine?.SetPropertyBlock(pointerProperties);
+            reticleRenderer?.SetPropertyBlock(pointerProperties);
+        }
+
+        private static void ConfigurePointerRenderer(Renderer renderer)
+        {
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            renderer.lightProbeUsage = LightProbeUsage.Off;
+            renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+            renderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
         }
 
         private void HidePointerVisuals()

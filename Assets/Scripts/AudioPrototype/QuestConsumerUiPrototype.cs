@@ -148,8 +148,6 @@ namespace TsukiVox.AudioPrototype
         private static TMP_FontAsset sharedUiFont;
         private TMP_FontAsset uiFont;
 
-        private TMP_Text connectionText;
-        private QuestUiSurface connectionDot;
         private RectTransform queueBadge;
         private TMP_Text queueBadgeText;
         private TMP_Text songMetaText;
@@ -275,9 +273,6 @@ namespace TsukiVox.AudioPrototype
         private TMP_Text ceilingAuroraLabel;
         private Toggle ceilingStarsToggle;
         private Toggle ceilingAuroraToggle;
-        private Toggle monitorOutputToggle;
-        private Toggle safetyToggle;
-        private Toggle nativeToggle;
         private Button openDiagnosticsButton;
         private TMP_Text settingsBuildText;
         private Button exitApplicationButton;
@@ -560,16 +555,15 @@ namespace TsukiVox.AudioPrototype
             var brandSmile = EnsureIcon(brandMark, "Smile", QuestUiIconKind.BrandSmile, Vector2.zero, new Vector2(34f, 34f), BrandWarm);
             brandSmile.StrokeWidth = 2.8f;
             brandSurface.raycastTarget = false;
-            CreateText(homePage, "Brand", "TsukiVox", 23, FontStyle.Bold, new Vector2(-356f, 240f), new Vector2(180f, 32f), TextAnchor.MiddleLeft, TextPrimary);
-            CreateText(homePage, "Brand CN", "月读声域", 16, FontStyle.Normal, new Vector2(-356f, 216f), new Vector2(180f, 24f), TextAnchor.MiddleLeft, TextSecondary);
-
-            connectionDot = EnsureSurface(EnsureRect(homePage, "Connection Dot", new Vector2(84f, 232f), new Vector2(12f, 12f)), Accent, 6f, false);
-            connectionText = CreateText(homePage, "Connection", "直接请求已就绪", 17, FontStyle.Normal, new Vector2(182f, 232f), new Vector2(168f, 36f), TextAnchor.MiddleLeft, TextPrimary);
+            CreateText(homePage, "Brand", "TsukiVox", 23, FontStyle.Bold, new Vector2(-392f, 232f), new Vector2(120f, 36f), TextAnchor.MiddleCenter, TextPrimary);
+            SetChildActive(homePage, "Brand CN", false);
+            SetChildActive(homePage, "Connection Dot", false);
+            SetChildActive(homePage, "Connection", false);
             SetChildActive(homePage, "Header Hover Label", false);
 
-            songSearchPageButton = CreateIconButton(homePage, "Open Song Search", QuestUiIconKind.Search, new Vector2(306f, 232f), new Vector2(52f, 52f), Accent, AccentInk, out _);
-            stageLightingPageButton = CreateIconButton(homePage, "Open Stage Lighting", QuestUiIconKind.Spotlight, new Vector2(366f, 232f), new Vector2(52f, 52f), Surface, TextPrimary, out _);
-            settingsPageButton = CreateIconButton(homePage, "Open Settings", QuestUiIconKind.Settings, new Vector2(486f, 232f), new Vector2(52f, 52f), Surface, TextPrimary, out _);
+            songSearchPageButton = CreateLabeledIconButton(homePage, "Open Song Search", "搜索点歌", QuestUiIconKind.Search, new Vector2(24f, 232f), new Vector2(128f, 52f), Accent, AccentInk, AccentInk, out _);
+            stageLightingPageButton = CreateLabeledIconButton(homePage, "Open Stage Lighting", "舞台灯光", QuestUiIconKind.Spotlight, new Vector2(160f, 232f), new Vector2(128f, 52f), Surface, Accent, TextPrimary, out _);
+            settingsPageButton = CreateLabeledIconButton(homePage, "Open Settings", "设置", QuestUiIconKind.Settings, new Vector2(432f, 232f), new Vector2(128f, 52f), Surface, TextPrimary, TextPrimary, out _);
             ConfigureHover(songSearchPageButton, null, string.Empty);
             ConfigureHover(stageLightingPageButton, null, string.Empty);
             ConfigureHover(settingsPageButton, null, string.Empty);
@@ -579,7 +573,7 @@ namespace TsukiVox.AudioPrototype
             songTitleText.enableAutoSizing = true;
             songTitleText.fontSizeMin = 28f;
             songTitleText.fontSizeMax = 44f;
-            songDetailText = CreateText(homePage, "Song Detail", "从 PC 添加歌曲后即可开始", 17, FontStyle.Normal, new Vector2(-250f, 62f), new Vector2(490f, 30f), TextAnchor.MiddleLeft, TextSecondary);
+            songDetailText = CreateText(homePage, "Song Detail", string.Empty, 17, FontStyle.Normal, new Vector2(-250f, 62f), new Vector2(490f, 30f), TextAnchor.MiddleLeft, TextSecondary);
 
             waveBars = new QuestUiSurface[8];
             var waveHeights = new[] { 20f, 38f, 58f, 30f, 50f, 24f, 40f, 16f };
@@ -611,11 +605,9 @@ namespace TsukiVox.AudioPrototype
             CreateDivider(homePage, "Mixer Channel Divider", new Vector2(-34f, -225f), new Vector2(1f, 42f));
             homeVoiceVolumeIcon = EnsureIcon(homePage, "Voice Volume Icon", QuestUiIconKind.Microphone, new Vector2(8f, -225f), new Vector2(28f, 28f), Warm);
             CreateText(homePage, "Voice Volume Label", "人声", 16, FontStyle.Bold, new Vector2(58f, -225f), new Vector2(68f, 32f), TextAnchor.MiddleLeft, TextPrimary);
-            homeVoiceVolumeSlider = CreateSlider(homePage, "Home Voice Volume", new Vector2(230f, -225f), new Vector2(240f, 46f), true, Warm, Warm);
-            homeVoiceVolumeValueText = CreateText(homePage, "Voice Volume Value", "70%", 16, FontStyle.Bold, new Vector2(386f, -225f), new Vector2(64f, 32f), TextAnchor.MiddleRight, Warm);
-
-            voicePageButton = CreateIconButton(homePage, "Open Voice Settings", QuestUiIconKind.SlidersHorizontal, new Vector2(466f, -225f), new Vector2(56f, 56f), Surface, TextPrimary, out _);
-            ConfigureHover(voicePageButton, transportHoverText, "人声设置");
+            homeVoiceVolumeSlider = CreateSlider(homePage, "Home Voice Volume", new Vector2(250f, -225f), new Vector2(280f, 46f), true, Warm, Warm);
+            homeVoiceVolumeValueText = CreateText(homePage, "Voice Volume Value", "70%", 16, FontStyle.Bold, new Vector2(448f, -225f), new Vector2(80f, 32f), TextAnchor.MiddleRight, Warm);
+            SetChildActive(homePage, "Open Voice Settings", false);
         }
 
         private void BuildSongSearchPage()
@@ -1042,21 +1034,37 @@ namespace TsukiVox.AudioPrototype
             SetChildActive(voicePage, "Safety Note", false);
         }
 
+        private void RetireSettingsAudioAdvancedUi()
+        {
+            SetChildActive(settingsPage, "Audio Section", false);
+            var settingNames = new[] { "Monitor Output", "Safety Limiter", "Native Backend" };
+            var elementNames = new[] { "Title", "Hint", "Switch", "Divider" };
+            foreach (var settingName in settingNames)
+            {
+                foreach (var elementName in elementNames)
+                {
+                    SetChildActive(settingsPage, $"{settingName} {elementName}", false);
+                }
+            }
+        }
+
         private void BuildQueueDrawer()
         {
-            queueDrawerButton = CreateIconButton(
+            queueDrawerButton = CreateLabeledIconButton(
                 consumerRoot,
                 "Open Queue Drawer",
+                "播放队列",
                 QuestUiIconKind.Queue,
-                new Vector2(426f, 232f),
-                new Vector2(52f, 52f),
+                new Vector2(296f, 232f),
+                new Vector2(128f, 52f),
                 Surface,
+                TextPrimary,
                 TextPrimary,
                 out _);
             queueDrawerButtonSurface = queueDrawerButton.targetGraphic as QuestUiSurface;
             ConfigureHover(queueDrawerButton, null, string.Empty);
 
-            queueBadge = EnsureRect(queueDrawerButton.transform, "Badge", new Vector2(20f, 20f), new Vector2(20f, 20f));
+            queueBadge = EnsureRect(queueDrawerButton.transform, "Badge", new Vector2(52f, 20f), new Vector2(20f, 20f));
             EnsureSurface(queueBadge, Accent, 12f, false);
             queueBadgeText = CreateText(queueBadge, "Label", "0", 14, FontStyle.Bold, Vector2.zero, queueBadge.sizeDelta, TextAnchor.MiddleCenter, AccentInk);
 
@@ -1334,10 +1342,11 @@ namespace TsukiVox.AudioPrototype
             ceilingAuroraToggle = CreateSwitch(settingsPage, "Ceiling Aurora Switch", new Vector2(422f, 132f));
 
             CreateDivider(settingsPage, "Request Mode Divider", new Vector2(0f, 82f), new Vector2(ContentWidth, 1f));
-            CreateText(settingsPage, "Audio Section", "音频高级设置", 16, FontStyle.Bold, new Vector2(-356f, 55f), new Vector2(280f, 30f), TextAnchor.MiddleLeft, TextSecondary);
-            CreateSettingToggle(settingsPage, "Monitor Output", "返听输出", "关闭后仍保留麦克风输入", 12f, out monitorOutputToggle);
-            CreateSettingToggle(settingsPage, "Safety Limiter", "安全保护", "建议始终保持开启", -56f, out safetyToggle);
-            CreateSettingToggle(settingsPage, "Native Backend", "Native 低延迟", "空间返听模式下不可用", -124f, out nativeToggle);
+            RetireSettingsAudioAdvancedUi();
+            voicePageButton = CreateSurfaceButton(settingsPage, "Open Voice Settings", new Vector2(0f, -55f), new Vector2(ContentWidth, 72f), Surface, Line);
+            EnsureIcon(voicePageButton.transform, "Icon", QuestUiIconKind.SlidersHorizontal, new Vector2(-452f, 0f), new Vector2(28f, 28f), Warm);
+            CreateText(voicePageButton.transform, "Label", "人声设置", 19, FontStyle.Bold, new Vector2(-326f, 0f), new Vector2(210f, 36f), TextAnchor.MiddleLeft, TextPrimary);
+            EnsureIcon(voicePageButton.transform, "Chevron", QuestUiIconKind.ChevronRight, new Vector2(460f, 0f), new Vector2(24f, 24f), TextSecondary);
 
             CreateDivider(settingsPage, "Audio Divider", new Vector2(0f, -184f), new Vector2(ContentWidth, 1f));
             openDiagnosticsButton = CreateSurfaceButton(settingsPage, "Open Diagnostics", new Vector2(-116f, -228f), new Vector2(760f, 72f), Surface, Line);
@@ -1571,7 +1580,7 @@ namespace TsukiVox.AudioPrototype
             WireButton(settingsPageButton, () => ShowPage(UiPage.Settings));
             WireButton(stageLightingPageButton, () => OpenStageLightingPage(UiPage.Home));
             WireButton(voicePageButton, () => ShowPage(UiPage.Voice));
-            WireButton(voiceBackButton, () => ShowPage(UiPage.Home));
+            WireButton(voiceBackButton, () => ShowPage(UiPage.Settings));
             WireButton(songSearchBackButton, () => ShowPage(UiPage.Home));
             WireButton(settingsBackButton, () => ShowPage(UiPage.Home));
             WireButton(openStageLightingButton, () => OpenStageLightingPage(UiPage.Settings));
@@ -1672,12 +1681,6 @@ namespace TsukiVox.AudioPrototype
                 });
             }
 
-            monitorOutputToggle.onValueChanged.RemoveAllListeners();
-            monitorOutputToggle.onValueChanged.AddListener(value => audioPrototype?.SetMonitorOutput(value));
-            safetyToggle.onValueChanged.RemoveAllListeners();
-            safetyToggle.onValueChanged.AddListener(value => audioPrototype?.SetSafetyLimiterEnabled(value));
-            nativeToggle.onValueChanged.RemoveAllListeners();
-            nativeToggle.onValueChanged.AddListener(value => audioPrototype?.SetPreferNativeBackend(value));
             ceilingStarsToggle.onValueChanged.RemoveAllListeners();
             ceilingStarsToggle.onValueChanged.AddListener(value =>
             {
@@ -1796,10 +1799,6 @@ namespace TsukiVox.AudioPrototype
             voicePageButton.interactable = hasVoiceAudio;
 
             var connected = playlistPrototype != null && playlistPrototype.IsConnected;
-            connectionText.text = connected ? "直接请求已就绪" : "点歌组件不可用";
-            connectionText.color = connected ? TextPrimary : Warm;
-            connectionDot.color = connected ? Accent : Warm;
-
             var state = playlistPrototype?.CurrentState;
             var count = state?.QueueCount ?? 0;
             queueBadge.gameObject.SetActive(count > 0);
@@ -1810,7 +1809,7 @@ namespace TsukiVox.AudioPrototype
             {
                 songMetaText.text = connected ? "播放队列为空" : "点歌组件不可用";
                 songTitleText.text = "等待点歌";
-                songDetailText.text = connected ? "打开搜索点歌选择视频" : "请重新启动应用";
+                songDetailText.text = connected ? string.Empty : "请重新启动应用";
             }
             else
             {
@@ -2207,18 +2206,6 @@ namespace TsukiVox.AudioPrototype
             ceilingAuroraLabel.text = celestialControlsAvailable && roomPrototype.CurrentTheme == RoomTheme.Bright ? "火烧云" : "极光";
             ceilingAuroraLabel.color = celestialControlsAvailable && roomPrototype.AuroraEnabled ? TextPrimary : TextSecondary;
 
-            if (audioPrototype == null)
-            {
-                return;
-            }
-
-            monitorOutputToggle.SetIsOnWithoutNotify(audioPrototype.IsMonitorOutputEnabled);
-            safetyToggle.SetIsOnWithoutNotify(audioPrototype.IsSafetyLimiterEnabled);
-            nativeToggle.SetIsOnWithoutNotify(audioPrototype.PrefersNativeOboeBackend);
-            nativeToggle.interactable = audioPrototype.IsNativeBackendSelectable;
-            RefreshSwitchVisual(monitorOutputToggle, Accent);
-            RefreshSwitchVisual(safetyToggle, Accent);
-            RefreshSwitchVisual(nativeToggle, Accent);
         }
 
         private void RefreshStageLighting()
@@ -4087,14 +4074,6 @@ namespace TsukiVox.AudioPrototype
             }
         }
 
-        private void CreateSettingToggle(RectTransform parent, string name, string title, string hint, float y, out Toggle toggle)
-        {
-            CreateText(parent, $"{name} Title", title, 18, FontStyle.Bold, new Vector2(-336f, y + 8f), new Vector2(320f, 34f), TextAnchor.MiddleLeft, TextPrimary);
-            CreateText(parent, $"{name} Hint", hint, 16, FontStyle.Normal, new Vector2(-256f, y - 20f), new Vector2(480f, 26f), TextAnchor.MiddleLeft, TextSecondary);
-            toggle = CreateSwitch(parent, $"{name} Switch", new Vector2(460f, y - 4f));
-            CreateDivider(parent, $"{name} Divider", new Vector2(0f, y - 39f), new Vector2(ContentWidth, 1f));
-        }
-
         private Button CreateIconButton(
             Transform parent,
             string name,
@@ -4107,6 +4086,39 @@ namespace TsukiVox.AudioPrototype
         {
             var button = CreateSurfaceButton(parent, name, position, size, background, Line);
             icon = EnsureIcon(button.transform, "Icon", iconKind, Vector2.zero, size * 0.46f, iconColor);
+            return button;
+        }
+
+        private Button CreateLabeledIconButton(
+            Transform parent,
+            string name,
+            string label,
+            QuestUiIconKind iconKind,
+            Vector2 position,
+            Vector2 size,
+            Color background,
+            Color iconColor,
+            Color textColor,
+            out QuestUiIcon icon)
+        {
+            var button = CreateSurfaceButton(parent, name, position, size, background, Line);
+            var iconSize = Mathf.Min(24f, size.y * 0.46f);
+            var iconX = -size.x * 0.5f + 14f + iconSize * 0.5f;
+            icon = EnsureIcon(button.transform, "Icon", iconKind, new Vector2(iconX, 0f), new Vector2(iconSize, iconSize), iconColor);
+
+            var labelLeft = iconX + iconSize * 0.5f + 8f;
+            var labelRight = size.x * 0.5f - 12f;
+            var labelWidth = Mathf.Max(1f, labelRight - labelLeft);
+            CreateText(
+                button.transform,
+                "Label",
+                label,
+                15,
+                FontStyle.Bold,
+                new Vector2((labelLeft + labelRight) * 0.5f, 0f),
+                new Vector2(labelWidth, size.y - 12f),
+                TextAnchor.MiddleCenter,
+                textColor);
             return button;
         }
 

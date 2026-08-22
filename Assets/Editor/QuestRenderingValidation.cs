@@ -48,6 +48,7 @@ namespace TsukiVox.AudioPrototype.Editor
             var moonstoneTop = FindRequiredDescendant(coffeeTable, "moonstone top");
             ValidateCoffeeTableStructure(coffeeTable, tabletBody, moonstoneTop);
             ValidateCoffeeTableContrast(tabletBody, moonstoneTop, RoomTheme.Dark);
+            ValidatePointerIsolation(QuestUiPointer.EnsureScenePointer(), moonstoneTop);
 
             var shader = Shader.Find(QuestStylizedMaterial.ShaderName);
             if (shader == null || !shader.isSupported)
@@ -319,6 +320,73 @@ namespace TsukiVox.AudioPrototype.Editor
         private static Color GetBaseColor(Material material)
         {
             return material.HasProperty("_BaseColor") ? material.GetColor("_BaseColor") : material.color;
+        }
+
+        private static void ValidatePointerIsolation(QuestUiPointer pointer, Transform moonstoneTop)
+        {
+            var pointerLine = FindRequiredDescendant(pointer.transform, "Quest Controller UI Ray")
+                .GetComponent<LineRenderer>();
+            var reticleRenderer = FindRequiredDescendant(pointer.transform, "Quest UI Reticle")
+                .GetComponent<MeshRenderer>();
+            var stoneMaterial = GetRequiredMaterial(moonstoneTop);
+            if (pointerLine == null || reticleRenderer == null)
+            {
+                throw new InvalidOperationException("Quest pointer renderers were not generated.");
+            }
+
+            if (pointerLine.sharedMaterial == null ||
+                reticleRenderer.sharedMaterial == null ||
+                pointerLine.sharedMaterial == stoneMaterial ||
+                reticleRenderer.sharedMaterial == stoneMaterial)
+            {
+                throw new InvalidOperationException("Quest pointer material must be isolated from the coffee-table material.");
+            }
+
+            ValidatePointerRenderer(pointerLine);
+            ValidatePointerRenderer(reticleRenderer);
+
+            var pointerMaterialColor = GetBaseColor(pointerLine.sharedMaterial);
+            var stoneColor = GetBaseColor(stoneMaterial);
+            var applyPointerColor = typeof(QuestUiPointer).GetMethod(
+                "ApplyPointerColor",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            if (applyPointerColor == null)
+            {
+                throw new InvalidOperationException("Quest pointer color isolation method is unavailable.");
+            }
+
+            var testColor = new Color(0.17f, 0.73f, 0.91f, 0.64f);
+            applyPointerColor.Invoke(pointer, new object[] { testColor });
+            var propertyBlock = new MaterialPropertyBlock();
+            pointerLine.GetPropertyBlock(propertyBlock);
+            if (!ColorsApproximately(propertyBlock.GetColor("_Color"), testColor) ||
+                !ColorsApproximately(GetBaseColor(pointerLine.sharedMaterial), pointerMaterialColor) ||
+                !ColorsApproximately(GetBaseColor(stoneMaterial), stoneColor))
+            {
+                throw new InvalidOperationException("Quest pointer state color leaked into a shared environment material.");
+            }
+
+            applyPointerColor.Invoke(pointer, new object[] { pointerMaterialColor });
+        }
+
+        private static void ValidatePointerRenderer(Renderer renderer)
+        {
+            if (renderer.shadowCastingMode != UnityEngine.Rendering.ShadowCastingMode.Off ||
+                renderer.receiveShadows ||
+                renderer.lightProbeUsage != UnityEngine.Rendering.LightProbeUsage.Off ||
+                renderer.reflectionProbeUsage != UnityEngine.Rendering.ReflectionProbeUsage.Off ||
+                renderer.motionVectorGenerationMode != MotionVectorGenerationMode.ForceNoMotion)
+            {
+                throw new InvalidOperationException($"Pointer renderer {renderer.name} can still affect environment lighting.");
+            }
+        }
+
+        private static bool ColorsApproximately(Color left, Color right)
+        {
+            return Mathf.Abs(left.r - right.r) < 0.0001f &&
+                   Mathf.Abs(left.g - right.g) < 0.0001f &&
+                   Mathf.Abs(left.b - right.b) < 0.0001f &&
+                   Mathf.Abs(left.a - right.a) < 0.0001f;
         }
 
         private static void SetPreviewPage(RectTransform[] pages, string visiblePageName)
