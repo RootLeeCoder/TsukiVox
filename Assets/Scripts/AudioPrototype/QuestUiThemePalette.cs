@@ -21,6 +21,8 @@ namespace TsukiVox.AudioPrototype
         public Color Warm { get; private set; }
         public Color WarmSurface { get; private set; }
         public Color Danger { get; private set; }
+        public Color DangerSurface { get; private set; }
+        public Color DangerBorder { get; private set; }
         public Color BrandBackground { get; private set; }
         public Color BrandAccent { get; private set; }
         public Color BrandWarm { get; private set; }
@@ -92,6 +94,8 @@ namespace TsukiVox.AudioPrototype
             Warm = Rgb(0x929CAF),
             WarmSurface = Rgb(0x1A202B),
             Danger = Rgb(0xEF7075),
+            DangerSurface = Rgb(0x24181D),
+            DangerBorder = Rgb(0xC17478),
             BrandBackground = Rgb(0x111217),
             BrandAccent = Rgb(0xE2CFA9),
             BrandWarm = Rgb(0xB6A178),
@@ -150,6 +154,8 @@ namespace TsukiVox.AudioPrototype
             Warm = Rgb(0x59657B),
             WarmSurface = Rgb(0xE7EAF0),
             Danger = Rgb(0xC33B3F),
+            DangerSurface = Rgb(0xF0E4E5),
+            DangerBorder = Rgb(0x985156),
             BrandBackground = Rgb(0x2A2925),
             BrandAccent = Rgb(0xE3CFA8),
             BrandWarm = Rgb(0xA88F60),

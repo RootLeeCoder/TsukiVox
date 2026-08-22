@@ -57,6 +57,8 @@ namespace TsukiVox.AudioPrototype
         private Color Warm => palette.Warm;
         private Color WarmSurface => palette.WarmSurface;
         private Color Danger => palette.Danger;
+        private Color DangerSurface => palette.DangerSurface;
+        private Color DangerBorder => palette.DangerBorder;
         private Color BrandBackground => palette.BrandBackground;
         private Color BrandAccent => palette.BrandAccent;
         private Color BrandWarm => palette.BrandWarm;
@@ -77,6 +79,8 @@ namespace TsukiVox.AudioPrototype
             Warm,
             WarmSurface,
             Danger,
+            DangerSurface,
+            DangerBorder,
             BrandBackground,
             BrandAccent,
             BrandWarm,
@@ -96,6 +100,7 @@ namespace TsukiVox.AudioPrototype
             SongSearch,
             Voice,
             Settings,
+            RoomAmbience,
             StageLighting,
             MicProtection,
             MicMouthPoint,
@@ -107,6 +112,7 @@ namespace TsukiVox.AudioPrototype
         private RectTransform songSearchPage;
         private RectTransform voicePage;
         private RectTransform settingsPage;
+        private RectTransform roomAmbiencePage;
         private RectTransform stageLightingPage;
         private RectTransform micProtectionPage;
         private RectTransform micMouthPointPage;
@@ -124,6 +130,7 @@ namespace TsukiVox.AudioPrototype
         private CanvasGroup songSearchGroup;
         private CanvasGroup voiceGroup;
         private CanvasGroup settingsGroup;
+        private CanvasGroup roomAmbienceGroup;
         private CanvasGroup stageLightingGroup;
         private CanvasGroup micProtectionGroup;
         private CanvasGroup micMouthPointGroup;
@@ -259,8 +266,12 @@ namespace TsukiVox.AudioPrototype
         private bool searchResultSkeletonVisible;
 
         private Button settingsBackButton;
+        private Button openRoomAmbienceButton;
+        private QuestUiSurface openRoomAmbienceSurface;
+        private QuestUiIcon openRoomAmbienceIcon;
         private Button openStageLightingButton;
         private QuestUiSurface openStageLightingSurface;
+        private QuestUiIcon openStageLightingIcon;
         private Button playBuiltInDefaultButton;
         private QuestUiIcon playBuiltInDefaultIcon;
         private TMP_Text playBuiltInDefaultText;
@@ -269,6 +280,8 @@ namespace TsukiVox.AudioPrototype
         private Button openMicProtectionButton;
         private QuestUiSurface openMicProtectionSurface;
         private QuestUiIcon openMicProtectionIcon;
+        private QuestUiSurface voicePageSurface;
+        private QuestUiIcon voicePageIcon;
         private TMP_Text ceilingStarsLabel;
         private TMP_Text ceilingAuroraLabel;
         private Toggle ceilingStarsToggle;
@@ -278,6 +291,8 @@ namespace TsukiVox.AudioPrototype
         private Button exitApplicationButton;
         private QuestUiIcon exitApplicationIcon;
         private TMP_Text exitApplicationText;
+
+        private Button roomAmbienceBackButton;
 
         private Button stageLightingBackButton;
         private Toggle stageLightingToggle;
@@ -522,6 +537,7 @@ namespace TsukiVox.AudioPrototype
             songSearchPage = EnsurePage(consumerRoot, "Song Search Page", out songSearchGroup);
             voicePage = EnsurePage(consumerRoot, "Voice Page", out voiceGroup);
             settingsPage = EnsurePage(consumerRoot, "Settings Page", out settingsGroup);
+            roomAmbiencePage = EnsurePage(consumerRoot, "Room Ambience Page", out roomAmbienceGroup);
             stageLightingPage = EnsurePage(consumerRoot, "Stage Lighting Page", out stageLightingGroup);
             micProtectionPage = EnsurePage(consumerRoot, "Mic Protection Page", out micProtectionGroup);
             micMouthPointPage = EnsurePage(consumerRoot, "Mic Mouth Point Page", out micMouthPointGroup);
@@ -531,6 +547,7 @@ namespace TsukiVox.AudioPrototype
             BuildSongSearchPage();
             BuildVoicePage();
             BuildSettingsPage();
+            BuildRoomAmbiencePage();
             BuildStageLightingPage();
             BuildMicProtectionPage();
             BuildMicMouthPointPage();
@@ -1320,43 +1337,139 @@ namespace TsukiVox.AudioPrototype
         {
             SetChildActive(settingsPage, "Request Mode Label", false);
             SetChildActive(settingsPage, "Request Mode Value", false);
+            SetChildActive(settingsPage, "Request Mode Divider", false);
+            SetChildActive(settingsPage, "Room Ambience Label", false);
+            SetChildActive(settingsPage, "Ceiling Stars Label", false);
+            SetChildActive(settingsPage, "Ceiling Stars Switch", false);
+            SetChildActive(settingsPage, "Ceiling Aurora Label", false);
+            SetChildActive(settingsPage, "Ceiling Aurora Switch", false);
 
             BuildSubpageHeader(settingsPage, "设置", out settingsBackButton);
-            openStageLightingButton = CreateSurfaceButton(settingsPage, "Open Stage Lighting", new Vector2(-78f, 232f), new Vector2(176f, 52f), Surface, Line);
-            openStageLightingSurface = openStageLightingButton.targetGraphic as QuestUiSurface;
-            EnsureIcon(openStageLightingButton.transform, "Icon", QuestUiIconKind.Spotlight, new Vector2(-60f, 0f), new Vector2(24f, 24f), Accent);
-            CreateText(openStageLightingButton.transform, "Label", "舞台灯光", 17, FontStyle.Bold, new Vector2(22f, 0f), new Vector2(108f, 34f), TextAnchor.MiddleCenter, TextPrimary);
-            playBuiltInDefaultButton = CreateSurfaceButton(settingsPage, "Play Built-in Default", new Vector2(118f, 232f), new Vector2(196f, 52f), Surface, Line);
+            playBuiltInDefaultButton = CreateSurfaceButton(settingsPage, "Play Built-in Default", new Vector2(386f, 232f), new Vector2(196f, 52f), Surface, Line);
             playBuiltInDefaultIcon = EnsureIcon(playBuiltInDefaultButton.transform, "Icon", QuestUiIconKind.Play, new Vector2(-72f, 0f), new Vector2(24f, 24f), Accent);
             playBuiltInDefaultText = CreateText(playBuiltInDefaultButton.transform, "Label", "播放内置视频", 16, FontStyle.Bold, new Vector2(18f, 0f), new Vector2(124f, 34f), TextAnchor.MiddleCenter, TextPrimary);
-            stopBuiltInDefaultButton = CreateIconButton(settingsPage, "Stop Built-in Default", QuestUiIconKind.Stop, new Vector2(256f, 232f), new Vector2(56f, 52f), Surface, TextSecondary, out stopBuiltInDefaultIcon);
-            openMicProtectionButton = CreateSurfaceButton(settingsPage, "Open Mic Protection", new Vector2(396f, 232f), new Vector2(200f, 52f), Surface, Line);
-            openMicProtectionSurface = openMicProtectionButton.targetGraphic as QuestUiSurface;
-            openMicProtectionIcon = EnsureIcon(openMicProtectionButton.transform, "Icon", QuestUiIconKind.Microphone, new Vector2(-70f, 0f), new Vector2(24f, 24f), Accent);
-            CreateText(openMicProtectionButton.transform, "Label", "防碰撞", 17, FontStyle.Bold, new Vector2(22f, 0f), new Vector2(118f, 34f), TextAnchor.MiddleCenter, TextPrimary);
+            stopBuiltInDefaultButton = CreateIconButton(settingsPage, "Stop Built-in Default", QuestUiIconKind.Stop, new Vector2(250f, 232f), new Vector2(56f, 52f), Surface, TextSecondary, out stopBuiltInDefaultIcon);
 
-            CreateText(settingsPage, "Room Ambience Label", "房间氛围", 18, FontStyle.Bold, new Vector2(-394f, 132f), new Vector2(200f, 34f), TextAnchor.MiddleLeft, TextPrimary);
-            ceilingStarsLabel = CreateText(settingsPage, "Ceiling Stars Label", "星空", 17, FontStyle.Bold, new Vector2(92f, 132f), new Vector2(80f, 34f), TextAnchor.MiddleCenter, TextSecondary);
-            ceilingStarsToggle = CreateSwitch(settingsPage, "Ceiling Stars Switch", new Vector2(188f, 132f));
-            ceilingAuroraLabel = CreateText(settingsPage, "Ceiling Aurora Label", "极光", 17, FontStyle.Bold, new Vector2(314f, 132f), new Vector2(80f, 34f), TextAnchor.MiddleCenter, TextSecondary);
-            ceilingAuroraToggle = CreateSwitch(settingsPage, "Ceiling Aurora Switch", new Vector2(422f, 132f));
+            const float settingsRowHeight = 76f;
+            const float settingsRowX = 0f;
+            const float roomAmbienceRowY = 136f;
+            const float stageLightingRowY = 60f;
+            const float voiceRowY = -16f;
+            const float micProtectionRowY = -92f;
+            openRoomAmbienceButton = CreateSettingsNavigationRow(
+                settingsPage,
+                "Open Room Ambience",
+                "房间氛围",
+                QuestUiIconKind.Moon,
+                new Vector2(settingsRowX, roomAmbienceRowY),
+                settingsRowHeight,
+                false,
+                out openRoomAmbienceSurface,
+                out openRoomAmbienceIcon);
+            openStageLightingButton = CreateSettingsNavigationRow(
+                settingsPage,
+                "Open Stage Lighting",
+                "舞台灯光",
+                QuestUiIconKind.Spotlight,
+                new Vector2(settingsRowX, stageLightingRowY),
+                settingsRowHeight,
+                true,
+                out openStageLightingSurface,
+                out openStageLightingIcon);
+            voicePageButton = CreateSettingsNavigationRow(
+                settingsPage,
+                "Open Voice Settings",
+                "人声设置",
+                QuestUiIconKind.SlidersHorizontal,
+                new Vector2(settingsRowX, voiceRowY),
+                settingsRowHeight,
+                true,
+                out voicePageSurface,
+                out voicePageIcon);
+            openMicProtectionButton = CreateSettingsNavigationRow(
+                settingsPage,
+                "Open Mic Protection",
+                "防碰撞",
+                QuestUiIconKind.Microphone,
+                new Vector2(settingsRowX, micProtectionRowY),
+                settingsRowHeight,
+                true,
+                out openMicProtectionSurface,
+                out openMicProtectionIcon);
 
-            CreateDivider(settingsPage, "Request Mode Divider", new Vector2(0f, 82f), new Vector2(ContentWidth, 1f));
+            CreateDivider(settingsPage, "Settings Rows Divider", new Vector2(0f, -130f), new Vector2(ContentWidth, 1f));
             RetireSettingsAudioAdvancedUi();
-            voicePageButton = CreateSurfaceButton(settingsPage, "Open Voice Settings", new Vector2(0f, -55f), new Vector2(ContentWidth, 72f), Surface, Line);
-            EnsureIcon(voicePageButton.transform, "Icon", QuestUiIconKind.SlidersHorizontal, new Vector2(-452f, 0f), new Vector2(28f, 28f), Warm);
-            CreateText(voicePageButton.transform, "Label", "人声设置", 19, FontStyle.Bold, new Vector2(-326f, 0f), new Vector2(210f, 36f), TextAnchor.MiddleLeft, TextPrimary);
-            EnsureIcon(voicePageButton.transform, "Chevron", QuestUiIconKind.ChevronRight, new Vector2(460f, 0f), new Vector2(24f, 24f), TextSecondary);
-
-            CreateDivider(settingsPage, "Audio Divider", new Vector2(0f, -184f), new Vector2(ContentWidth, 1f));
+            SetChildActive(settingsPage, "Audio Divider", false);
             openDiagnosticsButton = CreateSurfaceButton(settingsPage, "Open Diagnostics", new Vector2(-116f, -228f), new Vector2(760f, 72f), Surface, Line);
             CreateText(openDiagnosticsButton.transform, "Title", "诊断与支持", 19, FontStyle.Bold, new Vector2(-230f, 11f), new Vector2(260f, 32f), TextAnchor.MiddleLeft, TextPrimary);
             settingsBuildText = CreateText(openDiagnosticsButton.transform, "Hint", QuestBuildInfo.SettingsSummary, 15, FontStyle.Normal, new Vector2(-65f, -17f), new Vector2(520f, 26f), TextAnchor.MiddleLeft, TextSecondary);
             EnsureIcon(openDiagnosticsButton.transform, "Chevron", QuestUiIconKind.ChevronRight, new Vector2(340f, 0f), new Vector2(24f, 24f), TextSecondary);
 
-            exitApplicationButton = CreateSurfaceButton(settingsPage, "Exit Application", new Vector2(388f, -228f), new Vector2(216f, 72f), Surface, Line);
-            exitApplicationIcon = EnsureIcon(exitApplicationButton.transform, "Icon", QuestUiIconKind.Power, new Vector2(-72f, 0f), new Vector2(24f, 24f), Warm);
-            exitApplicationText = CreateText(exitApplicationButton.transform, "Label", "退出应用", 17, FontStyle.Bold, new Vector2(30f, 0f), new Vector2(132f, 34f), TextAnchor.MiddleCenter, TextPrimary);
+            exitApplicationButton = CreateSurfaceButton(settingsPage, "Exit Application", new Vector2(388f, -228f), new Vector2(216f, 72f), DangerSurface, DangerBorder);
+            exitApplicationButton.transition = Selectable.Transition.None;
+            exitApplicationIcon = EnsureIcon(exitApplicationButton.transform, "Icon", QuestUiIconKind.Power, new Vector2(-72f, 0f), new Vector2(24f, 24f), DangerBorder);
+            exitApplicationText = CreateText(exitApplicationButton.transform, "Label", "退出应用", 17, FontStyle.Bold, new Vector2(30f, 0f), new Vector2(132f, 34f), TextAnchor.MiddleCenter, DangerBorder);
+        }
+
+        private Button CreateSettingsNavigationRow(
+            RectTransform parent,
+            string name,
+            string label,
+            QuestUiIconKind iconKind,
+            Vector2 position,
+            float rowHeight,
+            bool showTopDivider,
+            out QuestUiSurface surface,
+            out QuestUiIcon icon)
+        {
+            var button = CreateSurfaceButton(parent, name, position, new Vector2(ContentWidth, rowHeight), Color.clear, Color.clear);
+            button.gameObject.SetActive(true);
+            surface = button.targetGraphic as QuestUiSurface;
+            surface.color = Color.clear;
+            button.transition = Selectable.Transition.None;
+            var outline = button.GetComponent<Outline>();
+            if (outline != null)
+            {
+                outline.enabled = false;
+            }
+
+            SetChildActive(button.transform, "Icon", false);
+            SetChildActive(button.transform, "Label", false);
+            icon = EnsureIcon(button.transform, "Icon", iconKind, new Vector2(-452f, 0f), new Vector2(28f, 28f), TextPrimary);
+            icon.gameObject.SetActive(false);
+            var chevron = EnsureIcon(button.transform, "Chevron", QuestUiIconKind.ChevronRight, new Vector2(460f, 0f), new Vector2(24f, 24f), TextSecondary);
+            chevron.gameObject.SetActive(true);
+            CreateText(button.transform, "Title", label, 19, FontStyle.Bold, new Vector2(-40f, 15f), new Vector2(820f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            var descriptions = label switch
+            {
+                "房间氛围" => "星空、极光与包厢主题",
+                "舞台灯光" => "灯组、颜色与动态预设",
+                "人声设置" => "返听、预设与空间效果",
+                "防碰撞" => "靠近嘴部时提供触觉反馈",
+                _ => string.Empty,
+            };
+            CreateText(button.transform, "Description", descriptions, 14, FontStyle.Normal, new Vector2(-40f, -14f), new Vector2(820f, 24f), TextAnchor.MiddleLeft, TextSecondary);
+            CreateDivider(button.transform, "Divider", new Vector2(0f, rowHeight * 0.5f), new Vector2(ContentWidth, 1f));
+            SetChildActive(button.transform, "Divider", showTopDivider);
+
+            var feedback = button.GetComponent<QuestUiButtonFeedback>();
+            if (feedback != null)
+            {
+                feedback.enabled = false;
+            }
+            return button;
+        }
+
+        private void BuildRoomAmbiencePage()
+        {
+            BuildSubpageHeader(roomAmbiencePage, "房间氛围", out roomAmbienceBackButton);
+
+            CreateText(roomAmbiencePage, "Room Ambience Label", "房间氛围", 18, FontStyle.Bold, new Vector2(-394f, 132f), new Vector2(200f, 34f), TextAnchor.MiddleLeft, TextPrimary);
+            ceilingStarsLabel = CreateText(roomAmbiencePage, "Ceiling Stars Label", "星空", 17, FontStyle.Bold, new Vector2(92f, 132f), new Vector2(80f, 34f), TextAnchor.MiddleCenter, TextSecondary);
+            ceilingStarsToggle = CreateSwitch(roomAmbiencePage, "Ceiling Stars Switch", new Vector2(188f, 132f));
+            ceilingAuroraLabel = CreateText(roomAmbiencePage, "Ceiling Aurora Label", "极光", 17, FontStyle.Bold, new Vector2(314f, 132f), new Vector2(80f, 34f), TextAnchor.MiddleCenter, TextSecondary);
+            ceilingAuroraToggle = CreateSwitch(roomAmbiencePage, "Ceiling Aurora Switch", new Vector2(422f, 132f));
+            CreateDivider(roomAmbiencePage, "Ambience Divider", new Vector2(0f, 82f), new Vector2(ContentWidth, 1f));
         }
 
         private void BuildStageLightingPage()
@@ -1594,6 +1707,8 @@ namespace TsukiVox.AudioPrototype
             WireButton(voiceBackButton, () => ShowPage(UiPage.Settings));
             WireButton(songSearchBackButton, () => ShowPage(UiPage.Home));
             WireButton(settingsBackButton, () => ShowPage(UiPage.Home));
+            WireButton(roomAmbienceBackButton, () => ShowPage(UiPage.Settings));
+            WireButton(openRoomAmbienceButton, () => ShowPage(UiPage.RoomAmbience));
             WireButton(openStageLightingButton, () => OpenStageLightingPage(UiPage.Settings));
             WireButton(stageLightingBackButton, () => ShowPage(stageLightingReturnPage));
             WireButton(playBuiltInDefaultButton, () => videoScreenPrototype?.ToggleBuiltInDefaultPlayback());
@@ -1696,12 +1811,14 @@ namespace TsukiVox.AudioPrototype
             ceilingStarsToggle.onValueChanged.AddListener(value =>
             {
                 roomPrototype?.SetStarsEnabled(value);
+                RefreshRoomAmbience();
                 RefreshSettings();
             });
             ceilingAuroraToggle.onValueChanged.RemoveAllListeners();
             ceilingAuroraToggle.onValueChanged.AddListener(value =>
             {
                 roomPrototype?.SetAuroraEnabled(value);
+                RefreshRoomAmbience();
                 RefreshSettings();
             });
 
@@ -1791,6 +1908,7 @@ namespace TsukiVox.AudioPrototype
             RefreshVoice();
             RefreshQueue();
             RefreshSettings();
+            RefreshRoomAmbience();
             RefreshStageLighting();
             RefreshMicProtection();
             RefreshMicMouthPoint();
@@ -2153,6 +2271,17 @@ namespace TsukiVox.AudioPrototype
         private void RefreshSettings()
         {
             settingsBuildText.text = QuestBuildInfo.SettingsSummary;
+            if (roomPrototype == null)
+            {
+                roomPrototype = FindAnyObjectByType<QuestKtvRoomPrototype>();
+                SubscribeRoom();
+            }
+
+            var roomAvailable = roomPrototype != null;
+            openRoomAmbienceButton.interactable = roomAvailable;
+            openRoomAmbienceSurface.color = Color.clear;
+            openRoomAmbienceIcon.color = TextPrimary;
+
             if (stageLightingPrototype == null)
             {
                 stageLightingPrototype = FindAnyObjectByType<QuestStageLightingPrototype>();
@@ -2160,10 +2289,23 @@ namespace TsukiVox.AudioPrototype
             if (openStageLightingButton != null)
             {
                 openStageLightingButton.interactable = stageLightingPrototype != null;
-                openStageLightingSurface.color = stageLightingPrototype != null && stageLightingPrototype.LightingEnabled
-                    ? palette.EnabledSurface
-                    : Surface;
+                openStageLightingSurface.color = Color.clear;
+                openStageLightingIcon.color = TextPrimary;
             }
+            var hasVoiceAudio = audioPrototype != null;
+            voicePageButton.interactable = hasVoiceAudio;
+            voicePageSurface.color = Color.clear;
+            voicePageIcon.color = TextPrimary;
+
+            if (handheldPropsPrototype == null)
+            {
+                handheldPropsPrototype = FindAnyObjectByType<QuestHandheldPropsPrototype>();
+            }
+            var micProtectionAvailable = handheldPropsPrototype != null;
+            openMicProtectionButton.interactable = micProtectionAvailable;
+            openMicProtectionSurface.color = Color.clear;
+            openMicProtectionIcon.color = TextPrimary;
+
             if (playBuiltInDefaultButton != null)
             {
                 var isBuiltInDefaultActive = videoScreenPrototype != null && videoScreenPrototype.IsPlayingBuiltInDefault;
@@ -2196,33 +2338,36 @@ namespace TsukiVox.AudioPrototype
 
             var exitConfirmationActive = exitConfirmationExpiresAt > Time.unscaledTime;
             exitApplicationText.text = exitConfirmationActive ? "再次点击退出" : "退出应用";
-            exitApplicationText.color = exitConfirmationActive ? Warm : TextPrimary;
-            exitApplicationIcon.color = Warm;
+            exitApplicationText.color = DangerBorder;
+            exitApplicationIcon.color = DangerBorder;
             if (exitApplicationButton.targetGraphic is QuestUiSurface exitSurface)
             {
-                exitSurface.color = exitConfirmationActive ? WarmSurface : Surface;
+                exitSurface.color = DangerSurface;
             }
 
+        }
+
+        private void RefreshRoomAmbience()
+        {
             if (roomPrototype == null)
             {
                 roomPrototype = FindAnyObjectByType<QuestKtvRoomPrototype>();
                 SubscribeRoom();
             }
 
-            var celestialControlsAvailable = roomPrototype != null;
-            var starsAvailable = celestialControlsAvailable && roomPrototype.StarsAvailable;
+            var available = roomPrototype != null;
+            var starsAvailable = available && roomPrototype.StarsAvailable;
             ceilingStarsToggle.interactable = starsAvailable;
-            ceilingAuroraToggle.interactable = celestialControlsAvailable;
-            ceilingStarsToggle.SetIsOnWithoutNotify(celestialControlsAvailable && roomPrototype.StarsEnabled);
-            ceilingAuroraToggle.SetIsOnWithoutNotify(celestialControlsAvailable && roomPrototype.AuroraEnabled);
+            ceilingAuroraToggle.interactable = available;
+            ceilingStarsToggle.SetIsOnWithoutNotify(available && roomPrototype.StarsEnabled);
+            ceilingAuroraToggle.SetIsOnWithoutNotify(available && roomPrototype.AuroraEnabled);
             RefreshSwitchVisual(ceilingStarsToggle);
             RefreshSwitchVisual(ceilingAuroraToggle);
             ceilingStarsLabel.color = !starsAvailable
                 ? TextFaint
                 : roomPrototype.StarsEnabled ? TextPrimary : TextSecondary;
-            ceilingAuroraLabel.text = celestialControlsAvailable && roomPrototype.CurrentTheme == RoomTheme.Bright ? "火烧云" : "极光";
-            ceilingAuroraLabel.color = celestialControlsAvailable && roomPrototype.AuroraEnabled ? TextPrimary : TextSecondary;
-
+            ceilingAuroraLabel.text = available && roomPrototype.CurrentTheme == RoomTheme.Bright ? "火烧云" : "极光";
+            ceilingAuroraLabel.color = available && roomPrototype.AuroraEnabled ? TextPrimary : TextSecondary;
         }
 
         private void RefreshStageLighting()
@@ -2317,10 +2462,8 @@ namespace TsukiVox.AudioPrototype
 
             var available = handheldPropsPrototype != null;
             openMicProtectionButton.interactable = available;
-            openMicProtectionSurface.color = available && handheldPropsPrototype.MicFaceHapticsEnabled
-                ? palette.EnabledSurface
-                : Surface;
-            openMicProtectionIcon.color = available && handheldPropsPrototype.MicFaceHapticsEnabled ? Accent : TextSecondary;
+            openMicProtectionSurface.color = Color.clear;
+            openMicProtectionIcon.color = TextPrimary;
 
             if (!available)
             {
@@ -3445,6 +3588,8 @@ namespace TsukiVox.AudioPrototype
                 ThemeColorRole.Warm => palette.Warm,
                 ThemeColorRole.WarmSurface => palette.WarmSurface,
                 ThemeColorRole.Danger => palette.Danger,
+                ThemeColorRole.DangerSurface => palette.DangerSurface,
+                ThemeColorRole.DangerBorder => palette.DangerBorder,
                 ThemeColorRole.BrandBackground => palette.BrandBackground,
                 ThemeColorRole.BrandAccent => palette.BrandAccent,
                 ThemeColorRole.BrandWarm => palette.BrandWarm,
@@ -3661,6 +3806,7 @@ namespace TsukiVox.AudioPrototype
             SetPageGroupImmediate(songSearchGroup, page == UiPage.SongSearch);
             SetPageGroupImmediate(voiceGroup, page == UiPage.Voice);
             SetPageGroupImmediate(settingsGroup, page == UiPage.Settings);
+            SetPageGroupImmediate(roomAmbienceGroup, page == UiPage.RoomAmbience);
             SetPageGroupImmediate(stageLightingGroup, page == UiPage.StageLighting);
             SetPageGroupImmediate(micProtectionGroup, page == UiPage.MicProtection);
             SetPageGroupImmediate(micMouthPointGroup, page == UiPage.MicMouthPoint);
@@ -4052,6 +4198,7 @@ namespace TsukiVox.AudioPrototype
                 UiPage.Voice => voiceGroup,
                 UiPage.SongSearch => songSearchGroup,
                 UiPage.Settings => settingsGroup,
+                UiPage.RoomAmbience => roomAmbienceGroup,
                 UiPage.StageLighting => stageLightingGroup,
                 UiPage.MicProtection => micProtectionGroup,
                 UiPage.MicMouthPoint => micMouthPointGroup,

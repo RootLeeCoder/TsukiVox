@@ -1,10 +1,12 @@
 using System;
 using System.IO;
 using System.Linq;
+using TMPro;
 using TsukiVox.AudioPrototype;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace TsukiVox.AudioPrototype.Editor
 {
@@ -21,6 +23,7 @@ namespace TsukiVox.AudioPrototype.Editor
         private const string StageLightingPanelPreviewPath = "Logs/QuestStageLightingPanelPreview.png";
         private const string SettingsPanelPreviewPath = "Logs/QuestSettingsPanelPreview.png";
         private const string SettingsPanelDarkPreviewPath = "Logs/QuestSettingsPanelDarkPreview.png";
+        private const string RoomAmbiencePanelPreviewPath = "Logs/QuestRoomAmbiencePanelPreview.png";
 
         [MenuItem("TsukiVox/Capture Quest Rendering Preview")]
         public static void CapturePreview()
@@ -181,6 +184,7 @@ namespace TsukiVox.AudioPrototype.Editor
                 var pageRects = controlCanvas.GetComponentsInChildren<RectTransform>(true);
                 RectTransform stageLightingPage = null;
                 RectTransform settingsPage = null;
+                RectTransform roomAmbiencePage = null;
                 for (var index = 0; index < pageRects.Length; index += 1)
                 {
                     if (pageRects[index].parent == null || pageRects[index].parent.name != "Consumer UI" ||
@@ -197,6 +201,10 @@ namespace TsukiVox.AudioPrototype.Editor
                     {
                         settingsPage = pageRects[index];
                     }
+                    else if (pageRects[index].name == "Room Ambience Page")
+                    {
+                        roomAmbiencePage = pageRects[index];
+                    }
                 }
 
                 if (stageLightingPage == null)
@@ -206,6 +214,10 @@ namespace TsukiVox.AudioPrototype.Editor
                 if (settingsPage == null)
                 {
                     throw new InvalidOperationException("Settings control page was not generated.");
+                }
+                if (roomAmbiencePage == null)
+                {
+                    throw new InvalidOperationException("Room ambience control page was not generated.");
                 }
 
                 SetPreviewPage(pageRects, "Stage Lighting Page");
@@ -230,13 +242,21 @@ namespace TsukiVox.AudioPrototype.Editor
                 WriteSrgbPng(linearTexture, outputTexture, StageLightingPanelPreviewPath);
 
                 SetPreviewPage(pageRects, "Settings Page");
-                ValidateSettingsPage(settingsPage);
+                ValidateSettingsPage(settingsPage, roomAmbiencePage);
                 camera.Render();
                 camera.Render();
                 RenderTexture.active = renderTexture;
                 linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
                 linearTexture.Apply(false, false);
                 WriteSrgbPng(linearTexture, outputTexture, SettingsPanelPreviewPath);
+
+                SetPreviewPage(pageRects, "Room Ambience Page");
+                camera.Render();
+                camera.Render();
+                RenderTexture.active = renderTexture;
+                linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
+                linearTexture.Apply(false, false);
+                WriteSrgbPng(linearTexture, outputTexture, RoomAmbiencePanelPreviewPath);
 
                 room.ApplyTheme(RoomTheme.Dark);
                 SetPreviewPage(pageRects, "Settings Page");
@@ -268,8 +288,8 @@ namespace TsukiVox.AudioPrototype.Editor
                 $"{Path.GetFullPath(LoungePreviewPath)}, {Path.GetFullPath(CeilingPreviewPath)} and " +
                 $"{Path.GetFullPath(BrightPreviewPath)}, {Path.GetFullPath(BrightCeilingPreviewPath)}, " +
                     $"{Path.GetFullPath(FlatTabletDarkPreviewPath)}, {Path.GetFullPath(FlatTabletBrightPreviewPath)}, " +
-                    $"{Path.GetFullPath(StageLightingPanelPreviewPath)}, {Path.GetFullPath(SettingsPanelPreviewPath)} and " +
-                    $"{Path.GetFullPath(SettingsPanelDarkPreviewPath)}.");
+                    $"{Path.GetFullPath(StageLightingPanelPreviewPath)}, {Path.GetFullPath(SettingsPanelPreviewPath)}, " +
+                    $"{Path.GetFullPath(RoomAmbiencePanelPreviewPath)} and {Path.GetFullPath(SettingsPanelDarkPreviewPath)}.");
         }
 
         private static void ValidateCoffeeTableStructure(
@@ -555,20 +575,126 @@ namespace TsukiVox.AudioPrototype.Editor
             }
         }
 
-        private static void ValidateSettingsPage(RectTransform settingsPage)
+        private static void ValidateSettingsPage(RectTransform settingsPage, RectTransform roomAmbiencePage)
         {
-            var legacyNames = new[] { "Request Mode Label", "Request Mode Value" };
+            var legacyNames = new[]
+            {
+                "Request Mode Label",
+                "Request Mode Value",
+                "Room Ambience Label",
+                "Ceiling Stars Label",
+                "Ceiling Stars Switch",
+                "Ceiling Aurora Label",
+                "Ceiling Aurora Switch",
+            };
             for (var index = 0; index < legacyNames.Length; index += 1)
             {
                 var legacy = settingsPage.Find(legacyNames[index]);
                 if (legacy != null && legacy.gameObject.activeSelf)
                 {
                     throw new InvalidOperationException(
-                        $"Legacy settings control '{legacyNames[index]}' overlaps the room ambience row.");
+                        $"Legacy settings control '{legacyNames[index]}' is still active on the Settings Page.");
                 }
             }
 
-            var requiredNames = new[]
+            var navigationNames = new[]
+            {
+                "Open Room Ambience",
+                "Open Stage Lighting",
+                "Open Voice Settings",
+                "Open Mic Protection",
+            };
+            var previousY = float.PositiveInfinity;
+            for (var index = 0; index < navigationNames.Length; index += 1)
+            {
+                var navigation = settingsPage.Find(navigationNames[index]);
+                if (navigation == null || !navigation.gameObject.activeSelf || navigation.GetComponent<Button>() == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Settings navigation row '{navigationNames[index]}' is missing or not interactive.");
+                }
+
+                var rect = navigation.GetComponent<RectTransform>();
+                if (rect == null || rect.sizeDelta.x < 991f || rect.sizeDelta.y < 74f)
+                {
+                    throw new InvalidOperationException(
+                        $"Settings navigation row '{navigationNames[index]}' does not span the control width.");
+                }
+
+                if (rect.anchoredPosition.y >= previousY)
+                {
+                    throw new InvalidOperationException(
+                        $"Settings navigation rows are not ordered: '{navigationNames[index]}'.");
+                }
+
+                var title = navigation.Find("Title");
+                var description = navigation.Find("Description");
+                var divider = navigation.Find("Divider");
+                if (title == null || !title.gameObject.activeSelf || title.GetComponent<TMP_Text>() == null ||
+                    description == null || !description.gameObject.activeSelf || description.GetComponent<TMP_Text>() == null ||
+                    divider == null || divider.GetComponent<QuestUiSurface>() == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Settings navigation row '{navigationNames[index]}' is missing its title, description or divider.");
+                }
+
+                if (divider.gameObject.activeSelf == (index == 0))
+                {
+                    throw new InvalidOperationException(
+                        $"Settings navigation row '{navigationNames[index]}' has an incorrect top divider state.");
+                }
+
+                var rowButton = navigation.GetComponent<Button>();
+                if (rowButton.transition != Selectable.Transition.None)
+                {
+                    throw new InvalidOperationException(
+                        $"Settings navigation row '{navigationNames[index]}' still has a hover transition.");
+                }
+
+                if (rowButton.targetGraphic is QuestUiSurface rowSurface && rowSurface.color.a > 0.001f)
+                {
+                    throw new InvalidOperationException(
+                        $"Settings navigation row '{navigationNames[index]}' still has a visible background.");
+                }
+
+                var feedback = navigation.GetComponent<QuestUiButtonFeedback>();
+                if (feedback != null && feedback.enabled)
+                {
+                    throw new InvalidOperationException(
+                        $"Settings navigation row '{navigationNames[index]}' still has hover feedback enabled.");
+                }
+
+                var icon = navigation.Find("Icon")?.GetComponent<QuestUiIcon>();
+                var chevron = navigation.Find("Chevron")?.GetComponent<QuestUiIcon>();
+                if ((icon != null && icon.gameObject.activeSelf) || chevron == null || !chevron.gameObject.activeSelf)
+                {
+                    throw new InvalidOperationException(
+                        $"Settings navigation row '{navigationNames[index]}' does not use the expected right chevron.");
+                }
+
+                previousY = rect.anchoredPosition.y;
+            }
+
+            var builtIn = settingsPage.Find("Play Built-in Default")?.GetComponent<RectTransform>();
+            var stopBuiltIn = settingsPage.Find("Stop Built-in Default")?.GetComponent<RectTransform>();
+            if (builtIn == null || stopBuiltIn == null || builtIn.anchoredPosition.y <= previousY ||
+                stopBuiltIn.anchoredPosition.y <= previousY || builtIn.anchoredPosition.x <= stopBuiltIn.anchoredPosition.x)
+            {
+                throw new InvalidOperationException("Built-in video controls are not retained at the top-right of Settings.");
+            }
+
+            var exitButton = settingsPage.Find("Exit Application")?.GetComponent<Button>();
+            var exitOutline = exitButton?.GetComponent<Outline>();
+            if (exitButton == null || exitButton.transition != Selectable.Transition.None ||
+                exitButton.targetGraphic is not QuestUiSurface exitSurface ||
+                exitSurface.color.r <= exitSurface.color.g || exitSurface.color.r - exitSurface.color.g >= 0.15f ||
+                exitOutline == null || !exitOutline.enabled || exitOutline.effectColor.a < 0.9f ||
+                exitOutline.effectColor.r <= exitOutline.effectColor.g)
+            {
+                throw new InvalidOperationException("Exit Application is not using the restrained danger treatment.");
+            }
+
+            var roomRequiredNames = new[]
             {
                 "Room Ambience Label",
                 "Ceiling Stars Label",
@@ -576,12 +702,13 @@ namespace TsukiVox.AudioPrototype.Editor
                 "Ceiling Aurora Label",
                 "Ceiling Aurora Switch",
             };
-            for (var index = 0; index < requiredNames.Length; index += 1)
+            for (var index = 0; index < roomRequiredNames.Length; index += 1)
             {
-                if (settingsPage.Find(requiredNames[index]) == null)
+                var roomControl = roomAmbiencePage.Find(roomRequiredNames[index]);
+                if (roomControl == null || !roomControl.gameObject.activeSelf)
                 {
                     throw new InvalidOperationException(
-                        $"Settings room ambience row is missing '{requiredNames[index]}'.");
+                        $"Room ambience page is missing active control '{roomRequiredNames[index]}'.");
                 }
             }
         }
