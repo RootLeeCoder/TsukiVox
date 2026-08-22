@@ -2495,7 +2495,7 @@ namespace TsukiVox.AudioPrototype
             }
             else if (restoreConfirmationActive)
             {
-                diagnosticsVideoText.text = "将恢复月夜主题、平板 30°、星空/极光与 LIVE 灯光\n媒体缓存不会被删除";
+                diagnosticsVideoText.text = "将恢复月夜主题、平板 30°、星空/极光与极光舞台预设\n媒体缓存不会被删除";
                 diagnosticsVideoText.color = Warm;
             }
             else if (maintenanceResultActive)
@@ -3223,7 +3223,7 @@ namespace TsukiVox.AudioPrototype
             exitConfirmationExpiresAt = 0f;
             RefreshAppendKtvSearchToggle();
             SetMaintenanceResult(
-                "全部设置已恢复默认\n月夜主题 · 平板 30° · 星空/极光开启 · LIVE 灯光开启",
+                "全部设置已恢复默认\n月夜主题 · 平板 30° · 星空/极光开启 · 舞台预设“极光”",
                 false,
                 "all settings restored to defaults; media cache retained");
             RefreshAll();

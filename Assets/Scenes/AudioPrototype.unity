@@ -16425,8 +16425,8 @@ MonoBehaviour:
   glowstickLocalEuler: {x: 11.46, y: 0, z: 0}
   micFaceHapticsEnabled: 1
   mouthLocalOffset: {x: 0, y: -0.11, z: 0.02}
-  micFaceWarningDistance: 0.0675
-  micFaceCriticalDistance: 0.0455
+  micFaceWarningDistance: 0.0505
+  micFaceCriticalDistance: 0.0395
   micFaceReleaseHysteresis: 0.005
   micFaceDistanceSmoothing: 18
   micFaceWarningAmplitude: 0.16
@@ -122348,12 +122348,12 @@ MonoBehaviour:
   roomPrototype: {fileID: 1669320527}
   audioPrototype: {fileID: 1263131890}
   lightingEnabled: 1
-  currentPreset: 1
-  colorLook: 1
-  intensity: 0.72
-  movementSpeed: 0.52
-  beamWidth: 0.52
-  motionRange: 0.62
+  currentPreset: 2
+  colorLook: 0
+  intensity: 0.64
+  movementSpeed: 0.3
+  beamWidth: 0.78
+  motionRange: 0.46
   automaticMotion: 1
   beatPulse: 1
   beamsVisible: 1

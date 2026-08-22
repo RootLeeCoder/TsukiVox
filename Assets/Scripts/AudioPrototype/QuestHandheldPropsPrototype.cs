@@ -30,8 +30,8 @@ namespace TsukiVox.AudioPrototype
         public const float MinimumClearanceGap = 0.005f;
         public const float MinimumHapticStrength = 0.2f;
         public const float MaximumHapticStrength = 1f;
-        public const float DefaultWarningClearance = 0.03f;
-        public const float DefaultCriticalClearance = 0.008f;
+        public const float DefaultWarningClearance = 0.013f;
+        public const float DefaultCriticalClearance = 0.002f;
         public const float DefaultHapticStrength = 1f;
         public const float DefaultMouthOffsetX = 0f;
         public const float DefaultMouthOffsetY = -0.11f;
@@ -107,8 +107,8 @@ namespace TsukiVox.AudioPrototype
         [Header("Microphone Face Proximity Haptics")]
         [SerializeField] private bool micFaceHapticsEnabled = true;
         [SerializeField] private Vector3 mouthLocalOffset = new Vector3(DefaultMouthOffsetX, DefaultMouthOffsetY, DefaultMouthOffsetZ);
-        [SerializeField, Range(MicrophoneGrilleRadius + MinimumWarningClearance, MicrophoneGrilleRadius + MaximumWarningClearance)] private float micFaceWarningDistance = 0.0675f;
-        [SerializeField, Range(MicrophoneGrilleRadius + MinimumCriticalClearance, MicrophoneGrilleRadius + MaximumCriticalClearance)] private float micFaceCriticalDistance = 0.0455f;
+        [SerializeField, Range(MicrophoneGrilleRadius + MinimumWarningClearance, MicrophoneGrilleRadius + MaximumWarningClearance)] private float micFaceWarningDistance = 0.0505f;
+        [SerializeField, Range(MicrophoneGrilleRadius + MinimumCriticalClearance, MicrophoneGrilleRadius + MaximumCriticalClearance)] private float micFaceCriticalDistance = 0.0395f;
         [SerializeField, Range(0.005f, 0.05f)] private float micFaceReleaseHysteresis = 0.005f;
         [SerializeField, Range(1f, 40f)] private float micFaceDistanceSmoothing = 18f;
         [SerializeField, Range(0.05f, 1f)] private float micFaceWarningAmplitude = 0.16f;

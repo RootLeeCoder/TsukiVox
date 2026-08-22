@@ -42,6 +42,12 @@ namespace TsukiVox.AudioPrototype
         private const string AutoMotionPrefsKey = "TsukiVox.StageLighting.AutoMotion";
         private const string BeatPulsePrefsKey = "TsukiVox.StageLighting.BeatPulse";
         private const string BeamsVisiblePrefsKey = "TsukiVox.StageLighting.BeamsVisible";
+        private const StageLightingPreset DefaultPreset = StageLightingPreset.Aurora;
+        private const StageLightingColorLook DefaultColorLook = StageLightingColorLook.Ocean;
+        private const float DefaultIntensity = 0.64f;
+        private const float DefaultMovementSpeed = 0.3f;
+        private const float DefaultBeamWidth = 0.78f;
+        private const float DefaultMotionRange = 0.46f;
         private const string BeamShaderName = "TsukiVox/Quest Stage Beam";
         private const float StageFloorHeight = 0.13f;
         private const float TrussDepth = 2.35f;
@@ -74,12 +80,12 @@ namespace TsukiVox.AudioPrototype
 
         [Header("Stage Lighting")]
         [SerializeField] private bool lightingEnabled = true;
-        [SerializeField] private StageLightingPreset currentPreset = StageLightingPreset.Live;
-        [SerializeField] private StageLightingColorLook colorLook = StageLightingColorLook.Neon;
-        [SerializeField, Range(0f, 1f)] private float intensity = 0.72f;
-        [SerializeField, Range(0f, 1f)] private float movementSpeed = 0.52f;
-        [SerializeField, Range(0f, 1f)] private float beamWidth = 0.52f;
-        [SerializeField, Range(0f, 1f)] private float motionRange = 0.62f;
+        [SerializeField] private StageLightingPreset currentPreset = DefaultPreset;
+        [SerializeField] private StageLightingColorLook colorLook = DefaultColorLook;
+        [SerializeField, Range(0f, 1f)] private float intensity = DefaultIntensity;
+        [SerializeField, Range(0f, 1f)] private float movementSpeed = DefaultMovementSpeed;
+        [SerializeField, Range(0f, 1f)] private float beamWidth = DefaultBeamWidth;
+        [SerializeField, Range(0f, 1f)] private float motionRange = DefaultMotionRange;
         [SerializeField] private bool automaticMotion = true;
         [SerializeField] private bool beatPulse = true;
         [SerializeField] private bool beamsVisible = true;
@@ -205,11 +211,11 @@ namespace TsukiVox.AudioPrototype
                     beatPulse = false;
                     break;
                 case StageLightingPreset.Aurora:
-                    intensity = 0.64f;
-                    movementSpeed = 0.3f;
-                    beamWidth = 0.78f;
-                    motionRange = 0.46f;
-                    colorLook = StageLightingColorLook.Ocean;
+                    intensity = DefaultIntensity;
+                    movementSpeed = DefaultMovementSpeed;
+                    beamWidth = DefaultBeamWidth;
+                    motionRange = DefaultMotionRange;
+                    colorLook = DefaultColorLook;
                     automaticMotion = true;
                     beatPulse = true;
                     break;
@@ -301,7 +307,7 @@ namespace TsukiVox.AudioPrototype
 
         public void RestoreDefaultSettings()
         {
-            ApplyPreset(StageLightingPreset.Live);
+            ApplyPreset(DefaultPreset);
         }
 
         public static Color GetColorLookSwatch(StageLightingColorLook look)
@@ -685,12 +691,12 @@ namespace TsukiVox.AudioPrototype
 
             preferencesLoaded = true;
             lightingEnabled = PlayerPrefs.GetInt(EnabledPrefsKey, 1) != 0;
-            currentPreset = ParsePreset(PlayerPrefs.GetInt(PresetPrefsKey, (int)StageLightingPreset.Live));
-            colorLook = ParseColorLook(PlayerPrefs.GetInt(ColorLookPrefsKey, (int)StageLightingColorLook.Neon));
-            intensity = Mathf.Clamp01(PlayerPrefs.GetFloat(IntensityPrefsKey, 0.72f));
-            movementSpeed = Mathf.Clamp01(PlayerPrefs.GetFloat(SpeedPrefsKey, 0.52f));
-            beamWidth = Mathf.Clamp01(PlayerPrefs.GetFloat(WidthPrefsKey, 0.52f));
-            motionRange = Mathf.Clamp01(PlayerPrefs.GetFloat(MotionRangePrefsKey, 0.62f));
+            currentPreset = ParsePreset(PlayerPrefs.GetInt(PresetPrefsKey, (int)DefaultPreset));
+            colorLook = ParseColorLook(PlayerPrefs.GetInt(ColorLookPrefsKey, (int)DefaultColorLook));
+            intensity = Mathf.Clamp01(PlayerPrefs.GetFloat(IntensityPrefsKey, DefaultIntensity));
+            movementSpeed = Mathf.Clamp01(PlayerPrefs.GetFloat(SpeedPrefsKey, DefaultMovementSpeed));
+            beamWidth = Mathf.Clamp01(PlayerPrefs.GetFloat(WidthPrefsKey, DefaultBeamWidth));
+            motionRange = Mathf.Clamp01(PlayerPrefs.GetFloat(MotionRangePrefsKey, DefaultMotionRange));
             automaticMotion = PlayerPrefs.GetInt(AutoMotionPrefsKey, 1) != 0;
             beatPulse = PlayerPrefs.GetInt(BeatPulsePrefsKey, 1) != 0;
             beamsVisible = PlayerPrefs.GetInt(BeamsVisiblePrefsKey, 1) != 0;
@@ -784,14 +790,14 @@ namespace TsukiVox.AudioPrototype
         {
             return value is >= (int)StageLightingPreset.Custom and <= (int)StageLightingPreset.Finale
                 ? (StageLightingPreset)value
-                : StageLightingPreset.Live;
+                : DefaultPreset;
         }
 
         private static StageLightingColorLook ParseColorLook(int value)
         {
             return value is >= (int)StageLightingColorLook.Ocean and <= (int)StageLightingColorLook.Spectrum
                 ? (StageLightingColorLook)value
-                : StageLightingColorLook.Neon;
+                : DefaultColorLook;
         }
 
         private static GameObject CreateBox(Transform parent, string objectName, Vector3 size, Vector3 position, Material material)
