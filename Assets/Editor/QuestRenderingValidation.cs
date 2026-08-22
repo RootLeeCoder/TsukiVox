@@ -47,8 +47,10 @@ namespace TsukiVox.AudioPrototype.Editor
             var tabletPivot = FindRequiredDescendant(coffeeTable, QuestTabletTiltController.TabletPivotName);
             var tabletBody = FindRequiredDescendant(tabletPivot, "tablet body");
             var moonstoneTop = FindRequiredDescendant(coffeeTable, "moonstone top");
+            var tableRimFront = FindRequiredDescendant(coffeeTable, "table rim front");
             ValidateCoffeeTableStructure(coffeeTable, tabletBody, moonstoneTop);
             ValidateCoffeeTableContrast(tabletBody, moonstoneTop, RoomTheme.Dark);
+            ValidateStableTableFrame(tableRimFront);
             ValidatePointerIsolation(QuestUiPointer.EnsureScenePointer(), moonstoneTop);
 
             var shader = Shader.Find(QuestStylizedMaterial.ShaderName);
@@ -62,6 +64,8 @@ namespace TsukiVox.AudioPrototype.Editor
             {
                 throw new InvalidOperationException("AudioPrototype scene has no Main Camera.");
             }
+
+            ValidateStableStoneRendering(moonstoneTop);
 
             const int width = 1600;
             const int height = 900;
@@ -289,6 +293,11 @@ namespace TsukiVox.AudioPrototype.Editor
             {
                 throw new InvalidOperationException("Tablet body and coffee-table stone must use independent materials.");
             }
+
+            if (!stoneMaterial.HasProperty("_StableLighting") || stoneMaterial.GetFloat("_StableLighting") < 0.999f)
+            {
+                throw new InvalidOperationException("Coffee-table stone must keep stable theme lighting.");
+            }
         }
 
         private static void ValidateCoffeeTableContrast(
@@ -303,6 +312,17 @@ namespace TsukiVox.AudioPrototype.Editor
             if (Mathf.Abs(tabletValue - stoneValue) < 0.2f)
             {
                 throw new InvalidOperationException($"{theme} tablet body does not contrast enough with the coffee-table stone.");
+            }
+        }
+
+        private static void ValidateStableTableFrame(Transform tableRimFront)
+        {
+            var material = GetRequiredMaterial(tableRimFront);
+            if (material.name != "V0.5 Table Frame" ||
+                !material.HasProperty("_StableLighting") ||
+                material.GetFloat("_StableLighting") < 0.999f)
+            {
+                throw new InvalidOperationException("The user-facing coffee-table rim must use stable theme lighting.");
             }
         }
 
@@ -331,6 +351,104 @@ namespace TsukiVox.AudioPrototype.Editor
         private static Color GetBaseColor(Material material)
         {
             return material.HasProperty("_BaseColor") ? material.GetColor("_BaseColor") : material.color;
+        }
+
+        private static void ValidateStableStoneRendering(Transform moonstoneTop)
+        {
+            var stoneRenderer = moonstoneTop.GetComponent<MeshRenderer>();
+            var stoneMaterial = GetRequiredMaterial(moonstoneTop);
+            var bounds = stoneRenderer.bounds;
+            var samplePoint = new Vector3(bounds.max.x - 0.16f, bounds.max.y, bounds.max.z - 0.18f);
+            var previousActive = RenderTexture.active;
+            var previousStability = stoneMaterial.GetFloat("_StableLighting");
+            var cameraObject = new GameObject("Stable stone validation camera");
+            var lightObject = new GameObject("Stable stone validation light");
+            var renderTexture = new RenderTexture(64, 64, 24, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear);
+            var texture = new Texture2D(64, 64, TextureFormat.RGBAFloat, false, true);
+
+            try
+            {
+                var camera = cameraObject.AddComponent<Camera>();
+                camera.enabled = false;
+                camera.orthographic = true;
+                camera.orthographicSize = 0.06f;
+                camera.aspect = 1f;
+                camera.nearClipPlane = 0.01f;
+                camera.farClipPlane = 0.7f;
+                camera.clearFlags = CameraClearFlags.SolidColor;
+                camera.backgroundColor = Color.black;
+                camera.allowHDR = true;
+                camera.targetTexture = renderTexture;
+                camera.stereoTargetEye = StereoTargetEyeMask.None;
+                camera.transform.position = samplePoint + Vector3.up * 0.34f;
+                camera.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+
+                var testLight = lightObject.AddComponent<Light>();
+                testLight.type = LightType.Point;
+                testLight.range = 0.9f;
+                testLight.intensity = 8f;
+                testLight.shadows = LightShadows.None;
+                testLight.renderMode = LightRenderMode.ForcePixel;
+                testLight.transform.position = samplePoint + new Vector3(0.03f, 0.22f, 0.02f);
+
+                stoneMaterial.SetFloat("_StableLighting", 0f);
+                var unstableRed = RenderStoneSample(camera, testLight, renderTexture, texture, Color.red);
+                var unstableBlue = RenderStoneSample(camera, testLight, renderTexture, texture, Color.blue);
+                if (ColorDistance(unstableRed, unstableBlue) < 0.025f)
+                {
+                    throw new InvalidOperationException("Stable-stone validation light did not exercise dynamic material lighting.");
+                }
+
+                stoneMaterial.SetFloat("_StableLighting", 1f);
+                var stableRed = RenderStoneSample(camera, testLight, renderTexture, texture, Color.red);
+                var stableBlue = RenderStoneSample(camera, testLight, renderTexture, texture, Color.blue);
+                if (ColorDistance(stableRed, stableBlue) > 0.002f)
+                {
+                    throw new InvalidOperationException("Coffee-table stone still changes color under dynamic lighting.");
+                }
+            }
+            finally
+            {
+                stoneMaterial.SetFloat("_StableLighting", previousStability);
+                RenderTexture.active = previousActive;
+                renderTexture.Release();
+                UnityEngine.Object.DestroyImmediate(texture);
+                UnityEngine.Object.DestroyImmediate(renderTexture);
+                UnityEngine.Object.DestroyImmediate(lightObject);
+                UnityEngine.Object.DestroyImmediate(cameraObject);
+            }
+        }
+
+        private static Color RenderStoneSample(
+            Camera camera,
+            Light testLight,
+            RenderTexture renderTexture,
+            Texture2D texture,
+            Color lightColor)
+        {
+            testLight.color = lightColor;
+            camera.Render();
+            camera.Render();
+            RenderTexture.active = renderTexture;
+            texture.ReadPixels(new Rect(0f, 0f, renderTexture.width, renderTexture.height), 0, 0, false);
+            texture.Apply(false, false);
+
+            var pixels = texture.GetPixels(24, 24, 16, 16);
+            var color = Color.clear;
+            for (var index = 0; index < pixels.Length; index += 1)
+            {
+                color += pixels[index];
+            }
+
+            return color / pixels.Length;
+        }
+
+        private static float ColorDistance(Color left, Color right)
+        {
+            return Mathf.Max(
+                Mathf.Abs(left.r - right.r),
+                Mathf.Abs(left.g - right.g),
+                Mathf.Abs(left.b - right.b));
         }
 
         private static void ValidatePointerIsolation(QuestUiPointer pointer, Transform moonstoneTop)

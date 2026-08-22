@@ -25,7 +25,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 30;
+        public const int CurrentDesignRevision = 32;
         public const string ThemePrefsKey = "TsukiVox.RoomTheme";
         public const string StarsPrefsKey = "TsukiVox.CeilingStarsEnabled";
         public const string AuroraPrefsKey = "TsukiVox.CeilingAuroraEnabled";
@@ -800,16 +800,16 @@ namespace TsukiVox.AudioPrototype
             var railCenterZ = frameOuterZ * 0.5f - railWidth * 0.5f;
 
             CreateBeveledBox(tableRoot, "moonstone top", new Vector3(2.08f, 0.075f, 1f), new Vector3(0f, 0.5575f, 0f), palette.Stone, 0.035f);
-            CreateTrimBox(tableRoot, "table rim front", new Vector3(frameOuterX, railHeight, railWidth), new Vector3(0f, frameCenterY, railCenterZ), palette.Trim, 0.012f);
-            CreateTrimBox(tableRoot, "table rim back", new Vector3(frameOuterX, railHeight, railWidth), new Vector3(0f, frameCenterY, -railCenterZ), palette.Trim, 0.012f);
-            CreateTrimBox(tableRoot, "table rim left", new Vector3(railWidth, railHeight, frameOuterZ - railWidth * 2f), new Vector3(-railCenterX, frameCenterY, 0f), palette.Trim, 0.012f);
-            CreateTrimBox(tableRoot, "table rim right", new Vector3(railWidth, railHeight, frameOuterZ - railWidth * 2f), new Vector3(railCenterX, frameCenterY, 0f), palette.Trim, 0.012f);
+            CreateTrimBox(tableRoot, "table rim front", new Vector3(frameOuterX, railHeight, railWidth), new Vector3(0f, frameCenterY, railCenterZ), palette.TableFrame, 0.012f);
+            CreateTrimBox(tableRoot, "table rim back", new Vector3(frameOuterX, railHeight, railWidth), new Vector3(0f, frameCenterY, -railCenterZ), palette.TableFrame, 0.012f);
+            CreateTrimBox(tableRoot, "table rim left", new Vector3(railWidth, railHeight, frameOuterZ - railWidth * 2f), new Vector3(-railCenterX, frameCenterY, 0f), palette.TableFrame, 0.012f);
+            CreateTrimBox(tableRoot, "table rim right", new Vector3(railWidth, railHeight, frameOuterZ - railWidth * 2f), new Vector3(railCenterX, frameCenterY, 0f), palette.TableFrame, 0.012f);
 
             // Lower shelf rests on stretcher rails that tie the four legs together.
-            CreateTrimBox(tableRoot, "shelf stretcher front", new Vector3(2.0f, 0.035f, 0.05f), new Vector3(0f, 0.24f, 0.46f), palette.Trim, 0.012f);
-            CreateTrimBox(tableRoot, "shelf stretcher back", new Vector3(2.0f, 0.035f, 0.05f), new Vector3(0f, 0.24f, -0.46f), palette.Trim, 0.012f);
-            CreateTrimBox(tableRoot, "shelf stretcher left", new Vector3(0.05f, 0.035f, 0.87f), new Vector3(-1.0f, 0.24f, 0f), palette.Trim, 0.012f);
-            CreateTrimBox(tableRoot, "shelf stretcher right", new Vector3(0.05f, 0.035f, 0.87f), new Vector3(1.0f, 0.24f, 0f), palette.Trim, 0.012f);
+            CreateTrimBox(tableRoot, "shelf stretcher front", new Vector3(2.0f, 0.035f, 0.05f), new Vector3(0f, 0.24f, 0.46f), palette.TableFrame, 0.012f);
+            CreateTrimBox(tableRoot, "shelf stretcher back", new Vector3(2.0f, 0.035f, 0.05f), new Vector3(0f, 0.24f, -0.46f), palette.TableFrame, 0.012f);
+            CreateTrimBox(tableRoot, "shelf stretcher left", new Vector3(0.05f, 0.035f, 0.87f), new Vector3(-1.0f, 0.24f, 0f), palette.TableFrame, 0.012f);
+            CreateTrimBox(tableRoot, "shelf stretcher right", new Vector3(0.05f, 0.035f, 0.87f), new Vector3(1.0f, 0.24f, 0f), palette.TableFrame, 0.012f);
             CreateBeveledBox(tableRoot, "table shelf", new Vector3(1.98f, 0.04f, 0.9f), new Vector3(0f, 0.2775f, 0f), palette.Wood, 0.015f);
 
             var tabletPivot = new GameObject(QuestTabletTiltController.TabletPivotName).transform;
@@ -2486,6 +2486,7 @@ namespace TsukiVox.AudioPrototype
             public Material WinePanel;
             public Material Wood;
             public Material Trim;
+            public Material TableFrame;
             public Material FocalTrim;
             public Material Rug;
             public Material Sofa;
@@ -2549,6 +2550,7 @@ namespace TsukiVox.AudioPrototype
                         ["V0.5 Wine Panel"] = new ThemedColor(Rgb(0xA98482)),
                         ["V0.5 Walnut"] = new ThemedColor(Rgb(0x725A49)),
                         ["V0.5 Brushed Brass"] = new ThemedColor(Rgb(0x827666)),
+                        ["V0.5 Table Frame"] = new ThemedColor(Rgb(0x8D8172)),
                         ["V0.5 Focal Brass"] = new ThemedColor(Rgb(0x9F8357)),
                         ["V0.5 Rug"] = new ThemedColor(Rgb(0xB9B7B0)),
                         ["V0.5 Velvet Sofa"] = new ThemedColor(Rgb(0xC8B4B1)),
@@ -2594,6 +2596,7 @@ namespace TsukiVox.AudioPrototype
                     ["V0.5 Wine Panel"] = new ThemedColor(Rgb(0x4A2F40)),
                     ["V0.5 Walnut"] = new ThemedColor(Rgb(0x352820)),
                     ["V0.5 Brushed Brass"] = new ThemedColor(Rgb(0x927E68)),
+                    ["V0.5 Table Frame"] = new ThemedColor(Rgb(0x776856)),
                     ["V0.5 Focal Brass"] = new ThemedColor(Rgb(0xC3A46B)),
                     ["V0.5 Rug"] = new ThemedColor(Rgb(0x373740)),
                     ["V0.5 Velvet Sofa"] = new ThemedColor(Rgb(0x4A3741)),
@@ -2642,6 +2645,7 @@ namespace TsukiVox.AudioPrototype
                     WinePanel = CreateMaterial("V0.5 Wine Panel", colors, 0.1f, 0f),
                     Wood = CreateMaterial("V0.5 Walnut", colors, 0.32f, 0.04f),
                     Trim = CreateMaterial("V0.5 Brushed Brass", colors, 0.42f, 0.58f),
+                    TableFrame = CreateMaterial("V0.5 Table Frame", colors, 0.34f, 0.24f),
                     FocalTrim = CreateMaterial("V0.5 Focal Brass", colors, 0.52f, 0.65f),
                     Rug = CreateMaterial("V0.5 Rug", colors, 0.04f, 0f),
                     Sofa = CreateMaterial("V0.5 Velvet Sofa", colors, 0.18f, 0f),
@@ -2718,6 +2722,8 @@ namespace TsukiVox.AudioPrototype
                 QuestStylizedMaterial.ConfigureDetail(palette.WinePanel, QuestMaterialDetailMode.Fabric, 42f, 0.05f, 0.12f);
                 QuestStylizedMaterial.ConfigureDetail(palette.Wood, QuestMaterialDetailMode.Wood, 3.6f, 0.12f, 0.08f);
                 QuestStylizedMaterial.ConfigureDetail(palette.Trim, QuestMaterialDetailMode.BrushedMetal, 42f, 0.09f, 0.08f);
+                QuestStylizedMaterial.ConfigureDetail(palette.TableFrame, QuestMaterialDetailMode.BrushedMetal, 42f, 0.07f, 0.06f);
+                QuestStylizedMaterial.ConfigureStableLighting(palette.TableFrame);
                 QuestStylizedMaterial.ConfigureDetail(palette.FocalTrim, QuestMaterialDetailMode.BrushedMetal, 48f, 0.08f, 0.1f);
                 QuestStylizedMaterial.ConfigureDetail(palette.Rug, QuestMaterialDetailMode.Fabric, 52f, 0.07f);
                 QuestStylizedMaterial.ConfigureDetail(palette.Sofa, QuestMaterialDetailMode.Fabric, 44f, 0.055f, 0.08f);
@@ -2725,6 +2731,7 @@ namespace TsukiVox.AudioPrototype
                 QuestStylizedMaterial.ConfigureDetail(palette.Pillow, QuestMaterialDetailMode.Fabric, 48f, 0.06f, 0.1f);
                 QuestStylizedMaterial.ConfigureDetail(palette.TabletBody, QuestMaterialDetailMode.BrushedMetal, 54f, 0.045f, 0.06f);
                 QuestStylizedMaterial.ConfigureDetail(palette.Stone, QuestMaterialDetailMode.Stone, 2.6f, 0.11f, 0.06f);
+                QuestStylizedMaterial.ConfigureStableLighting(palette.Stone);
                 QuestStylizedMaterial.ConfigureDetail(palette.SpeakerGrille, QuestMaterialDetailMode.Perforated, 28f, 0.24f);
                 QuestStylizedMaterial.ConfigureDetail(palette.SpeakerHardware, QuestMaterialDetailMode.BrushedMetal, 52f, 0.08f);
 

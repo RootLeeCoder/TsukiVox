@@ -135,6 +135,16 @@ namespace TsukiVox.AudioPrototype
             SetFloat(material, "_RimIntensity", Mathf.Clamp01(rimIntensity));
         }
 
+        public static void ConfigureStableLighting(Material material)
+        {
+            if (material == null)
+            {
+                return;
+            }
+
+            SetFloat(material, "_StableLighting", 1f);
+        }
+
         private static Shader FindLitShader()
         {
             var shader = Shader.Find(ShaderName);

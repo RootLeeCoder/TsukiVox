@@ -1363,10 +1363,10 @@ namespace TsukiVox.AudioPrototype
         {
             BuildSubpageHeader(stageLightingPage, "舞台灯光", out stageLightingBackButton);
 
-            EnsureIcon(stageLightingPage, "Status Icon", QuestUiIconKind.Spotlight, new Vector2(-458f, 144f), new Vector2(34f, 34f), AccentStrong);
-            CreateText(stageLightingPage, "Enable Title", "Livehouse 灯组", 21, FontStyle.Bold, new Vector2(-326f, 151f), new Vector2(230f, 36f), TextAnchor.MiddleLeft, TextPrimary);
-            CreateText(stageLightingPage, "Enable Hint", "6 台灯具 · 4 盏动态射灯", 15, FontStyle.Normal, new Vector2(-276f, 122f), new Vector2(330f, 26f), TextAnchor.MiddleLeft, TextSecondary);
-            stageLightingStatusText = CreateText(stageLightingPage, "Status", "演出中", 17, FontStyle.Bold, new Vector2(330f, 140f), new Vector2(140f, 34f), TextAnchor.MiddleRight, AccentStrong);
+            EnsureIcon(stageLightingPage, "Status Icon", QuestUiIconKind.Spotlight, new Vector2(-456f, 151f), new Vector2(30f, 30f), AccentStrong);
+            CreateText(stageLightingPage, "Enable Title", "Livehouse 灯组", 21, FontStyle.Bold, new Vector2(-319f, 151f), new Vector2(230f, 36f), TextAnchor.MiddleLeft, TextPrimary);
+            CreateText(stageLightingPage, "Enable Hint", "6 台灯具 · 4 盏动态射灯", 15, FontStyle.Normal, new Vector2(-269f, 122f), new Vector2(330f, 26f), TextAnchor.MiddleLeft, TextSecondary);
+            stageLightingStatusText = CreateText(stageLightingPage, "Status", "开启", 17, FontStyle.Bold, new Vector2(330f, 140f), new Vector2(140f, 34f), TextAnchor.MiddleRight, AccentStrong);
             stageLightingToggle = CreateSwitch(stageLightingPage, "Stage Lighting Switch", new Vector2(460f, 140f));
             CreateDivider(stageLightingPage, "Enable Divider", new Vector2(0f, 96f), new Vector2(ContentWidth, 1f));
 
@@ -1406,29 +1406,40 @@ namespace TsukiVox.AudioPrototype
             }
             CreateDivider(stageLightingPage, "Color Divider", new Vector2(0f, -30f), new Vector2(ContentWidth, 1f));
 
-            CreateText(stageLightingPage, "Intensity Label", "强度", 16, FontStyle.Bold, new Vector2(-446f, -70f), new Vector2(88f, 30f), TextAnchor.MiddleLeft, TextPrimary);
-            stageLightingIntensitySlider = CreateSlider(stageLightingPage, "Lighting Intensity", new Vector2(-282f, -70f), new Vector2(220f, 42f), true, Accent, AccentStrong);
-            stageLightingIntensityValueText = CreateText(stageLightingPage, "Intensity Value", "72%", 16, FontStyle.Bold, new Vector2(-125f, -70f), new Vector2(74f, 30f), TextAnchor.MiddleRight, AccentStrong);
+            const float parameterColumnSpacing = 500f;
+            const float parameterLabelX = -432f;
+            const float parameterSliderX = -252f;
+            const float parameterValueX = -80f;
+            var parameterSliderSize = new Vector2(250f, 42f);
+            var parameterValueSize = new Vector2(72f, 30f);
 
-            CreateText(stageLightingPage, "Speed Label", "速度", 16, FontStyle.Bold, new Vector2(-34f, -70f), new Vector2(88f, 30f), TextAnchor.MiddleLeft, TextPrimary);
-            stageLightingSpeedSlider = CreateSlider(stageLightingPage, "Lighting Speed", new Vector2(130f, -70f), new Vector2(220f, 42f), true, Warm, Warm);
-            stageLightingSpeedValueText = CreateText(stageLightingPage, "Speed Value", "52%", 16, FontStyle.Bold, new Vector2(287f, -70f), new Vector2(74f, 30f), TextAnchor.MiddleRight, Warm);
+            CreateText(stageLightingPage, "Intensity Label", "强度", 16, FontStyle.Bold, new Vector2(parameterLabelX, -70f), new Vector2(88f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            stageLightingIntensitySlider = CreateSlider(stageLightingPage, "Lighting Intensity", new Vector2(parameterSliderX, -70f), parameterSliderSize, true, Accent, AccentStrong);
+            stageLightingIntensityValueText = CreateText(stageLightingPage, "Intensity Value", "72%", 16, FontStyle.Bold, new Vector2(parameterValueX, -70f), parameterValueSize, TextAnchor.MiddleRight, AccentStrong);
 
-            CreateText(stageLightingPage, "Width Label", "光束", 16, FontStyle.Bold, new Vector2(-446f, -132f), new Vector2(88f, 30f), TextAnchor.MiddleLeft, TextPrimary);
-            stageLightingWidthSlider = CreateSlider(stageLightingPage, "Lighting Width", new Vector2(-282f, -132f), new Vector2(220f, 42f), true, Accent, AccentStrong);
-            stageLightingWidthValueText = CreateText(stageLightingPage, "Width Value", "34°", 16, FontStyle.Bold, new Vector2(-125f, -132f), new Vector2(74f, 30f), TextAnchor.MiddleRight, AccentStrong);
+            CreateText(stageLightingPage, "Speed Label", "速度", 16, FontStyle.Bold, new Vector2(parameterLabelX + parameterColumnSpacing, -70f), new Vector2(88f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            stageLightingSpeedSlider = CreateSlider(stageLightingPage, "Lighting Speed", new Vector2(parameterSliderX + parameterColumnSpacing, -70f), parameterSliderSize, true, Accent, AccentStrong);
+            stageLightingSpeedValueText = CreateText(stageLightingPage, "Speed Value", "52%", 16, FontStyle.Bold, new Vector2(parameterValueX + parameterColumnSpacing, -70f), parameterValueSize, TextAnchor.MiddleRight, AccentStrong);
 
-            CreateText(stageLightingPage, "Range Label", "幅度", 16, FontStyle.Bold, new Vector2(-34f, -132f), new Vector2(88f, 30f), TextAnchor.MiddleLeft, TextPrimary);
-            stageLightingRangeSlider = CreateSlider(stageLightingPage, "Lighting Range", new Vector2(130f, -132f), new Vector2(220f, 42f), true, Warm, Warm);
-            stageLightingRangeValueText = CreateText(stageLightingPage, "Range Value", "62%", 16, FontStyle.Bold, new Vector2(287f, -132f), new Vector2(74f, 30f), TextAnchor.MiddleRight, Warm);
+            CreateText(stageLightingPage, "Width Label", "光束", 16, FontStyle.Bold, new Vector2(parameterLabelX, -132f), new Vector2(88f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            stageLightingWidthSlider = CreateSlider(stageLightingPage, "Lighting Width", new Vector2(parameterSliderX, -132f), parameterSliderSize, true, Accent, AccentStrong);
+            stageLightingWidthValueText = CreateText(stageLightingPage, "Width Value", "34°", 16, FontStyle.Bold, new Vector2(parameterValueX, -132f), parameterValueSize, TextAnchor.MiddleRight, AccentStrong);
+
+            CreateText(stageLightingPage, "Range Label", "幅度", 16, FontStyle.Bold, new Vector2(parameterLabelX + parameterColumnSpacing, -132f), new Vector2(88f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            stageLightingRangeSlider = CreateSlider(stageLightingPage, "Lighting Range", new Vector2(parameterSliderX + parameterColumnSpacing, -132f), parameterSliderSize, true, Accent, AccentStrong);
+            stageLightingRangeValueText = CreateText(stageLightingPage, "Range Value", "62%", 16, FontStyle.Bold, new Vector2(parameterValueX + parameterColumnSpacing, -132f), parameterValueSize, TextAnchor.MiddleRight, AccentStrong);
 
             CreateDivider(stageLightingPage, "Control Divider", new Vector2(0f, -178f), new Vector2(ContentWidth, 1f));
-            CreateText(stageLightingPage, "Motion Label", "自动扫动", 16, FontStyle.Bold, new Vector2(-414f, -226f), new Vector2(132f, 32f), TextAnchor.MiddleLeft, TextPrimary);
-            stageLightingMotionToggle = CreateSwitch(stageLightingPage, "Lighting Motion Switch", new Vector2(-270f, -226f));
-            CreateText(stageLightingPage, "Pulse Label", "节拍脉冲", 16, FontStyle.Bold, new Vector2(-100f, -226f), new Vector2(132f, 32f), TextAnchor.MiddleLeft, TextPrimary);
-            stageLightingPulseToggle = CreateSwitch(stageLightingPage, "Lighting Pulse Switch", new Vector2(44f, -226f));
-            CreateText(stageLightingPage, "Beams Label", "烟雾光束", 16, FontStyle.Bold, new Vector2(336f, -226f), new Vector2(150f, 32f), TextAnchor.MiddleLeft, TextPrimary);
-            stageLightingBeamsToggle = CreateSwitch(stageLightingPage, "Lighting Beams Switch", new Vector2(460f, -226f));
+            const float toggleColumnSpacing = 336f;
+            const float toggleLabelX = -390f;
+            const float toggleSwitchX = -252f;
+            var toggleLabelSize = new Vector2(132f, 32f);
+            CreateText(stageLightingPage, "Motion Label", "自动扫动", 16, FontStyle.Bold, new Vector2(toggleLabelX, -226f), toggleLabelSize, TextAnchor.MiddleLeft, TextPrimary);
+            stageLightingMotionToggle = CreateSwitch(stageLightingPage, "Lighting Motion Switch", new Vector2(toggleSwitchX, -226f));
+            CreateText(stageLightingPage, "Pulse Label", "节拍脉冲", 16, FontStyle.Bold, new Vector2(toggleLabelX + toggleColumnSpacing, -226f), toggleLabelSize, TextAnchor.MiddleLeft, TextPrimary);
+            stageLightingPulseToggle = CreateSwitch(stageLightingPage, "Lighting Pulse Switch", new Vector2(toggleSwitchX + toggleColumnSpacing, -226f));
+            CreateText(stageLightingPage, "Beams Label", "烟雾光束", 16, FontStyle.Bold, new Vector2(toggleLabelX + toggleColumnSpacing * 2f, -226f), toggleLabelSize, TextAnchor.MiddleLeft, TextPrimary);
+            stageLightingBeamsToggle = CreateSwitch(stageLightingPage, "Lighting Beams Switch", new Vector2(toggleSwitchX + toggleColumnSpacing * 2f, -226f));
         }
 
         private void BuildMicProtectionPage()
@@ -2226,7 +2237,7 @@ namespace TsukiVox.AudioPrototype
             stageLightingToggle.interactable = available;
             stageLightingToggle.SetIsOnWithoutNotify(enabled);
             RefreshSwitchVisual(stageLightingToggle);
-            stageLightingStatusText.text = !available ? "灯组不可用" : enabled ? "演出中" : "已关闭";
+            stageLightingStatusText.text = !available ? "灯组不可用" : enabled ? "开启" : "已关闭";
             stageLightingStatusText.color = enabled ? AccentStrong : TextSecondary;
 
             var preset = available ? stageLightingPrototype.CurrentPreset : StageLightingPreset.Custom;

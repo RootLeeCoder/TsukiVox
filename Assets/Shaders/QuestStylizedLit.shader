@@ -10,6 +10,7 @@ Shader "TsukiVox/Quest Stylized Lit"
         _ToonStrength("Toon Strength", Range(0, 1)) = 0.68
         _IndirectStrength("Indirect Light", Range(0, 2)) = 0.82
         _AmbientFloor("Ambient Floor", Range(0, 0.5)) = 0.32
+        [HideInInspector] _StableLighting("Stable Lighting", Float) = 0
         [Enum(None,0,Wood,1,Fabric,2,BrushedMetal,3,Stone,4,Perforated,5,Plaster,6)] _DetailMode("Surface Detail", Float) = 0
         _DetailScale("Detail Scale", Range(0.01, 120)) = 1
         _DetailStrength("Detail Strength", Range(0, 0.5)) = 0
@@ -60,6 +61,7 @@ Shader "TsukiVox/Quest Stylized Lit"
             half _ToonStrength;
             half _IndirectStrength;
             half _AmbientFloor;
+            half _StableLighting;
             half _DetailMode;
             half _DetailScale;
             half _DetailStrength;
@@ -331,8 +333,11 @@ Shader "TsukiVox/Quest Stylized Lit"
                 }
 
                 color += _RimColor.rgb * rim * max(_RimIntensity, 0.0h);
+                half stableLighting = saturate(_StableLighting);
+                half stableShade = lerp(0.74h, 1.0h, upFacing);
+                color = lerp(color, baseSample.rgb * stableShade, stableLighting);
                 color += max(_EmissionColor.rgb, 0.0h.xxx);
-                color = MixFog(color, input.fogFactor);
+                color = MixFog(color, input.fogFactor * (1.0h - stableLighting));
                 return half4(color, baseSample.a);
             }
             ENDHLSL
