@@ -20,6 +20,7 @@ namespace TsukiVox.AudioPrototype.Editor
         private const string FlatTabletBrightPreviewPath = "Logs/QuestFlatTabletBrightPreview.png";
         private const string StageLightingPanelPreviewPath = "Logs/QuestStageLightingPanelPreview.png";
         private const string SettingsPanelPreviewPath = "Logs/QuestSettingsPanelPreview.png";
+        private const string SettingsPanelDarkPreviewPath = "Logs/QuestSettingsPanelDarkPreview.png";
 
         [MenuItem("TsukiVox/Capture Quest Rendering Preview")]
         public static void CapturePreview()
@@ -232,6 +233,15 @@ namespace TsukiVox.AudioPrototype.Editor
                 linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
                 linearTexture.Apply(false, false);
                 WriteSrgbPng(linearTexture, outputTexture, SettingsPanelPreviewPath);
+
+                room.ApplyTheme(RoomTheme.Dark);
+                SetPreviewPage(pageRects, "Settings Page");
+                camera.Render();
+                camera.Render();
+                RenderTexture.active = renderTexture;
+                linearTexture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, false);
+                linearTexture.Apply(false, false);
+                WriteSrgbPng(linearTexture, outputTexture, SettingsPanelDarkPreviewPath);
             }
             finally
             {
@@ -253,8 +263,9 @@ namespace TsukiVox.AudioPrototype.Editor
                 $"[TsukiVox URP] Captured rendering previews at {Path.GetFullPath(PreviewPath)} " +
                 $"{Path.GetFullPath(LoungePreviewPath)}, {Path.GetFullPath(CeilingPreviewPath)} and " +
                 $"{Path.GetFullPath(BrightPreviewPath)}, {Path.GetFullPath(BrightCeilingPreviewPath)}, " +
-                $"{Path.GetFullPath(FlatTabletDarkPreviewPath)}, {Path.GetFullPath(FlatTabletBrightPreviewPath)}, " +
-                $"{Path.GetFullPath(StageLightingPanelPreviewPath)}, {Path.GetFullPath(SettingsPanelPreviewPath)}.");
+                    $"{Path.GetFullPath(FlatTabletDarkPreviewPath)}, {Path.GetFullPath(FlatTabletBrightPreviewPath)}, " +
+                    $"{Path.GetFullPath(StageLightingPanelPreviewPath)}, {Path.GetFullPath(SettingsPanelPreviewPath)} and " +
+                    $"{Path.GetFullPath(SettingsPanelDarkPreviewPath)}.");
         }
 
         private static void ValidateCoffeeTableStructure(
@@ -407,6 +418,21 @@ namespace TsukiVox.AudioPrototype.Editor
                     group.alpha = isVisible ? 1f : 0f;
                     group.interactable = isVisible;
                     group.blocksRaycasts = isVisible;
+                }
+            }
+
+            Canvas.ForceUpdateCanvases();
+            for (var index = 0; index < pages.Length; index += 1)
+            {
+                if (pages[index].name != visiblePageName)
+                {
+                    continue;
+                }
+
+                var switchVisuals = pages[index].GetComponentsInChildren<QuestUiSwitchVisual>(true);
+                for (var switchIndex = 0; switchIndex < switchVisuals.Length; switchIndex += 1)
+                {
+                    switchVisuals[switchIndex].RefreshState(true);
                 }
             }
         }

@@ -53,6 +53,14 @@ namespace TsukiVox.AudioPrototype
         public Color KeyboardHighlighted { get; private set; }
         public Color KeyboardPressed { get; private set; }
         public Color KeyboardDisabled { get; private set; }
+        public Color SwitchOffTrack { get; private set; }
+        public Color SwitchOffTrackHover { get; private set; }
+        public Color SwitchOffBorder { get; private set; }
+        public Color SwitchOffThumb { get; private set; }
+        public Color SwitchDisabledTrack { get; private set; }
+        public Color SwitchDisabledThumb { get; private set; }
+        public Color SwitchFocusRing { get; private set; }
+        public Color SwitchThumbShadow { get; private set; }
 
         public static QuestUiThemePalette For(RoomTheme theme)
         {
@@ -116,6 +124,14 @@ namespace TsukiVox.AudioPrototype
             KeyboardHighlighted = Rgb(0xF0E6D2),
             KeyboardPressed = Rgb(0xBCA77E),
             KeyboardDisabled = Rgb(0x707071, 0.45f),
+            SwitchOffTrack = Rgb(0x24272E),
+            SwitchOffTrackHover = Rgb(0x30333A),
+            SwitchOffBorder = Rgb(0x4C4E53),
+            SwitchOffThumb = Rgb(0xC6C3BA),
+            SwitchDisabledTrack = Rgb(0x20232A),
+            SwitchDisabledThumb = Rgb(0x696A6A),
+            SwitchFocusRing = Rgb(0xD8C49D, 0.35f),
+            SwitchThumbShadow = Rgb(0x000000, 0.36f),
         };
 
         private static readonly QuestUiThemePalette Bright = new QuestUiThemePalette
@@ -166,6 +182,14 @@ namespace TsukiVox.AudioPrototype
             KeyboardHighlighted = Rgb(0xF0E5CE),
             KeyboardPressed = Rgb(0xD0BE96),
             KeyboardDisabled = Rgb(0x8F9091, 0.42f),
+            SwitchOffTrack = Rgb(0xDEDFE1),
+            SwitchOffTrackHover = Rgb(0xD3D4D6),
+            SwitchOffBorder = Rgb(0xB3B4B7),
+            SwitchOffThumb = Rgb(0xFFFFFF),
+            SwitchDisabledTrack = Rgb(0xE5E6E8),
+            SwitchDisabledThumb = Rgb(0xBFC0C3),
+            SwitchFocusRing = Rgb(0x9C814B, 0.28f),
+            SwitchThumbShadow = Rgb(0x4D4E53, 0.18f),
         };
     }
 }

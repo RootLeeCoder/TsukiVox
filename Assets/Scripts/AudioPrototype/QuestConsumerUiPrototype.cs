@@ -1764,6 +1764,12 @@ namespace TsukiVox.AudioPrototype
             WireButton(clearMediaCacheButton, HandleClearMediaCache);
             WireButton(restoreDefaultSettingsButton, HandleRestoreDefaultSettings);
             WireButton(copyDiagnosticsButton, () => appShellPrototype?.CopyCompleteDebugInfoToClipboard());
+
+            var switchVisuals = consumerRoot.GetComponentsInChildren<QuestUiSwitchVisual>(true);
+            for (var index = 0; index < switchVisuals.Length; index += 1)
+            {
+                switchVisuals[index].RebindToggleListener();
+            }
         }
 
         private void RefreshAll()
@@ -1965,13 +1971,13 @@ namespace TsukiVox.AudioPrototype
             }
 
             voiceMicrophoneToggle.SetIsOnWithoutNotify(audioPrototype.IsMonitoring);
-            RefreshSwitchVisual(voiceMicrophoneToggle, Warm);
+            RefreshSwitchVisual(voiceMicrophoneToggle);
             inputMeterSlider.SetValueWithoutNotify(audioPrototype.InputLevel);
             ambienceSlider.SetValueWithoutNotify(audioPrototype.AmbienceAmount);
             echoSlider.SetValueWithoutNotify(audioPrototype.EchoAmount);
             dynamicsSlider.SetValueWithoutNotify(audioPrototype.DynamicsAmount);
             distanceMonitoringToggle.SetIsOnWithoutNotify(audioPrototype.IsDistanceMonitoringEnabled);
-            RefreshSwitchVisual(distanceMonitoringToggle, AccentStrong);
+            RefreshSwitchVisual(distanceMonitoringToggle);
 
             ambienceValueText.text = $"{Mathf.RoundToInt(audioPrototype.AmbienceAmount * 100f)}%";
             echoValueText.text = $"{Mathf.RoundToInt(audioPrototype.EchoAmount * 100f)}%";
@@ -2198,8 +2204,8 @@ namespace TsukiVox.AudioPrototype
             ceilingAuroraToggle.interactable = celestialControlsAvailable;
             ceilingStarsToggle.SetIsOnWithoutNotify(celestialControlsAvailable && roomPrototype.StarsEnabled);
             ceilingAuroraToggle.SetIsOnWithoutNotify(celestialControlsAvailable && roomPrototype.AuroraEnabled);
-            RefreshSwitchVisual(ceilingStarsToggle, Warm);
-            RefreshSwitchVisual(ceilingAuroraToggle, AccentStrong);
+            RefreshSwitchVisual(ceilingStarsToggle);
+            RefreshSwitchVisual(ceilingAuroraToggle);
             ceilingStarsLabel.color = !starsAvailable
                 ? TextFaint
                 : roomPrototype.StarsEnabled ? TextPrimary : TextSecondary;
@@ -2219,7 +2225,7 @@ namespace TsukiVox.AudioPrototype
             var enabled = available && stageLightingPrototype.LightingEnabled;
             stageLightingToggle.interactable = available;
             stageLightingToggle.SetIsOnWithoutNotify(enabled);
-            RefreshSwitchVisual(stageLightingToggle, AccentStrong);
+            RefreshSwitchVisual(stageLightingToggle);
             stageLightingStatusText.text = !available ? "灯组不可用" : enabled ? "演出中" : "已关闭";
             stageLightingStatusText.color = enabled ? AccentStrong : TextSecondary;
 
@@ -2286,9 +2292,9 @@ namespace TsukiVox.AudioPrototype
             stageLightingMotionToggle.SetIsOnWithoutNotify(available && stageLightingPrototype.AutomaticMotion);
             stageLightingPulseToggle.SetIsOnWithoutNotify(available && stageLightingPrototype.BeatPulse);
             stageLightingBeamsToggle.SetIsOnWithoutNotify(available && stageLightingPrototype.BeamsVisible);
-            RefreshSwitchVisual(stageLightingMotionToggle, AccentStrong);
-            RefreshSwitchVisual(stageLightingPulseToggle, Warm);
-            RefreshSwitchVisual(stageLightingBeamsToggle, AccentStrong);
+            RefreshSwitchVisual(stageLightingMotionToggle);
+            RefreshSwitchVisual(stageLightingPulseToggle);
+            RefreshSwitchVisual(stageLightingBeamsToggle);
         }
 
         private void RefreshMicProtection()
@@ -2315,7 +2321,7 @@ namespace TsukiVox.AudioPrototype
             }
 
             micProtectionToggle.SetIsOnWithoutNotify(handheldPropsPrototype.MicFaceHapticsEnabled);
-            RefreshSwitchVisual(micProtectionToggle, Accent);
+            RefreshSwitchVisual(micProtectionToggle);
             micWarningDistanceSlider.SetValueWithoutNotify(handheldPropsPrototype.MicFaceWarningClearance / MicWarningClearanceStep);
             micCriticalDistanceSlider.SetValueWithoutNotify(handheldPropsPrototype.MicFaceCriticalClearance / MicCriticalClearanceStep);
             micHapticStrengthSlider.SetValueWithoutNotify(handheldPropsPrototype.MicFaceHapticStrength / 0.1f);
@@ -2827,7 +2833,7 @@ namespace TsukiVox.AudioPrototype
             }
 
             appendKtvSearchToggle.SetIsOnWithoutNotify(appendKtvToSearch);
-            RefreshSwitchVisual(appendKtvSearchToggle, Accent);
+            RefreshSwitchVisual(appendKtvSearchToggle);
             if (appendKtvSearchLabel != null)
             {
                 appendKtvSearchLabel.color = appendKtvToSearch ? TextPrimary : TextSecondary;
@@ -3355,7 +3361,16 @@ namespace TsukiVox.AudioPrototype
             for (var index = 0; index < toggles.Length; index += 1)
             {
                 var toggle = toggles[index];
-                if (toggle != null && toggle.targetGraphic != null)
+                if (toggle == null)
+                {
+                    continue;
+                }
+
+                if (toggle.TryGetComponent<QuestUiSwitchVisual>(out var switchVisual))
+                {
+                    switchVisual.SetPalette(palette, true);
+                }
+                else if (toggle.targetGraphic != null)
                 {
                     toggle.colors = CreateButtonColors(toggle.targetGraphic.color);
                 }
@@ -4196,16 +4211,45 @@ namespace TsukiVox.AudioPrototype
 
         private Toggle CreateSwitch(Transform parent, string name, Vector2 position)
         {
-            var root = EnsureRect(parent, name, position, new Vector2(60f, 32f));
-            var surface = EnsureSurface(root, SurfaceRaised, 16f, true);
-            var knob = EnsureRect(root, "Knob", new Vector2(-13f, 0f), new Vector2(24f, 24f));
-            EnsureSurface(knob, TextSecondary, 12f, false);
+            var root = EnsureRect(parent, name, position, new Vector2(72f, 48f));
+            var legacyKnob = root.Find("Knob");
+            if (legacyKnob != null)
+            {
+                RetireLegacyNode(legacyKnob, "Knob");
+            }
+
+            var hitArea = EnsureSurface(root, Color.clear, 8f, true);
+            var visualRoot = EnsureRect(root, "Visual", Vector2.zero, new Vector2(60f, 32f));
+            var focusRingRect = EnsureRect(visualRoot, "Focus Ring", Vector2.zero, new Vector2(68f, 40f));
+            var focusRingSurface = EnsureSurface(focusRingRect, Color.clear, 20f, false);
+            var borderRect = EnsureRect(visualRoot, "Border", Vector2.zero, new Vector2(62f, 34f));
+            var borderSurface = EnsureSurface(borderRect, palette.SwitchOffBorder, 17f, false);
+            var trackRect = EnsureRect(visualRoot, "Track", Vector2.zero, new Vector2(60f, 32f));
+            var trackSurface = EnsureSurface(trackRect, palette.SwitchOffTrack, 16f, false);
+            var knob = EnsureRect(visualRoot, "Knob", new Vector2(-14f, 0f), new Vector2(24f, 24f));
+            var knobSurface = EnsureSurface(knob, palette.SwitchOffThumb, 12f, false);
+            var knobShadow = GetOrAddComponent<Shadow>(knob.gameObject);
+            knobShadow.effectColor = palette.SwitchThumbShadow;
+            knobShadow.effectDistance = new Vector2(0f, -2f);
+            knobShadow.useGraphicAlpha = true;
+
             var toggle = GetOrAddComponent<Toggle>(root.gameObject);
-            toggle.targetGraphic = surface;
+            toggle.targetGraphic = hitArea;
             toggle.graphic = null;
-            toggle.transition = Selectable.Transition.ColorTint;
-            toggle.colors = CreateButtonColors(SurfaceRaised);
+            toggle.transition = Selectable.Transition.None;
             toggle.navigation = new Navigation { mode = Navigation.Mode.None };
+
+            var switchVisual = GetOrAddComponent<QuestUiSwitchVisual>(root.gameObject);
+            switchVisual.Configure(
+                toggle,
+                visualRoot,
+                knob,
+                focusRingSurface,
+                borderSurface,
+                trackSurface,
+                knobSurface,
+                knobShadow,
+                palette);
             return toggle;
         }
 
@@ -4448,28 +4492,17 @@ namespace TsukiVox.AudioPrototype
             };
         }
 
-        private void RefreshSwitchVisual(Toggle toggle, Color activeColor)
+        private void RefreshSwitchVisual(Toggle toggle)
         {
             if (toggle == null)
             {
                 return;
             }
 
-            var surface = toggle.targetGraphic as QuestUiSurface;
-            var knob = toggle.transform.Find("Knob") as RectTransform;
-            if (surface != null)
+            if (toggle.TryGetComponent<QuestUiSwitchVisual>(out var switchVisual))
             {
-                surface.color = toggle.isOn ? new Color(activeColor.r * 0.24f, activeColor.g * 0.24f, activeColor.b * 0.24f, 1f) : SurfaceRaised;
-            }
-
-            if (knob != null)
-            {
-                knob.anchoredPosition = new Vector2(toggle.isOn ? 13f : -13f, 0f);
-                var knobSurface = knob.GetComponent<QuestUiSurface>();
-                if (knobSurface != null)
-                {
-                    knobSurface.color = toggle.isOn ? activeColor : TextSecondary;
-                }
+                switchVisual.SetPalette(palette);
+                switchVisual.RefreshState();
             }
         }
 
