@@ -25,7 +25,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 33;
+        public const int CurrentDesignRevision = 35;
         public const string ThemePrefsKey = "TsukiVox.RoomTheme";
         public const string StarsPrefsKey = "TsukiVox.CeilingStarsEnabled";
         public const string AuroraPrefsKey = "TsukiVox.CeilingAuroraEnabled";
@@ -62,6 +62,7 @@ namespace TsukiVox.AudioPrototype
         private const string RightCornerMoonRelicName = "right corner moon relic";
         private const string LeftCornerSunRelicName = "left corner sun relic";
         private const string RightCornerSunRelicName = "right corner sun relic";
+        private const string FloorWordmarkTextureResource = "Textures/TsukiVoxFloorLogo";
 
         private const float RoomWidth = 7.2f;
         private const float RoomHeight = 2.9f;
@@ -479,7 +480,6 @@ namespace TsukiVox.AudioPrototype
             rightCornerMoonRelic = null;
             leftCornerSunRelic = null;
             rightCornerSunRelic = null;
-
             var palette = RoomPalette.Create(currentTheme);
             levelBarFillMaterial = palette.Accent;
             lightStripMaterial = palette.Warm;
@@ -1134,64 +1134,105 @@ namespace TsukiVox.AudioPrototype
 
         private void BuildPerformanceArea(RoomPalette palette)
         {
-            const float runnerWidth = 1.12f;
-            const float runnerDepth = 1.14f;
-            const float runnerZ = 2.48f;
-
-            // A low-profile three-dimensional interpretation of the TsukiVox
-            // crescent / microphone / waveform mark replaces the old oval stage.
-            // It sits directly on the floor between the coffee table and screen,
-            // with the top of the lettering facing the screen so it reads naturally
-            // from the sofa and does not create a trip-height obstruction in VR.
-            CreateFloorWordmark(palette, new Vector3(0f, 0.024f, 3.42f));
-
-            CreateBeveledBox(
-                geometryRoot,
-                "runner rug",
-                new Vector3(runnerWidth, 0.018f, runnerDepth),
-                new Vector3(0f, 0.011f, runnerZ),
-                palette.Rug,
-                0.01f);
-            CreateTrimBox(
-                geometryRoot,
-                "runner front trim",
-                new Vector3(runnerWidth + 0.04f, 0.024f, 0.03f),
-                new Vector3(0f, 0.018f, runnerZ + runnerDepth * 0.5f),
-                palette.Trim,
-                0.008f);
-            CreateTrimBox(
-                geometryRoot,
-                "runner back trim",
-                new Vector3(runnerWidth + 0.04f, 0.024f, 0.03f),
-                new Vector3(0f, 0.018f, runnerZ - runnerDepth * 0.5f),
-                palette.Trim,
-                0.008f);
-            CreateTrimBox(
-                geometryRoot,
-                "runner left trim",
-                new Vector3(0.03f, 0.024f, runnerDepth),
-                new Vector3(-runnerWidth * 0.5f - 0.01f, 0.018f, runnerZ),
-                palette.Trim,
-                0.008f);
-            CreateTrimBox(
-                geometryRoot,
-                "runner right trim",
-                new Vector3(0.03f, 0.024f, runnerDepth),
-                new Vector3(runnerWidth * 0.5f + 0.01f, 0.018f, runnerZ),
-                palette.Trim,
-                0.008f);
+            CreateFloorWordmarkCarpet(palette);
         }
 
-        private void CreateFloorWordmark(RoomPalette palette, Vector3 localPosition)
+        private void CreateFloorWordmarkCarpet(RoomPalette palette)
+        {
+            const float carpetWidth = 4.16f;
+            const float carpetDepth = 1.12f;
+            const float carpetZ = 4.04f;
+
+            var carpetRoot = new GameObject("TsukiVox floor logo carpet").transform;
+            carpetRoot.SetParent(geometryRoot, false);
+            carpetRoot.localPosition = new Vector3(0f, 0f, carpetZ);
+            CreateBeveledBox(
+                carpetRoot,
+                "carpet shadow",
+                new Vector3(carpetWidth + 0.12f, 0.012f, carpetDepth + 0.12f),
+                new Vector3(0f, 0.007f, 0f),
+                palette.SofaShadow,
+                0.004f,
+                false,
+                false);
+            CreateBeveledBox(
+                carpetRoot,
+                "carpet field",
+                new Vector3(carpetWidth, 0.026f, carpetDepth),
+                new Vector3(0f, 0.021f, 0f),
+                palette.Rug,
+                0.008f,
+                false,
+                false);
+            CreateTrimBox(carpetRoot, "front border", new Vector3(carpetWidth + 0.02f, 0.014f, 0.026f), new Vector3(0f, 0.041f, -carpetDepth * 0.5f), palette.Trim, 0.004f, false, false);
+            CreateTrimBox(carpetRoot, "back border", new Vector3(carpetWidth + 0.02f, 0.014f, 0.026f), new Vector3(0f, 0.041f, carpetDepth * 0.5f), palette.Trim, 0.004f, false, false);
+            CreateTrimBox(carpetRoot, "left border", new Vector3(0.026f, 0.014f, carpetDepth), new Vector3(-carpetWidth * 0.5f, 0.041f, 0f), palette.Trim, 0.004f, false, false);
+            CreateTrimBox(carpetRoot, "right border", new Vector3(0.026f, 0.014f, carpetDepth), new Vector3(carpetWidth * 0.5f, 0.041f, 0f), palette.Trim, 0.004f, false, false);
+
+            var texture = Resources.Load<Texture2D>(FloorWordmarkTextureResource);
+            if (texture == null)
+            {
+                Debug.LogError($"[TsukiVox Room] Floor wordmark texture was not found at Resources/{FloorWordmarkTextureResource}.");
+                return;
+            }
+
+            var shader = Shader.Find("TsukiVox/Quest Floor Wordmark");
+            if (shader == null)
+            {
+                Debug.LogError("[TsukiVox Room] Quest floor wordmark shader was not found.");
+                return;
+            }
+
+            var material = new Material(shader)
+            {
+                name = "TsukiVox floor wordmark",
+                renderQueue = (int)RenderQueue.Transparent + 5,
+            };
+            material.SetTexture("_BaseMap", texture);
+
+            var logo = new GameObject("complete TsukiVox logo");
+            logo.transform.SetParent(carpetRoot, false);
+            logo.transform.localPosition = new Vector3(0f, 0.044f, 0f);
+            logo.AddComponent<MeshFilter>().sharedMesh = CreateFloorQuadMesh(3.96f, 0.99f);
+            var renderer = logo.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+        }
+
+        private static Mesh CreateFloorQuadMesh(float width, float depth)
+        {
+            var halfWidth = width * 0.5f;
+            var halfDepth = depth * 0.5f;
+            var mesh = new Mesh
+            {
+                name = "TsukiVox floor wordmark quad",
+                vertices = new[]
+                {
+                    new Vector3(-halfWidth, 0f, -halfDepth),
+                    new Vector3(halfWidth, 0f, -halfDepth),
+                    new Vector3(-halfWidth, 0f, halfDepth),
+                    new Vector3(halfWidth, 0f, halfDepth),
+                },
+                normals = new[] { Vector3.up, Vector3.up, Vector3.up, Vector3.up },
+                uv = new[]
+                {
+                    new Vector2(0f, 0f),
+                    new Vector2(1f, 0f),
+                    new Vector2(0f, 1f),
+                    new Vector2(1f, 1f),
+                },
+                triangles = new[] { 0, 2, 1, 1, 2, 3 },
+            };
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        private static void CreateWordmarkVisual(RoomPalette palette, Transform wordmarkRoot)
         {
             const float depth = 0.04f;
             const float stroke = 0.029f;
             const float halfHeight = 0.14f;
-
-            var wordmarkRoot = new GameObject("TsukiVox floor wordmark").transform;
-            wordmarkRoot.SetParent(geometryRoot, false);
-            wordmarkRoot.localPosition = localPosition;
-            wordmarkRoot.localRotation = Quaternion.Euler(90f, 0f, 0f);
 
             // The long signal line visually ties the waveform bars into the T and X,
             // matching the generated brand study without requiring a texture asset.
