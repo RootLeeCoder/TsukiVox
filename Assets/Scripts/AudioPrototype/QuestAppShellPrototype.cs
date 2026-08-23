@@ -311,7 +311,30 @@ namespace TsukiVox.AudioPrototype
                 debugBuilder.AppendLine($"audioMonitoring {audioPrototype.IsMonitoring}");
                 debugBuilder.AppendLine($"audioWaitingForPermission {audioPrototype.IsWaitingForPermission}");
                 debugBuilder.AppendLine($"audioSafetyReducingGain {audioPrototype.IsSafetyReducingGain}");
+                debugBuilder.AppendLine($"audioMonitorRequested {audioPrototype.SelectedMonitorMode}");
+                debugBuilder.AppendLine($"audioMonitorActive {audioPrototype.ActiveMonitorMode}");
+                debugBuilder.AppendLine($"audioMonitorFallback {audioPrototype.IsNativeFallbackActive}");
+                debugBuilder.AppendLine($"audioMonitorFallbackReason {audioPrototype.NativeFallbackReason}");
                 debugBuilder.AppendLine($"audioBackend {audioPrototype.ActiveBackendName}");
+                var nativeStats = audioPrototype.NativeStats;
+                debugBuilder.AppendLine($"audioNativeApiVersion {nativeStats.version}/{NativeOboeDryMonitor.RequiredApiVersion}");
+                debugBuilder.AppendLine($"audioNativeApi {audioPrototype.NativeApiName}");
+                debugBuilder.AppendLine($"audioNativeError {audioPrototype.NativeError}");
+                debugBuilder.AppendLine(
+                    $"audioNativeStats running {nativeStats.IsRunning} rate {nativeStats.sampleRate} burst {nativeStats.framesPerBurst} " +
+                    $"sharing {nativeStats.inputSharingMode}/{nativeStats.outputSharingMode} preset {nativeStats.inputPreset} " +
+                    $"capacity {nativeStats.inputCapacityFrames}/{nativeStats.outputCapacityFrames} " +
+                    $"requestedBuffers {nativeStats.requestedInputBufferFrames}/{nativeStats.requestedOutputBufferFrames} " +
+                    $"actualBuffers {nativeStats.inputBufferFrames}/{nativeStats.outputBufferFrames} xruns {nativeStats.inputXRunCount}/{nativeStats.outputXRunCount} " +
+                    $"callbacks {nativeStats.callbackCount} short {nativeStats.shortReadCount} ({nativeStats.ShortReadRatio:P2}) " +
+                    $"mismatch {nativeStats.frameMismatchCount} inputFill {nativeStats.InputFrameFillRatio:P2} " +
+                    $"frames {nativeStats.receivedInputFrameCount}/{nativeStats.requestedInputFrameCount} streamError {nativeStats.lastStreamError}");
+                debugBuilder.AppendLine(
+                    $"audioNativeGains gain {nativeStats.actualGain:0.000} drive {nativeStats.actualInputDrive:0.000} " +
+                    $"distance {nativeStats.actualDistanceGain:0.000} safety {nativeStats.actualSafetyGain:0.000}");
+                debugBuilder.AppendLine(
+                    $"audioNativeLevels pre {nativeStats.preDspLevel:0.000} post {nativeStats.postDspLevel:0.000} " +
+                    $"output {nativeStats.outputLevel:0.000} reduction {nativeStats.compressorReductionDb:0.0}/{nativeStats.limiterReductionDb:0.0}dB");
                 var voiceEmitter = audioPrototype.VoiceEmitterPosition;
                 debugBuilder.AppendLine($"audioVoiceSpatialEnabled {audioPrototype.IsSpatialVoiceEnabled}");
                 debugBuilder.AppendLine($"audioVoiceEmitter {voiceEmitter.x:0.000},{voiceEmitter.y:0.000},{voiceEmitter.z:0.000}");

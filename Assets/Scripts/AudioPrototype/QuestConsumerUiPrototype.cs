@@ -185,6 +185,10 @@ namespace TsukiVox.AudioPrototype
 
         private Button voiceBackButton;
         private Toggle voiceMicrophoneToggle;
+        private Button spatialSpeakersModeButton;
+        private Button lowLatencyModeButton;
+        private QuestUiSurface spatialSpeakersModeSurface;
+        private QuestUiSurface lowLatencyModeSurface;
         private Slider inputMeterSlider;
         private Slider ambienceSlider;
         private Slider echoSlider;
@@ -1008,32 +1012,54 @@ namespace TsukiVox.AudioPrototype
             voiceMicrophoneToggle = CreateSwitch(voicePage, "Microphone Switch", new Vector2(460f, 124f));
 
             CreateDivider(voicePage, "Microphone Divider", new Vector2(0f, 88f), new Vector2(ContentWidth, 1f));
-            CreateText(voicePage, "Preset Title", "人声预设", 18, FontStyle.Bold, new Vector2(-414f, 66f), new Vector2(160f, 32f), TextAnchor.MiddleLeft, TextPrimary);
-            voicePresetStatusText = CreateText(voicePage, "Preset Status", "KTV · 预设值", 14, FontStyle.Normal, new Vector2(-244f, 66f), new Vector2(220f, 28f), TextAnchor.MiddleLeft, TextSecondary);
-            CreateText(voicePage, "Distance Link Label", "距离跟随", 16, FontStyle.Bold, new Vector2(350f, 66f), new Vector2(130f, 30f), TextAnchor.MiddleRight, TextPrimary);
-            distanceMonitoringToggle = CreateSwitch(voicePage, "Distance Monitoring Switch", new Vector2(460f, 66f));
+            CreateText(voicePage, "Monitor Mode Title", "返听方式", 16, FontStyle.Bold, new Vector2(-416f, 61f), new Vector2(130f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            spatialSpeakersModeButton = CreateTextButton(
+                voicePage,
+                "Spatial Speakers Mode",
+                "空间音箱",
+                new Vector2(-138f, 61f),
+                new Vector2(300f, 44f),
+                Surface,
+                TextPrimary);
+            lowLatencyModeButton = CreateTextButton(
+                voicePage,
+                "Low Latency Mode",
+                "低延迟",
+                new Vector2(184f, 61f),
+                new Vector2(300f, 44f),
+                Surface,
+                TextPrimary);
+            spatialSpeakersModeButton.transition = Selectable.Transition.None;
+            lowLatencyModeButton.transition = Selectable.Transition.None;
+            spatialSpeakersModeSurface = spatialSpeakersModeButton.targetGraphic as QuestUiSurface;
+            lowLatencyModeSurface = lowLatencyModeButton.targetGraphic as QuestUiSurface;
+
+            CreateText(voicePage, "Preset Title", "人声预设", 18, FontStyle.Bold, new Vector2(-414f, 15f), new Vector2(160f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            voicePresetStatusText = CreateText(voicePage, "Preset Status", "KTV · 预设值", 14, FontStyle.Normal, new Vector2(-244f, 15f), new Vector2(220f, 28f), TextAnchor.MiddleLeft, TextSecondary);
+            CreateText(voicePage, "Distance Link Label", "距离跟随", 16, FontStyle.Bold, new Vector2(350f, 15f), new Vector2(130f, 30f), TextAnchor.MiddleRight, TextPrimary);
+            distanceMonitoringToggle = CreateSwitch(voicePage, "Distance Monitoring Switch", new Vector2(460f, 15f));
 
             var labels = new[] { "原声", "KTV", "强效", "柔和" };
             for (var index = 0; index < presetButtons.Length; index += 1)
             {
-                presetButtons[index] = CreateTextButton(voicePage, $"Preset {index}", labels[index], new Vector2(-369f + index * 246f, 25f), new Vector2(232f, 46f), Surface, TextPrimary);
+                presetButtons[index] = CreateTextButton(voicePage, $"Preset {index}", labels[index], new Vector2(-369f + index * 246f, -27f), new Vector2(232f, 46f), Surface, TextPrimary);
                 presetButtons[index].transition = Selectable.Transition.None;
                 presetSurfaces[index] = presetButtons[index].targetGraphic as QuestUiSurface;
             }
 
-            CreateDivider(voicePage, "Preset Divider", new Vector2(0f, -5f), new Vector2(ContentWidth, 1f));
+            CreateDivider(voicePage, "Preset Divider", new Vector2(0f, -55f), new Vector2(ContentWidth, 1f));
 
-            CreateText(voicePage, "Ambience Title", "空间感", 17, FontStyle.Bold, new Vector2(-408f, -50f), new Vector2(170f, 30f), TextAnchor.MiddleLeft, TextPrimary);
-            ambienceSlider = CreateSlider(voicePage, "Ambience", new Vector2(86f, -50f), new Vector2(520f, 42f), true);
-            ambienceValueText = CreateText(voicePage, "Ambience Value", "55%", 16, FontStyle.Bold, new Vector2(430f, -50f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
+            CreateText(voicePage, "Ambience Title", "空间感", 17, FontStyle.Bold, new Vector2(-408f, -92f), new Vector2(170f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            ambienceSlider = CreateSlider(voicePage, "Ambience", new Vector2(86f, -92f), new Vector2(520f, 42f), true);
+            ambienceValueText = CreateText(voicePage, "Ambience Value", "55%", 16, FontStyle.Bold, new Vector2(430f, -92f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
 
-            CreateText(voicePage, "Echo Title", "回声", 17, FontStyle.Bold, new Vector2(-408f, -116f), new Vector2(170f, 30f), TextAnchor.MiddleLeft, TextPrimary);
-            echoSlider = CreateSlider(voicePage, "Echo", new Vector2(86f, -116f), new Vector2(520f, 42f), true);
-            echoValueText = CreateText(voicePage, "Echo Value", "30%", 16, FontStyle.Bold, new Vector2(430f, -116f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
+            CreateText(voicePage, "Echo Title", "回声", 17, FontStyle.Bold, new Vector2(-408f, -146f), new Vector2(170f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            echoSlider = CreateSlider(voicePage, "Echo", new Vector2(86f, -146f), new Vector2(520f, 42f), true);
+            echoValueText = CreateText(voicePage, "Echo Value", "30%", 16, FontStyle.Bold, new Vector2(430f, -146f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
 
-            CreateText(voicePage, "Dynamics Title", "人声稳定", 17, FontStyle.Bold, new Vector2(-408f, -182f), new Vector2(170f, 30f), TextAnchor.MiddleLeft, TextPrimary);
-            dynamicsSlider = CreateSlider(voicePage, "Dynamics", new Vector2(86f, -182f), new Vector2(520f, 42f), true);
-            dynamicsValueText = CreateText(voicePage, "Dynamics Value", "65%", 16, FontStyle.Bold, new Vector2(430f, -182f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
+            CreateText(voicePage, "Dynamics Title", "人声稳定", 17, FontStyle.Bold, new Vector2(-408f, -200f), new Vector2(170f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            dynamicsSlider = CreateSlider(voicePage, "Dynamics", new Vector2(86f, -200f), new Vector2(520f, 42f), true);
+            dynamicsValueText = CreateText(voicePage, "Dynamics Value", "65%", 16, FontStyle.Bold, new Vector2(430f, -200f), new Vector2(94f, 30f), TextAnchor.MiddleRight, AccentStrong);
 
             voiceMixerFooterText = CreateText(voicePage, "Mixer Footer", "距离跟随只调整返听增益", 14, FontStyle.Normal, new Vector2(0f, -245f), new Vector2(ContentWidth, 28f), TextAnchor.MiddleCenter, TextSecondary);
         }
@@ -1723,6 +1749,16 @@ namespace TsukiVox.AudioPrototype
             WireButton(playPauseButton, () => playlistPrototype?.SendPlayPause());
             WireButton(nextButton, () => playlistPrototype?.SendNext());
             WireButton(microphoneButton, () => audioPrototype?.ToggleMonitoring());
+            WireButton(spatialSpeakersModeButton, () =>
+            {
+                audioPrototype?.SetMonitorMode(MonitorMode.UnitySpatialSpeakers);
+                RefreshVoice();
+            });
+            WireButton(lowLatencyModeButton, () =>
+            {
+                audioPrototype?.SetMonitorMode(MonitorMode.OboeLowLatency);
+                RefreshVoice();
+            });
 
             homeVideoVolumeSlider.onValueChanged.RemoveAllListeners();
             homeVideoVolumeSlider.onValueChanged.AddListener(value =>
@@ -2111,6 +2147,33 @@ namespace TsukiVox.AudioPrototype
             ambienceValueText.text = $"{Mathf.RoundToInt(audioPrototype.AmbienceAmount * 100f)}%";
             echoValueText.text = $"{Mathf.RoundToInt(audioPrototype.EchoAmount * 100f)}%";
             dynamicsValueText.text = $"{Mathf.RoundToInt(audioPrototype.DynamicsAmount * 100f)}%";
+            var spatialSelected = audioPrototype.SelectedMonitorMode == MonitorMode.UnitySpatialSpeakers;
+            if (spatialSpeakersModeSurface != null)
+            {
+                spatialSpeakersModeSurface.color = spatialSelected ? Accent : Surface;
+            }
+            if (lowLatencyModeSurface != null)
+            {
+                lowLatencyModeSurface.color = spatialSelected ? Surface : Accent;
+            }
+            if (spatialSpeakersModeButton != null)
+            {
+                spatialSpeakersModeButton.interactable = true;
+                var spatialLabel = spatialSpeakersModeButton.GetComponentInChildren<TMP_Text>(true);
+                if (spatialLabel != null)
+                {
+                    spatialLabel.color = spatialSelected ? AccentInk : TextPrimary;
+                }
+            }
+            if (lowLatencyModeButton != null)
+            {
+                lowLatencyModeButton.interactable = audioPrototype.IsNativeBackendSelectable || !spatialSelected;
+                var lowLatencyLabel = lowLatencyModeButton.GetComponentInChildren<TMP_Text>(true);
+                if (lowLatencyLabel != null)
+                {
+                    lowLatencyLabel.color = spatialSelected ? TextPrimary : AccentInk;
+                }
+            }
             voicePresetStatusText.text = $"{FormatPreset(audioPrototype.CurrentPresetIndex)} · " +
                                          (audioPrototype.HasCustomEffectSettings ? "已微调" : "预设值");
 
@@ -2136,14 +2199,29 @@ namespace TsukiVox.AudioPrototype
                 distanceMonitoringStatusText.color = AccentStrong;
             }
 
-            voiceMixerFooterText.text = audioPrototype.IsSafetyReducingGain
-                ? "安全保护正在降低返听增益"
-                : audioPrototype.IsSpatialVoiceEnabled
-                    ? "人声已定位至墙面音箱 · 距离跟随只调整增益"
-                    : audioPrototype.PrefersNativeOboeBackend
-                        ? "Native 低延迟仅提供原声；距离跟随仍然生效"
-                        : "距离跟随只调整返听增益";
-            voiceMixerFooterText.color = audioPrototype.IsSafetyReducingGain ? Warm : TextSecondary;
+            if (voiceMixerFooterText != null)
+            {
+                if (audioPrototype.IsNativeFallbackActive)
+                {
+                    voiceMixerFooterText.text = $"低延迟不可用，已回退空间音箱 · {ShortenStatusReason(audioPrototype.NativeFallbackReason)}";
+                    voiceMixerFooterText.color = Warm;
+                }
+                else if (audioPrototype.IsSafetyReducingGain)
+                {
+                    voiceMixerFooterText.text = "安全保护正在降低返听增益";
+                    voiceMixerFooterText.color = Warm;
+                }
+                else if (audioPrototype.ActiveMonitorMode == MonitorMode.OboeLowLatency)
+                {
+                    voiceMixerFooterText.text = "低延迟无墙面定位 · 轻量空间感、回声和人声稳定可用";
+                    voiceMixerFooterText.color = TextSecondary;
+                }
+                else
+                {
+                    voiceMixerFooterText.text = "人声已定位至墙面音箱 · 距离跟随只调整增益";
+                    voiceMixerFooterText.color = TextSecondary;
+                }
+            }
 
             for (var index = 0; index < presetButtons.Length; index += 1)
             {
@@ -2162,6 +2240,20 @@ namespace TsukiVox.AudioPrototype
                     label.color = isSelected ? AccentInk : TextPrimary;
                 }
             }
+        }
+
+        private static string ShortenStatusReason(string reason)
+        {
+            const int maximumCharacters = 30;
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                return "原生音频异常";
+            }
+
+            var singleLine = reason.Replace('\r', ' ').Replace('\n', ' ').Trim();
+            return singleLine.Length <= maximumCharacters
+                ? singleLine
+                : singleLine.Substring(0, maximumCharacters - 1) + "\u2026";
         }
 
         private void RefreshQueue()

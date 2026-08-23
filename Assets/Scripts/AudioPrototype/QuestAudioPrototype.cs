@@ -8,6 +8,12 @@ using UnityEngine.UI;
 
 namespace TsukiVox.AudioPrototype
 {
+    public enum MonitorMode
+    {
+        UnitySpatialSpeakers,
+        OboeLowLatency,
+    }
+
     public sealed class QuestAudioPrototype : MonoBehaviour
     {
         private const int TargetSampleRate = 48000;
@@ -24,6 +30,7 @@ namespace TsukiVox.AudioPrototype
         private const float MeterDisplayCurve = 0.62f;
         private const float DefaultDistanceFullGainClearance = 0.12f;
         private const float DefaultDistanceCutoffClearance = 0.30f;
+        private const float DistanceTrackingHoldSeconds = 0.85f;
         private const bool DefaultDistanceMonitoringEnabled = true;
         private const float AudioPreferencesSaveDelay = 0.5f;
         private const string PresetPrefsKey = "TsukiVox.Audio.Preset.v1";
@@ -60,6 +67,7 @@ namespace TsukiVox.AudioPrototype
         [SerializeField, Range(0f, MaximumMonitorVolume)] private float monitorVolume = DefaultMonitorVolume;
         [SerializeField] private bool safetyLimiterEnabled = true;
         [SerializeField] private bool preferNativeOboeBackend = false;
+        [SerializeField] private MonitorMode selectedMonitorMode = MonitorMode.UnitySpatialSpeakers;
         [SerializeField] private bool requestLowLatencyAudio = true;
         [SerializeField] private PrototypePreset initialPreset = PrototypePreset.KtvRoom;
 
@@ -100,6 +108,8 @@ namespace TsukiVox.AudioPrototype
         private bool isSafetyReducingGain;
         private bool monitorOutputEnabled = true;
         private NativeAudioBackend activeBackend = NativeAudioBackend.UnityMicrophone;
+        private bool nativeFallbackActive;
+        private string nativeFallbackReason = string.Empty;
         private TsukiVoxNativeStats nativeStats;
         private string backendNote = "Backend not started.";
         private double estimatedMicrophoneLagMs;
@@ -110,6 +120,8 @@ namespace TsukiVox.AudioPrototype
         private float safetyMonitorGain = 1f;
         private float appliedMonitorGain = -1f;
         private bool isMicrophoneDistanceTracked;
+        private bool hasValidDistanceTracking;
+        private float lastValidDistanceTrackingAt = float.NegativeInfinity;
         private bool audioPreferencesDirty;
         private float audioPreferencesSaveAt;
 
@@ -152,7 +164,23 @@ namespace TsukiVox.AudioPrototype
 
         public bool IsSafetyReducingGain => isSafetyReducingGain;
 
-        public string ActiveBackendName => activeBackend == NativeAudioBackend.NativeOboeDryMonitor ? "Native Oboe Dry" : "Unity Microphone";
+        public string ActiveBackendName => activeBackend == NativeAudioBackend.NativeOboeLowLatency ? "Oboe Low Latency" : "Unity Spatial Speakers";
+
+        public MonitorMode SelectedMonitorMode => selectedMonitorMode;
+
+        public MonitorMode ActiveMonitorMode => activeBackend == NativeAudioBackend.NativeOboeLowLatency
+            ? MonitorMode.OboeLowLatency
+            : MonitorMode.UnitySpatialSpeakers;
+
+        public bool IsNativeFallbackActive => nativeFallbackActive;
+
+        public string NativeFallbackReason => nativeFallbackReason;
+
+        public TsukiVoxNativeStats NativeStats => nativeStats;
+
+        public string NativeApiName => nativeStats.AudioApiName;
+
+        public string NativeError => NativeOboeDryMonitor.IsInvalid ? NativeOboeDryMonitor.InvalidReason : NativeOboeDryMonitor.GetLastError();
 
         public string CurrentPresetName => FormatPresetName(currentPreset);
 
@@ -203,11 +231,11 @@ namespace TsukiVox.AudioPrototype
 
         public bool IsSafetyLimiterEnabled => safetyLimiterEnabled;
 
-        public bool PrefersNativeOboeBackend => preferNativeOboeBackend;
+        public bool PrefersNativeOboeBackend => selectedMonitorMode == MonitorMode.OboeLowLatency;
 
         public bool IsSpatialVoiceEnabled => spatialVoiceEnabled;
 
-        public bool IsNativeBackendSelectable => !spatialVoiceEnabled && NativeOboeDryMonitor.IsAvailable;
+        public bool IsNativeBackendSelectable => NativeOboeDryMonitor.IsAvailable;
 
         public Vector3 VoiceEmitterPosition => monitorSource != null
             ? monitorSource.transform.position
@@ -238,9 +266,12 @@ namespace TsukiVox.AudioPrototype
             EnsureAudioListener();
             ConfigureLowLatencyAudio();
             currentPreset = initialPreset;
+            selectedMonitorMode = MonitorMode.UnitySpatialSpeakers;
+            preferNativeOboeBackend = false;
+            spatialVoiceEnabled = true;
             LoadAudioPreferences();
             ApplyCurrentEffectSettings();
-            distanceMonitorGain = distanceMonitoringEnabled ? 0f : 1f;
+            ResetDistanceTrackingState(false);
             ApplyEffectiveMonitorGain();
             WireUi();
             EnsureQuestUiInteraction();
@@ -251,7 +282,7 @@ namespace TsukiVox.AudioPrototype
             QuestKtvRoomPrototype.EnsureSceneRoom();
             QuestHandheldPropsPrototype.EnsureSceneProps();
             ApplySafetyState(safetyLimiterEnabled);
-            ApplyNativePreference(preferNativeOboeBackend);
+            ConfigureMonitorMode(MonitorMode.UnitySpatialSpeakers, false);
             RefreshUi();
         }
 
@@ -450,13 +481,14 @@ namespace TsukiVox.AudioPrototype
 
         public void SetDistanceMonitoringEnabled(bool enabled)
         {
-            distanceMonitoringEnabled = enabled;
-            if (!enabled)
+            if (distanceMonitoringEnabled == enabled)
             {
-                isMicrophoneDistanceTracked = false;
-                microphoneSurfaceClearance = float.PositiveInfinity;
+                return;
             }
 
+            distanceMonitoringEnabled = enabled;
+            ResetDistanceTrackingState(UsesLowLatencyDistanceFailSafe);
+            ApplyEffectiveMonitorGain();
             QueueAudioPreferencesSave();
         }
 
@@ -467,7 +499,12 @@ namespace TsukiVox.AudioPrototype
 
         public void SetPreferNativeBackend(bool enabled)
         {
-            ApplyNativePreference(enabled);
+            SetMonitorMode(enabled ? MonitorMode.OboeLowLatency : MonitorMode.UnitySpatialSpeakers);
+        }
+
+        public void SetMonitorMode(MonitorMode mode)
+        {
+            ConfigureMonitorMode(mode, true);
         }
 
         public void SetSafetyLimiterEnabled(bool enabled)
@@ -484,9 +521,7 @@ namespace TsukiVox.AudioPrototype
             echoAmount = defaults.Echo;
             dynamicsAmount = defaults.Dynamics;
             distanceMonitoringEnabled = DefaultDistanceMonitoringEnabled;
-            isMicrophoneDistanceTracked = false;
-            microphoneSurfaceClearance = float.PositiveInfinity;
-            distanceMonitorGain = 0f;
+            ResetDistanceTrackingState(false);
             safetyMonitorGain = 1f;
 
             ApplyCurrentEffectSettings();
@@ -731,17 +766,27 @@ namespace TsukiVox.AudioPrototype
 
         private bool TryStartNativeMonitoring()
         {
-            if (spatialVoiceEnabled)
+            if (selectedMonitorMode != MonitorMode.OboeLowLatency || nativeFallbackActive)
             {
                 return false;
             }
 
-            if (!preferNativeOboeBackend || !NativeOboeDryMonitor.IsAvailable)
+            if (!NativeOboeDryMonitor.IsAvailable)
             {
+                nativeFallbackActive = true;
+                nativeFallbackReason = NativeOboeDryMonitor.IsInvalid
+                    ? NativeOboeDryMonitor.InvalidReason
+                    : "Native Oboe is unavailable on this build.";
+                ResetDistanceTrackingState(false);
+                ApplyEffectiveMonitorGain();
+                spatialVoiceEnabled = true;
+                EnsureSignalChain();
                 return false;
             }
 
-            if (NativeOboeDryMonitor.TryStart(EffectiveMonitorVolume, !monitorOutputEnabled, out var error))
+            ResetDistanceTrackingState(true);
+            var parameters = BuildNativeParameters();
+            if (NativeOboeDryMonitor.TryStart(parameters, out var error))
             {
                 if (monitorSource != null)
                 {
@@ -750,16 +795,25 @@ namespace TsukiVox.AudioPrototype
                 }
 
                 isMonitoring = true;
-                activeBackend = NativeAudioBackend.NativeOboeDryMonitor;
-                backendNote = "Native Oboe Dry backend. Unity reverb and echo are bypassed.";
+                activeBackend = NativeAudioBackend.NativeOboeLowLatency;
+                nativeFallbackActive = false;
+                ResetDistanceTrackingState(true);
+                nativeFallbackReason = string.Empty;
+                backendNote = "Oboe FullDuplex backend with native HPF, compression, early reflections and limiter.";
                 estimatedMicrophoneLagMs = 0;
-                SetStatus("Native Oboe dry monitoring. Use Unity backend for audible KTV reverb.");
+                SetStatus("Low-latency monitoring is active; native audio bypasses Unity spatial routing.");
                 RefreshUi();
                 return true;
             }
 
-            backendNote = $"Native Oboe failed: {error}";
-            SetStatus($"{backendNote} Falling back to Unity microphone.");
+            nativeFallbackActive = true;
+            nativeFallbackReason = string.IsNullOrWhiteSpace(error) ? "Native backend failed to start." : error;
+            ResetDistanceTrackingState(false);
+            ApplyEffectiveMonitorGain();
+            spatialVoiceEnabled = true;
+            EnsureSignalChain();
+            backendNote = $"Native Oboe failed: {nativeFallbackReason}";
+            SetStatus($"Low-latency audio failed; using spatial speakers: {nativeFallbackReason}");
             return false;
         }
 
@@ -780,6 +834,7 @@ namespace TsukiVox.AudioPrototype
         private void ApplyCurrentEffectSettings()
         {
             ConfigureVocalProcessor();
+            SyncNativeParameters();
 
             var filtersEnabled = ambienceAmount > 0.001f || echoAmount > 0.001f || dynamicsAmount > 0.001f;
             highPassFilter.enabled = filtersEnabled;
@@ -840,15 +895,15 @@ namespace TsukiVox.AudioPrototype
             monitorOutputEnabled = enabled;
             if (monitorSource == null)
             {
-                NativeOboeDryMonitor.SetMuted(!monitorOutputEnabled);
+                SyncNativeParameters();
                 SetStatus(enabled ? "Monitor output enabled." : "Monitor output muted.");
                 return;
             }
 
             monitorSource.mute = !enabled;
-            if (activeBackend == NativeAudioBackend.NativeOboeDryMonitor)
+            if (activeBackend == NativeAudioBackend.NativeOboeLowLatency)
             {
-                NativeOboeDryMonitor.SetMuted(!enabled);
+                SyncNativeParameters();
             }
 
             SetStatus(enabled ? "Monitor output enabled." : "Monitor output muted.");
@@ -856,29 +911,52 @@ namespace TsukiVox.AudioPrototype
 
         private void ApplyNativePreference(bool enabled)
         {
-            if (enabled && spatialVoiceEnabled)
-            {
-                preferNativeOboeBackend = false;
-                nativeToggle?.SetIsOnWithoutNotify(false);
-                backendNote = "Native Oboe is unavailable while wall-speaker voice positioning is enabled.";
-                SetStatus("Spatial voice monitoring requires the Unity microphone backend.");
-                RefreshUi();
-                return;
-            }
+            ConfigureMonitorMode(enabled ? MonitorMode.OboeLowLatency : MonitorMode.UnitySpatialSpeakers, true);
+        }
 
-            preferNativeOboeBackend = enabled;
+        private void ConfigureMonitorMode(MonitorMode mode, bool restartIfRunning)
+        {
+            selectedMonitorMode = mode;
+            preferNativeOboeBackend = mode == MonitorMode.OboeLowLatency;
+            nativeFallbackActive = false;
+            nativeFallbackReason = string.Empty;
+            spatialVoiceEnabled = mode == MonitorMode.UnitySpatialSpeakers;
+            ResetDistanceTrackingState(mode == MonitorMode.OboeLowLatency);
+            ApplyEffectiveMonitorGain();
             nativeToggle?.SetIsOnWithoutNotify(preferNativeOboeBackend);
+            EnsureSignalChain();
 
-            if (!isMonitoring)
+            if (!isMonitoring || !restartIfRunning)
             {
-                SetStatus(enabled
-                    ? "Native Oboe selected: dry, lowest-latency AB path without Unity effects."
-                    : "Unity microphone selected: KTV preset effects are active.");
+                SetStatus(mode == MonitorMode.OboeLowLatency
+                    ? "Low latency selected; native effects remain available without wall positioning."
+                    : "Spatial speakers selected; voice is positioned at the room speakers.");
                 return;
             }
 
             StopMonitoring();
             StartMonitoring();
+        }
+
+        private TsukiVoxNativeParameters BuildNativeParameters()
+        {
+            return NativeOboeDryMonitor.CreateParameters(
+                MonitorPreGain,
+                Mathf.Lerp(1f, 7.2f, dynamicsAmount),
+                distanceMonitorGain,
+                safetyMonitorGain,
+                ambienceAmount,
+                echoAmount,
+                dynamicsAmount,
+                !monitorOutputEnabled);
+        }
+
+        private void SyncNativeParameters()
+        {
+            if (activeBackend == NativeAudioBackend.NativeOboeLowLatency)
+            {
+                NativeOboeDryMonitor.TrySetParameters(BuildNativeParameters());
+            }
         }
 
         private void ApplySafetyState(bool enabled)
@@ -912,19 +990,28 @@ namespace TsukiVox.AudioPrototype
                     {
                         microphoneSurfaceClearance = clearance;
                         isMicrophoneDistanceTracked = true;
+                        hasValidDistanceTracking = true;
+                        lastValidDistanceTrackingAt = Time.unscaledTime;
                         targetGain = CalculateDistanceMonitorGain(
                             clearance,
                             distanceFullGainClearance,
                             distanceCutoffClearance);
                     }
+                }
+
+                if (!isMicrophoneDistanceTracked)
+                {
+                    if (UsesLowLatencyDistanceFailSafe)
+                    {
+                        var trackingAge = Time.unscaledTime - lastValidDistanceTrackingAt;
+                        targetGain = hasValidDistanceTracking && trackingAge <= DistanceTrackingHoldSeconds
+                            ? distanceMonitorGain
+                            : 1f;
+                    }
                     else
                     {
                         targetGain = 0f;
                     }
-                }
-                else
-                {
-                    targetGain = 0f;
                 }
             }
 
@@ -941,6 +1028,19 @@ namespace TsukiVox.AudioPrototype
             {
                 distanceMonitorGain = 1f;
             }
+        }
+
+        private bool UsesLowLatencyDistanceFailSafe =>
+            activeBackend == NativeAudioBackend.NativeOboeLowLatency && !nativeFallbackActive;
+
+        private void ResetDistanceTrackingState(bool useLowLatencyFailSafe)
+        {
+            isMicrophoneDistanceTracked = false;
+            microphoneSurfaceClearance = float.PositiveInfinity;
+            hasValidDistanceTracking = false;
+            lastValidDistanceTrackingAt = float.NegativeInfinity;
+            distanceMonitorGain = !distanceMonitoringEnabled || useLowLatencyFailSafe ? 1f : 0f;
+            appliedMonitorGain = -1f;
         }
 
         public static float CalculateDistanceMonitorGain(
@@ -976,10 +1076,7 @@ namespace TsukiVox.AudioPrototype
                 monitorSource.volume = Mathf.Clamp01(distanceMonitorGain * safetyMonitorGain);
             }
 
-            if (activeBackend == NativeAudioBackend.NativeOboeDryMonitor)
-            {
-                NativeOboeDryMonitor.SetGain(effectiveGain);
-            }
+            SyncNativeParameters();
         }
 
         private void LoadAudioPreferences()
@@ -1066,7 +1163,7 @@ namespace TsukiVox.AudioPrototype
                     0.22f);
             }
 
-            if (activeBackend == NativeAudioBackend.NativeOboeDryMonitor)
+            if (activeBackend == NativeAudioBackend.NativeOboeLowLatency)
             {
                 var outputLevel = GetNativeOutputLevel();
                 safetyOutputLevel = Mathf.Lerp(safetyOutputLevel, outputLevel, 0.22f);
@@ -1097,10 +1194,15 @@ namespace TsukiVox.AudioPrototype
 
         private void UpdateEstimatedLag()
         {
-            if (activeBackend == NativeAudioBackend.NativeOboeDryMonitor)
+            if (activeBackend == NativeAudioBackend.NativeOboeLowLatency)
             {
                 estimatedMicrophoneLagMs = 0;
-                NativeOboeDryMonitor.TryGetStats(out nativeStats);
+                if (!NativeOboeDryMonitor.TryGetStats(out nativeStats) || !nativeStats.IsRunning)
+                {
+                    BeginNativeFallback(nativeStats.lastStreamError != 0
+                        ? $"stream error {nativeStats.lastStreamError}"
+                        : NativeOboeDryMonitor.GetLastError());
+                }
                 return;
             }
 
@@ -1121,6 +1223,26 @@ namespace TsukiVox.AudioPrototype
 
             estimatedMicrophoneLagMs = lagSamples * 1000.0 / microphoneClip.frequency;
             lastReadPosition = readPosition;
+        }
+
+
+        private void BeginNativeFallback(string reason)
+        {
+            if (activeBackend != NativeAudioBackend.NativeOboeLowLatency)
+            {
+                return;
+            }
+
+            nativeFallbackActive = true;
+            nativeFallbackReason = string.IsNullOrWhiteSpace(reason) ? "Native stream stopped unexpectedly." : reason;
+            StopMonitoring();
+            ResetDistanceTrackingState(false);
+            ApplyEffectiveMonitorGain();
+            selectedMonitorMode = MonitorMode.OboeLowLatency;
+            preferNativeOboeBackend = true;
+            spatialVoiceEnabled = true;
+            StartMonitoring();
+            SetStatus($"Low-latency audio failed; using spatial speakers: {nativeFallbackReason}");
         }
 
         private void ApplySafetyLimiter()
@@ -1206,8 +1328,8 @@ namespace TsukiVox.AudioPrototype
             metricsBuilder.Append(" Hz  Device ");
             metricsBuilder.Append(string.IsNullOrEmpty(activeDevice) ? "none" : activeDevice);
             metricsBuilder.Append("\nProcessor ");
-            metricsBuilder.Append(activeBackend == NativeAudioBackend.NativeOboeDryMonitor
-                ? "native dry soft limiter"
+            metricsBuilder.Append(activeBackend == NativeAudioBackend.NativeOboeLowLatency
+                ? "native stereo KTV DSP + limiter"
                 : (vocalProcessorEnabled ? "gate/comp/limiter + reverb/echo" : "bypassed"));
             metricsBuilder.Append("\nDistance monitor ");
             metricsBuilder.Append(distanceMonitoringEnabled ? "enabled" : "disabled");
@@ -1222,7 +1344,7 @@ namespace TsukiVox.AudioPrototype
                 metricsBuilder.Append(" cm");
             }
             metricsBuilder.Append("\nBackend ");
-            metricsBuilder.Append(activeBackend == NativeAudioBackend.NativeOboeDryMonitor ? "Native Oboe Dry" : "Unity Microphone");
+            metricsBuilder.Append(ActiveBackendName);
             metricsBuilder.Append("\nVoice spatial ");
             metricsBuilder.Append(spatialVoiceEnabled ? "wall speakers" : "disabled");
             if (monitorSource != null)
@@ -1245,12 +1367,8 @@ namespace TsukiVox.AudioPrototype
                 metricsBuilder.Append(" m  room send ");
                 metricsBuilder.Append(monitorSource.reverbZoneMix.ToString("0.00"));
             }
-            if (spatialVoiceEnabled)
-            {
-                metricsBuilder.Append("\nNative Oboe disabled: no Unity spatial routing");
-            }
 
-            if (activeBackend == NativeAudioBackend.NativeOboeDryMonitor)
+            if (activeBackend == NativeAudioBackend.NativeOboeLowLatency)
             {
                 AppendNativeMetrics();
             }
@@ -1272,7 +1390,11 @@ namespace TsukiVox.AudioPrototype
         {
             NativeOboeDryMonitor.TryGetStats(out nativeStats);
             metricsBuilder.Append("  ");
-            metricsBuilder.Append(nativeStats.IsExclusive ? "Exclusive" : "Shared");
+            metricsBuilder.Append(nativeStats.AudioApiName);
+            metricsBuilder.Append(" in/out ");
+            metricsBuilder.Append(nativeStats.IsInputExclusive ? "Exclusive" : "Shared");
+            metricsBuilder.Append("/");
+            metricsBuilder.Append(nativeStats.IsOutputExclusive ? "Exclusive" : "Shared");
             metricsBuilder.Append("\nBurst ");
             metricsBuilder.Append(nativeStats.framesPerBurst);
             metricsBuilder.Append("  Buffers in/out ");
@@ -1285,19 +1407,28 @@ namespace TsukiVox.AudioPrototype
             metricsBuilder.Append(nativeStats.outputXRunCount);
             metricsBuilder.Append("\nCallbacks ");
             metricsBuilder.Append(nativeStats.callbackCount);
+            metricsBuilder.Append(" short/mismatch ");
+            metricsBuilder.Append(nativeStats.shortReadCount);
+            metricsBuilder.Append("/");
+            metricsBuilder.Append(nativeStats.frameMismatchCount);
+            metricsBuilder.Append(" reduction comp/limit ");
+            metricsBuilder.Append(nativeStats.compressorReductionDb.ToString("0.0"));
+            metricsBuilder.Append("/");
+            metricsBuilder.Append(nativeStats.limiterReductionDb.ToString("0.0"));
+            metricsBuilder.Append(" dB");
         }
 
         private float GetNativeInputLevel()
         {
-            return activeBackend == NativeAudioBackend.NativeOboeDryMonitor &&
+            return activeBackend == NativeAudioBackend.NativeOboeLowLatency &&
                    NativeOboeDryMonitor.TryGetStats(out nativeStats)
-                ? Mathf.Clamp01(nativeStats.inputLevel)
+                ? Mathf.Clamp01(nativeStats.preDspLevel)
                 : 0f;
         }
 
         private float GetNativeOutputLevel()
         {
-            return activeBackend == NativeAudioBackend.NativeOboeDryMonitor &&
+            return activeBackend == NativeAudioBackend.NativeOboeLowLatency &&
                    NativeOboeDryMonitor.TryGetStats(out nativeStats)
                 ? Mathf.Clamp01(nativeStats.outputLevel)
                 : 0f;

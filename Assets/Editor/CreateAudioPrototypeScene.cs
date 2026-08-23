@@ -185,10 +185,12 @@ namespace TsukiVox.AudioPrototype.Editor
             so.FindProperty("previousPresetButton").objectReferenceValue = previousPreset;
             so.FindProperty("nextPresetButton").objectReferenceValue = nextPreset;
             so.FindProperty("monitorToggle").objectReferenceValue = monitorToggle;
-            so.FindProperty("nativeToggle").objectReferenceValue = nativeToggle;
+            so.FindProperty("nativeToggle").objectReferenceValue = null;
             so.FindProperty("safetyToggle").objectReferenceValue = safetyToggle;
             so.FindProperty("monitorVolume").floatValue = 0.7f;
             so.FindProperty("preferNativeOboeBackend").boolValue = false;
+            so.FindProperty("selectedMonitorMode").enumValueIndex = 0;
+            nativeToggle.gameObject.SetActive(false);
             so.ApplyModifiedPropertiesWithoutUndo();
 
             var playlistSo = new SerializedObject(playlistPrototype);
