@@ -25,7 +25,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 32;
+        public const int CurrentDesignRevision = 33;
         public const string ThemePrefsKey = "TsukiVox.RoomTheme";
         public const string StarsPrefsKey = "TsukiVox.CeilingStarsEnabled";
         public const string AuroraPrefsKey = "TsukiVox.CeilingAuroraEnabled";
@@ -1134,45 +1134,16 @@ namespace TsukiVox.AudioPrototype
 
         private void BuildPerformanceArea(RoomPalette palette)
         {
-            const float stageWidth = 1.72f;
-            const float stageDepth = 1.08f;
-            const float stageHeight = 0.09f;
-            const float stageZ = 3.42f;
             const float runnerWidth = 1.12f;
             const float runnerDepth = 1.14f;
             const float runnerZ = 2.48f;
 
-            CreateEllipticalCylinder(
-                geometryRoot,
-                "stage plinth",
-                new Vector2(stageWidth + 0.16f, stageDepth + 0.16f),
-                0.035f,
-                new Vector3(0f, 0.0175f, stageZ),
-                palette.SofaShadow);
-            CreateEllipticalCylinder(
-                feedbackRoot,
-                "stage halo",
-                new Vector2(stageWidth + 0.12f, stageDepth + 0.12f),
-                0.026f,
-                new Vector3(0f, 0.041f, stageZ),
-                palette.Warm,
-                false,
-                false,
-                false);
-            CreateEllipticalCylinder(
-                geometryRoot,
-                "stage brass edge",
-                new Vector2(stageWidth + 0.04f, stageDepth + 0.04f),
-                0.05f,
-                new Vector3(0f, 0.06f, stageZ),
-                palette.Trim);
-            CreateEllipticalCylinder(
-                geometryRoot,
-                "stage deck",
-                new Vector2(stageWidth - 0.08f, stageDepth - 0.08f),
-                stageHeight - 0.035f,
-                new Vector3(0f, 0.0775f, stageZ),
-                palette.Stage);
+            // A low-profile three-dimensional interpretation of the TsukiVox
+            // crescent / microphone / waveform mark replaces the old oval stage.
+            // It sits directly on the floor between the coffee table and screen,
+            // with the top of the lettering facing the screen so it reads naturally
+            // from the sofa and does not create a trip-height obstruction in VR.
+            CreateFloorWordmark(palette, new Vector3(0f, 0.024f, 3.42f));
 
             CreateBeveledBox(
                 geometryRoot,
@@ -1209,6 +1180,168 @@ namespace TsukiVox.AudioPrototype
                 new Vector3(runnerWidth * 0.5f + 0.01f, 0.018f, runnerZ),
                 palette.Trim,
                 0.008f);
+        }
+
+        private void CreateFloorWordmark(RoomPalette palette, Vector3 localPosition)
+        {
+            const float depth = 0.04f;
+            const float stroke = 0.029f;
+            const float halfHeight = 0.14f;
+
+            var wordmarkRoot = new GameObject("TsukiVox floor wordmark").transform;
+            wordmarkRoot.SetParent(geometryRoot, false);
+            wordmarkRoot.localPosition = localPosition;
+            wordmarkRoot.localRotation = Quaternion.Euler(90f, 0f, 0f);
+
+            // The long signal line visually ties the waveform bars into the T and X,
+            // matching the generated brand study without requiring a texture asset.
+            CreateWordmarkStroke(wordmarkRoot, "left signal", new Vector2(-0.705f, 0f), new Vector2(-0.555f, 0f), stroke * 0.52f, depth, palette.Accent);
+            CreateWordmarkWaveform(wordmarkRoot, "left waveform", -0.672f, -1f, depth, palette.Accent);
+
+            CreateWordmarkStroke(wordmarkRoot, "T cap", new Vector2(-0.56f, halfHeight), new Vector2(-0.445f, halfHeight), stroke, depth, palette.FocalTrim);
+            CreateWordmarkStroke(wordmarkRoot, "T stem", new Vector2(-0.505f, halfHeight), new Vector2(-0.52f, -halfHeight), stroke, depth, palette.FocalTrim);
+
+            CreateWordmarkStroke(wordmarkRoot, "S top", new Vector2(-0.415f, halfHeight), new Vector2(-0.325f, halfHeight), stroke, depth, palette.FocalTrim);
+            CreateWordmarkStroke(wordmarkRoot, "S upper", new Vector2(-0.415f, halfHeight), new Vector2(-0.425f, 0.035f), stroke, depth, palette.FocalTrim);
+            CreateWordmarkStroke(wordmarkRoot, "S middle", new Vector2(-0.425f, 0.035f), new Vector2(-0.335f, -0.015f), stroke, depth, palette.FocalTrim);
+            CreateWordmarkStroke(wordmarkRoot, "S lower", new Vector2(-0.335f, -0.015f), new Vector2(-0.325f, -halfHeight), stroke, depth, palette.FocalTrim);
+            CreateWordmarkStroke(wordmarkRoot, "S base", new Vector2(-0.325f, -halfHeight), new Vector2(-0.42f, -halfHeight), stroke, depth, palette.FocalTrim);
+
+            // The crescent takes the place of the U, retaining the signature lunar
+            // negative space from the approved 2D logo.
+            CreateCrescent(
+                wordmarkRoot,
+                "crescent U",
+                0.145f,
+                0.13f,
+                0.07f,
+                depth,
+                new Vector3(-0.235f, 0f, 0f),
+                1f,
+                palette.Accent,
+                false,
+                false);
+
+            CreateWordmarkStroke(wordmarkRoot, "K stem", new Vector2(-0.105f, -halfHeight), new Vector2(-0.09f, halfHeight), stroke, depth, palette.FocalTrim);
+            CreateWordmarkStroke(wordmarkRoot, "K upper", new Vector2(-0.097f, 0f), new Vector2(-0.025f, halfHeight), stroke, depth, palette.FocalTrim);
+            CreateWordmarkStroke(wordmarkRoot, "K lower", new Vector2(-0.097f, 0f), new Vector2(-0.01f, -halfHeight), stroke, depth, palette.FocalTrim);
+
+            CreateWordmarkStroke(wordmarkRoot, "I stem", new Vector2(0.025f, -halfHeight), new Vector2(0.04f, 0.105f), stroke, depth, palette.FocalTrim);
+            CreateWordmarkStar(wordmarkRoot, "I star", new Vector2(0.045f, 0.155f), depth, palette.Accent);
+
+            CreateWordmarkStroke(wordmarkRoot, "V left", new Vector2(0.075f, halfHeight), new Vector2(0.145f, -halfHeight), stroke, depth, palette.FocalTrim);
+            CreateWordmarkStroke(wordmarkRoot, "V right", new Vector2(0.145f, -halfHeight), new Vector2(0.225f, halfHeight), stroke, depth, palette.FocalTrim);
+
+            CreateWordmarkRing(wordmarkRoot, "microphone O", new Vector2(0.315f, 0f), new Vector2(0.074f, halfHeight), stroke * 0.86f, depth, palette.FocalTrim);
+            CreateWordmarkMicrophone(wordmarkRoot, new Vector2(0.315f, 0f), depth, palette.Accent);
+
+            CreateWordmarkStroke(wordmarkRoot, "X rising", new Vector2(0.405f, -halfHeight), new Vector2(0.515f, halfHeight), stroke, depth, palette.FocalTrim);
+            CreateWordmarkStroke(wordmarkRoot, "X falling", new Vector2(0.41f, halfHeight), new Vector2(0.525f, -halfHeight), stroke, depth, palette.FocalTrim);
+
+            CreateWordmarkStroke(wordmarkRoot, "right signal", new Vector2(0.51f, 0f), new Vector2(0.705f, 0f), stroke * 0.52f, depth, palette.Accent);
+            CreateWordmarkWaveform(wordmarkRoot, "right waveform", 0.672f, 1f, depth, palette.Accent);
+        }
+
+        private static void CreateWordmarkWaveform(
+            Transform parent,
+            string objectName,
+            float centerX,
+            float direction,
+            float depth,
+            Material material)
+        {
+            var heights = new[] { 0.036f, 0.08f, 0.125f, 0.08f };
+            for (var index = 0; index < heights.Length; index += 1)
+            {
+                var x = centerX + direction * (index - 1.5f) * 0.024f;
+                CreateWordmarkStroke(
+                    parent,
+                    $"{objectName} bar {index}",
+                    new Vector2(x, -heights[index] * 0.5f),
+                    new Vector2(x, heights[index] * 0.5f),
+                    0.014f,
+                    depth,
+                    material);
+            }
+        }
+
+        private static void CreateWordmarkRing(
+            Transform parent,
+            string objectName,
+            Vector2 center,
+            Vector2 radius,
+            float thickness,
+            float depth,
+            Material material)
+        {
+            const int segmentCount = 18;
+            for (var index = 0; index < segmentCount; index += 1)
+            {
+                var startAngle = index * Mathf.PI * 2f / segmentCount;
+                var endAngle = (index + 1) * Mathf.PI * 2f / segmentCount;
+                var start = center + new Vector2(Mathf.Cos(startAngle) * radius.x, Mathf.Sin(startAngle) * radius.y);
+                var end = center + new Vector2(Mathf.Cos(endAngle) * radius.x, Mathf.Sin(endAngle) * radius.y);
+                CreateWordmarkStroke(parent, $"{objectName} segment {index}", start, end, thickness, depth, material);
+            }
+        }
+
+        private static void CreateWordmarkMicrophone(
+            Transform parent,
+            Vector2 center,
+            float depth,
+            Material material)
+        {
+            CreateWordmarkStroke(parent, "microphone capsule", center + new Vector2(0f, -0.035f), center + new Vector2(0f, 0.058f), 0.036f, depth, material);
+            CreateWordmarkStroke(parent, "microphone stem", center + new Vector2(0f, -0.105f), center + new Vector2(0f, -0.035f), 0.014f, depth, material);
+            CreateWordmarkStroke(parent, "microphone foot", center + new Vector2(-0.03f, -0.105f), center + new Vector2(0.03f, -0.105f), 0.012f, depth, material);
+
+            for (var index = 0; index < 3; index += 1)
+            {
+                var y = 0.038f - index * 0.025f;
+                CreateWordmarkStroke(
+                    parent,
+                    $"microphone grille {index}",
+                    center + new Vector2(-0.025f, y),
+                    center + new Vector2(0.025f, y),
+                    0.008f,
+                    depth + 0.003f,
+                    material);
+            }
+        }
+
+        private static void CreateWordmarkStar(
+            Transform parent,
+            string objectName,
+            Vector2 center,
+            float depth,
+            Material material)
+        {
+            CreateWordmarkStroke(parent, $"{objectName} vertical", center + new Vector2(0f, -0.026f), center + new Vector2(0f, 0.026f), 0.012f, depth, material);
+            CreateWordmarkStroke(parent, $"{objectName} horizontal", center + new Vector2(-0.026f, 0f), center + new Vector2(0.026f, 0f), 0.012f, depth, material);
+        }
+
+        private static GameObject CreateWordmarkStroke(
+            Transform parent,
+            string objectName,
+            Vector2 start,
+            Vector2 end,
+            float thickness,
+            float depth,
+            Material material)
+        {
+            var delta = end - start;
+            var midpoint = (start + end) * 0.5f;
+            var stroke = CreateBeveledBox(
+                parent,
+                objectName,
+                new Vector3(delta.magnitude, thickness, depth),
+                new Vector3(midpoint.x, midpoint.y, 0f),
+                material,
+                Mathf.Min(0.006f, Mathf.Min(thickness, depth) * 0.22f),
+                false,
+                false);
+            stroke.transform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
+            return stroke;
         }
 
         private void BuildCornerDressing(RoomPalette palette)
