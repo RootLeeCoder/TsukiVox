@@ -46,6 +46,7 @@ namespace TsukiVox.AudioPrototype.Editor
             ValidateSplitTruss(stageLighting);
             stageLighting.ApplyPreset(StageLightingPreset.Live);
             appShell.ConfigureSceneReferences();
+            ValidateThemeLightingCoupling(room, stageLighting);
             var coffeeTable = FindRequiredDescendant(room.transform, "coffee table");
             var tabletPivot = FindRequiredDescendant(coffeeTable, QuestTabletTiltController.TabletPivotName);
             var tabletBody = FindRequiredDescendant(tabletPivot, "tablet body");
@@ -856,6 +857,23 @@ namespace TsukiVox.AudioPrototype.Editor
                 switchController.LightingEnabled != initialState)
             {
                 throw new InvalidOperationException("Stage-lighting controls did not return to a synchronized state.");
+            }
+        }
+
+        private static void ValidateThemeLightingCoupling(
+            QuestKtvRoomPrototype room,
+            QuestStageLightingPrototype stageLighting)
+        {
+            room.ApplyTheme(RoomTheme.Bright);
+            if (stageLighting.LightingEnabled)
+            {
+                throw new InvalidOperationException("Daylight theme did not turn off the stage lighting.");
+            }
+
+            room.ApplyTheme(RoomTheme.Dark);
+            if (!stageLighting.LightingEnabled)
+            {
+                throw new InvalidOperationException("Moonlight theme did not turn on the stage lighting.");
             }
         }
 

@@ -719,6 +719,7 @@ namespace TsukiVox.AudioPrototype
 
         private void HandleRoomThemeChanged(RoomTheme theme)
         {
+            SetLightingEnabled(theme == RoomTheme.Dark);
             ApplyHousingTheme();
         }
 
