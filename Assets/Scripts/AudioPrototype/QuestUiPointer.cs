@@ -1,9 +1,9 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
-using UnityEngine.InputSystem.UI;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
 using UnityEngine.UI;
@@ -88,8 +88,7 @@ namespace TsukiVox.AudioPrototype
 
             primary.enabled = true;
             primary.sendNavigationEvents = false;
-            RemoveStandaloneInputModules(primary.gameObject);
-            EnsureSingleInputSystemModule(primary.gameObject);
+            DestroyInputModules(primary.gameObject);
 
             for (var index = 0; index < eventSystems.Length; index += 1)
             {
@@ -319,7 +318,10 @@ namespace TsukiVox.AudioPrototype
                 var selectionTarget = pressedObject != null ? pressedObject : currentTarget;
                 if (!QuestAndroidKeyboardInput.IsKeyboardTarget(selectionTarget))
                 {
-                    EventSystem.current.SetSelectedGameObject(selectionTarget, pointerEventData);
+                    var inputField = selectionTarget.GetComponentInParent<TMP_InputField>();
+                    EventSystem.current.SetSelectedGameObject(
+                        inputField != null ? inputField.gameObject : null,
+                        pointerEventData);
                 }
             }
         }
@@ -972,33 +974,6 @@ namespace TsukiVox.AudioPrototype
             return eventSystems.Length > 0 ? eventSystems[0] : null;
         }
 
-        private static void EnsureSingleInputSystemModule(GameObject eventSystemObject)
-        {
-            var modules = eventSystemObject.GetComponents<InputSystemUIInputModule>();
-            if (modules.Length == 0)
-            {
-                eventSystemObject.AddComponent<InputSystemUIInputModule>();
-                return;
-            }
-
-            modules[0].enabled = true;
-            for (var index = 1; index < modules.Length; index += 1)
-            {
-                modules[index].enabled = false;
-                DestroyForCurrentMode(modules[index]);
-            }
-        }
-
-        private static void RemoveStandaloneInputModules(GameObject eventSystemObject)
-        {
-            var modules = eventSystemObject.GetComponents<StandaloneInputModule>();
-            for (var index = 0; index < modules.Length; index += 1)
-            {
-                modules[index].enabled = false;
-                DestroyForCurrentMode(modules[index]);
-            }
-        }
-
         private static void DisableInputModules(GameObject eventSystemObject)
         {
             var modules = eventSystemObject.GetComponents<BaseInputModule>();
@@ -1013,6 +988,7 @@ namespace TsukiVox.AudioPrototype
             var modules = eventSystemObject.GetComponents<BaseInputModule>();
             for (var index = 0; index < modules.Length; index += 1)
             {
+                modules[index].enabled = false;
                 DestroyForCurrentMode(modules[index]);
             }
         }

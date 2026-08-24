@@ -172,7 +172,6 @@ namespace TsukiVox.AudioPrototype
         private QuestUiSurface queueDrawerButtonSurface;
         private Button songSearchPageButton;
         private Button settingsPageButton;
-        private Button stageLightingPageButton;
         private Button replayButton;
         private Button previousButton;
         private Button playPauseButton;
@@ -582,11 +581,9 @@ namespace TsukiVox.AudioPrototype
             SetChildActive(homePage, "Connection", false);
             SetChildActive(homePage, "Header Hover Label", false);
 
-            songSearchPageButton = CreateLabeledIconButton(homePage, "Open Song Search", "搜索点歌", QuestUiIconKind.Search, new Vector2(24f, 232f), new Vector2(128f, 52f), Accent, AccentInk, AccentInk, out _);
-            stageLightingPageButton = CreateLabeledIconButton(homePage, "Open Stage Lighting", "舞台灯光", QuestUiIconKind.Spotlight, new Vector2(160f, 232f), new Vector2(128f, 52f), Surface, Accent, TextPrimary, out _);
+            songSearchPageButton = CreateLabeledIconButton(homePage, "Open Song Search", "搜索点歌", QuestUiIconKind.Search, new Vector2(160f, 232f), new Vector2(128f, 52f), Accent, AccentInk, AccentInk, out _);
             settingsPageButton = CreateLabeledIconButton(homePage, "Open Settings", "设置", QuestUiIconKind.Settings, new Vector2(432f, 232f), new Vector2(128f, 52f), Surface, TextPrimary, TextPrimary, out _);
             ConfigureHover(songSearchPageButton, null, string.Empty);
-            ConfigureHover(stageLightingPageButton, null, string.Empty);
             ConfigureHover(settingsPageButton, null, string.Empty);
 
             songMetaText = CreateText(homePage, "Song Meta", "播放队列为空", 18, FontStyle.Bold, new Vector2(-270f, 150f), new Vector2(450f, 32f), TextAnchor.MiddleLeft, Accent);
@@ -623,11 +620,11 @@ namespace TsukiVox.AudioPrototype
             homeVideoVolumeSlider = CreateSlider(homePage, "Home Video Volume", new Vector2(-260f, -225f), new Vector2(260f, 46f), true, Accent, AccentStrong);
             homeVideoVolumeValueText = CreateText(homePage, "Video Volume Value", "75%", 16, FontStyle.Bold, new Vector2(-88f, -225f), new Vector2(64f, 32f), TextAnchor.MiddleRight, AccentStrong);
 
-            CreateDivider(homePage, "Mixer Channel Divider", new Vector2(-34f, -225f), new Vector2(1f, 42f));
-            homeVoiceVolumeIcon = EnsureIcon(homePage, "Voice Volume Icon", QuestUiIconKind.Microphone, new Vector2(8f, -225f), new Vector2(28f, 28f), Warm);
-            CreateText(homePage, "Voice Volume Label", "人声", 16, FontStyle.Bold, new Vector2(58f, -225f), new Vector2(68f, 32f), TextAnchor.MiddleLeft, TextPrimary);
-            homeVoiceVolumeSlider = CreateSlider(homePage, "Home Voice Volume", new Vector2(250f, -225f), new Vector2(280f, 46f), true, Warm, Warm);
-            homeVoiceVolumeValueText = CreateText(homePage, "Voice Volume Value", "70%", 16, FontStyle.Bold, new Vector2(448f, -225f), new Vector2(80f, 32f), TextAnchor.MiddleRight, Warm);
+            CreateDivider(homePage, "Mixer Channel Divider", new Vector2(0f, -225f), new Vector2(1f, 42f));
+            homeVoiceVolumeIcon = EnsureIcon(homePage, "Voice Volume Icon", QuestUiIconKind.Microphone, new Vector2(70f, -225f), new Vector2(28f, 28f), Accent);
+            CreateText(homePage, "Voice Volume Label", "人声", 16, FontStyle.Bold, new Vector2(120f, -225f), new Vector2(68f, 32f), TextAnchor.MiddleLeft, TextPrimary);
+            homeVoiceVolumeSlider = CreateSlider(homePage, "Home Voice Volume", new Vector2(284f, -225f), new Vector2(260f, 46f), true, Accent, AccentStrong);
+            homeVoiceVolumeValueText = CreateText(homePage, "Voice Volume Value", "70%", 16, FontStyle.Bold, new Vector2(456f, -225f), new Vector2(64f, 32f), TextAnchor.MiddleRight, AccentStrong);
             SetChildActive(homePage, "Open Voice Settings", false);
         }
 
@@ -1728,7 +1725,6 @@ namespace TsukiVox.AudioPrototype
             WireButton(queueScrimButton, () => SetQueueDrawerVisible(false));
             WireButton(enqueueConfirmationButton, () => SetQueueDrawerVisible(true));
             WireButton(settingsPageButton, () => ShowPage(UiPage.Settings));
-            WireButton(stageLightingPageButton, () => OpenStageLightingPage(UiPage.Home));
             WireButton(voicePageButton, () => ShowPage(UiPage.Voice));
             WireButton(voiceBackButton, () => ShowPage(UiPage.Settings));
             WireButton(songSearchBackButton, () => ShowPage(UiPage.Home));
@@ -2016,8 +2012,8 @@ namespace TsukiVox.AudioPrototype
             microphoneIcon.color = micLive ? Warm : TextSecondary;
             homeVoiceVolumeIcon.color = audioPrototype != null && audioPrototype.IsSafetyReducingGain
                 ? Danger
-                : micLive ? Warm : TextSecondary;
-            homeVoiceVolumeValueText.color = micLive ? Warm : TextSecondary;
+                : hasVoiceAudio ? Accent : TextSecondary;
+            homeVoiceVolumeValueText.color = hasVoiceAudio ? AccentStrong : TextSecondary;
 
             var inputLevel = audioPrototype?.InputLevel ?? 0f;
             for (var index = 0; index < waveBars.Length; index += 1)
