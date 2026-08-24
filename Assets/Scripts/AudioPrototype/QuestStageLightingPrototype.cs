@@ -49,7 +49,7 @@ namespace TsukiVox.AudioPrototype
         private const float DefaultBeamWidth = 0.78f;
         private const float DefaultMotionRange = 0.46f;
         private const string BeamShaderName = "TsukiVox/Quest Stage Beam";
-        private const float StageFloorHeight = 0.13f;
+        private const float PoolSurfaceOffset = 0.003f;
         private const float TrussDepth = 2.35f;
         private const float TrussWingCenter = 1.875f;
         private const float TrussWingLength = 1.55f;
@@ -66,12 +66,12 @@ namespace TsukiVox.AudioPrototype
 
         private static readonly Vector3[] BaseTargets =
         {
-            new Vector3(-0.72f, StageFloorHeight, 3.25f),
-            new Vector3(0.28f, StageFloorHeight, 3.12f),
-            new Vector3(-0.28f, StageFloorHeight, 3.68f),
-            new Vector3(0.72f, StageFloorHeight, 3.42f),
-            new Vector3(0.48f, StageFloorHeight, 3.25f),
-            new Vector3(-0.48f, StageFloorHeight, 3.55f),
+            new Vector3(-0.72f, QuestKtvRoomPrototype.FloorSurfaceHeight, 3.25f),
+            new Vector3(0.28f, QuestKtvRoomPrototype.FloorSurfaceHeight, 3.12f),
+            new Vector3(-0.28f, QuestKtvRoomPrototype.FloorSurfaceHeight, 3.68f),
+            new Vector3(0.72f, QuestKtvRoomPrototype.FloorSurfaceHeight, 3.42f),
+            new Vector3(0.48f, QuestKtvRoomPrototype.FloorSurfaceHeight, 3.25f),
+            new Vector3(-0.48f, QuestKtvRoomPrototype.FloorSurfaceHeight, 3.55f),
         };
 
         [Header("Scene References")]
@@ -606,7 +606,7 @@ namespace TsukiVox.AudioPrototype
                 var distance = Mathf.Max(0.5f, direction.magnitude - 0.14f);
                 var endRadius = Mathf.Tan(spotAngle * 0.5f * Mathf.Deg2Rad) * distance;
                 fixture.BeamRenderer.transform.localScale = new Vector3(endRadius, endRadius, distance);
-                fixture.PoolRenderer.transform.position = target + Vector3.up * (0.008f + index * 0.0007f);
+                fixture.PoolRenderer.transform.position = target + Vector3.up * PoolSurfaceOffset;
                 var poolDiameter = Mathf.Lerp(0.52f, 1.08f, beamWidth);
                 fixture.PoolRenderer.transform.localScale = new Vector3(poolDiameter, 1f, poolDiameter);
 

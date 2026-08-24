@@ -25,7 +25,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 36;
+        public const int CurrentDesignRevision = 38;
         public const string ThemePrefsKey = "TsukiVox.RoomTheme";
         public const string StarsPrefsKey = "TsukiVox.CeilingStarsEnabled";
         public const string AuroraPrefsKey = "TsukiVox.CeilingAuroraEnabled";
@@ -49,6 +49,7 @@ namespace TsukiVox.AudioPrototype
         public const float SpeakerMinDistance = 4.5f;
         public const float SpeakerMaxDistance = 12f;
         public const float SpeakerReverbZoneMix = 0.2f;
+        public const float FloorSurfaceHeight = 0f;
 
         private const string GeometryRootName = "Geometry";
         private const string FeedbackRootName = "Feedback";
@@ -68,6 +69,12 @@ namespace TsukiVox.AudioPrototype
         private const float RoomHeight = 2.9f;
         private const float BackWallZ = -1.6f;
         private const float FrontWallZ = 5f;
+        private const float FloorThickness = 0.1f;
+        private const float FloorWordmarkCarpetWidth = 4.16f;
+        private const float FloorWordmarkCarpetDepth = 1.12f;
+        private const float FloorWordmarkCarpetZ = 4.04f;
+        private const float FloorWordmarkRecessWidth = FloorWordmarkCarpetWidth + 0.04f;
+        private const float FloorWordmarkRecessDepth = FloorWordmarkCarpetDepth + 0.04f;
         private const float ScreenWallOffset = 0.11f;
         private const float LevelBarHeight = 1.9f;
         private const float LevelBarMinHeight = 0.08f;
@@ -501,18 +508,12 @@ namespace TsukiVox.AudioPrototype
             var roomCenterZ = (BackWallZ + FrontWallZ) * 0.5f;
             var roomDepth = FrontWallZ - BackWallZ;
 
-            CreateBox(geometryRoot, "floor", new Vector3(RoomWidth, 0.1f, roomDepth), new Vector3(0f, -0.05f, roomCenterZ), palette.Floor);
+            BuildInsetFloor(palette, roomCenterZ, roomDepth);
             CreateBox(geometryRoot, "ceiling", new Vector3(RoomWidth, 0.1f, roomDepth), new Vector3(0f, RoomHeight + 0.05f, roomCenterZ), palette.Ceiling);
             CreateBox(geometryRoot, "front wall", new Vector3(RoomWidth, RoomHeight + 0.2f, 0.15f), new Vector3(0f, RoomHeight * 0.5f, FrontWallZ + 0.075f), palette.Wall);
             CreateBox(geometryRoot, "back wall", new Vector3(RoomWidth, RoomHeight + 0.2f, 0.15f), new Vector3(0f, RoomHeight * 0.5f, BackWallZ - 0.075f), palette.Wall);
             CreateBox(geometryRoot, "left wall", new Vector3(0.15f, RoomHeight + 0.2f, roomDepth), new Vector3(-RoomWidth * 0.5f - 0.075f, RoomHeight * 0.5f, roomCenterZ), palette.Wall);
             CreateBox(geometryRoot, "right wall", new Vector3(0.15f, RoomHeight + 0.2f, roomDepth), new Vector3(RoomWidth * 0.5f + 0.075f, RoomHeight * 0.5f, roomCenterZ), palette.Wall);
-
-            for (var index = 0; index < 11; index += 1)
-            {
-                var x = -3f + index * 0.6f;
-                CreateBox(geometryRoot, $"floor plank groove {index}", new Vector3(0.014f, 0.008f, roomDepth - 0.12f), new Vector3(x, 0.006f, roomCenterZ), palette.FloorGroove);
-            }
 
             CreateTrimBox(geometryRoot, "floor inlay left", new Vector3(0.026f, 0.012f, roomDepth - 0.54f), new Vector3(-2.72f, 0.012f, roomCenterZ), palette.Trim, 0.005f, false, false);
             CreateTrimBox(geometryRoot, "floor inlay right", new Vector3(0.026f, 0.012f, roomDepth - 0.54f), new Vector3(2.72f, 0.012f, roomCenterZ), palette.Trim, 0.005f, false, false);
@@ -556,6 +557,80 @@ namespace TsukiVox.AudioPrototype
 
             CreateCeilingMoonFixture(palette);
             CreateCeilingSunFixture(palette);
+        }
+
+        private void BuildInsetFloor(RoomPalette palette, float roomCenterZ, float roomDepth)
+        {
+            var recessHalfWidth = FloorWordmarkRecessWidth * 0.5f;
+            var recessMinZ = FloorWordmarkCarpetZ - FloorWordmarkRecessDepth * 0.5f;
+            var recessMaxZ = FloorWordmarkCarpetZ + FloorWordmarkRecessDepth * 0.5f;
+            var rearDepth = recessMinZ - BackWallZ;
+            var frontDepth = FrontWallZ - recessMaxZ;
+            var sideWidth = (RoomWidth - FloorWordmarkRecessWidth) * 0.5f;
+            var floorCenterY = FloorSurfaceHeight - FloorThickness * 0.5f;
+
+            CreateBox(
+                geometryRoot,
+                "floor rear section",
+                new Vector3(RoomWidth, FloorThickness, rearDepth),
+                new Vector3(0f, floorCenterY, BackWallZ + rearDepth * 0.5f),
+                palette.Floor);
+            CreateBox(
+                geometryRoot,
+                "floor front section",
+                new Vector3(RoomWidth, FloorThickness, frontDepth),
+                new Vector3(0f, floorCenterY, recessMaxZ + frontDepth * 0.5f),
+                palette.Floor);
+            CreateBox(
+                geometryRoot,
+                "floor recess left section",
+                new Vector3(sideWidth, FloorThickness, FloorWordmarkRecessDepth),
+                new Vector3(-(recessHalfWidth + sideWidth * 0.5f), floorCenterY, FloorWordmarkCarpetZ),
+                palette.Floor);
+            CreateBox(
+                geometryRoot,
+                "floor recess right section",
+                new Vector3(sideWidth, FloorThickness, FloorWordmarkRecessDepth),
+                new Vector3(recessHalfWidth + sideWidth * 0.5f, floorCenterY, FloorWordmarkCarpetZ),
+                palette.Floor);
+
+            const float grooveWidth = 0.014f;
+            const float grooveHeight = 0.008f;
+            const float grooveSurfaceOffset = 0.0005f;
+            const float grooveEdgeInset = 0.06f;
+            var grooveCenterY = FloorSurfaceHeight + grooveSurfaceOffset - grooveHeight * 0.5f;
+            var grooveStartZ = BackWallZ + grooveEdgeInset;
+            var grooveEndZ = FrontWallZ - grooveEdgeInset;
+            var rearGrooveDepth = recessMinZ - grooveStartZ;
+            var frontGrooveDepth = grooveEndZ - recessMaxZ;
+
+            for (var index = 0; index < 11; index += 1)
+            {
+                var x = -3f + index * 0.6f;
+                if (Mathf.Abs(x) >= recessHalfWidth)
+                {
+                    CreateBox(
+                        geometryRoot,
+                        $"floor plank groove {index}",
+                        new Vector3(grooveWidth, grooveHeight, roomDepth - grooveEdgeInset * 2f),
+                        new Vector3(x, grooveCenterY, roomCenterZ),
+                        palette.FloorGroove);
+                    continue;
+                }
+
+                CreateBox(
+                    geometryRoot,
+                    $"floor plank groove {index} rear",
+                    new Vector3(grooveWidth, grooveHeight, rearGrooveDepth),
+                    new Vector3(x, grooveCenterY, grooveStartZ + rearGrooveDepth * 0.5f),
+                    palette.FloorGroove);
+                CreateBox(
+                    geometryRoot,
+                    $"floor plank groove {index} front",
+                    new Vector3(grooveWidth, grooveHeight, frontGrooveDepth),
+                    new Vector3(x, grooveCenterY, recessMaxZ + frontGrooveDepth * 0.5f),
+                    palette.FloorGroove);
+            }
         }
 
         private void CreateCeilingMoonFixture(RoomPalette palette)
@@ -1139,18 +1214,20 @@ namespace TsukiVox.AudioPrototype
 
         private void CreateFloorWordmarkCarpet(RoomPalette palette)
         {
-            const float carpetWidth = 4.16f;
-            const float carpetDepth = 1.12f;
-            const float carpetZ = 4.04f;
+            const float recessBackingThickness = 0.02f;
+            const float carpetThickness = 0.014f;
+            const float borderThickness = 0.004f;
+            const float borderSurfaceOffset = 0.001f;
+            const float logoSurfaceOffset = 0.0015f;
 
             var carpetRoot = new GameObject("TsukiVox floor logo carpet").transform;
             carpetRoot.SetParent(geometryRoot, false);
-            carpetRoot.localPosition = new Vector3(0f, 0f, carpetZ);
+            carpetRoot.localPosition = new Vector3(0f, 0f, FloorWordmarkCarpetZ);
             CreateBeveledBox(
                 carpetRoot,
-                "carpet shadow",
-                new Vector3(carpetWidth + 0.12f, 0.012f, carpetDepth + 0.12f),
-                new Vector3(0f, 0.007f, 0f),
+                "carpet recess shadow",
+                new Vector3(FloorWordmarkRecessWidth, recessBackingThickness, FloorWordmarkRecessDepth),
+                new Vector3(0f, FloorSurfaceHeight - 0.002f - recessBackingThickness * 0.5f, 0f),
                 palette.SofaShadow,
                 0.004f,
                 false,
@@ -1158,16 +1235,17 @@ namespace TsukiVox.AudioPrototype
             CreateBeveledBox(
                 carpetRoot,
                 "carpet field",
-                new Vector3(carpetWidth, 0.026f, carpetDepth),
-                new Vector3(0f, 0.021f, 0f),
+                new Vector3(FloorWordmarkCarpetWidth, carpetThickness, FloorWordmarkCarpetDepth),
+                new Vector3(0f, FloorSurfaceHeight - carpetThickness * 0.5f, 0f),
                 palette.Rug,
-                0.008f,
+                0.006f,
                 false,
                 false);
-            CreateTrimBox(carpetRoot, "front border", new Vector3(carpetWidth + 0.02f, 0.014f, 0.026f), new Vector3(0f, 0.041f, -carpetDepth * 0.5f), palette.Trim, 0.004f, false, false);
-            CreateTrimBox(carpetRoot, "back border", new Vector3(carpetWidth + 0.02f, 0.014f, 0.026f), new Vector3(0f, 0.041f, carpetDepth * 0.5f), palette.Trim, 0.004f, false, false);
-            CreateTrimBox(carpetRoot, "left border", new Vector3(0.026f, 0.014f, carpetDepth), new Vector3(-carpetWidth * 0.5f, 0.041f, 0f), palette.Trim, 0.004f, false, false);
-            CreateTrimBox(carpetRoot, "right border", new Vector3(0.026f, 0.014f, carpetDepth), new Vector3(carpetWidth * 0.5f, 0.041f, 0f), palette.Trim, 0.004f, false, false);
+            var borderCenterY = FloorSurfaceHeight + borderSurfaceOffset - borderThickness * 0.5f;
+            CreateTrimBox(carpetRoot, "front border", new Vector3(FloorWordmarkCarpetWidth + 0.02f, borderThickness, 0.026f), new Vector3(0f, borderCenterY, -FloorWordmarkCarpetDepth * 0.5f), palette.Trim, 0.002f, false, false);
+            CreateTrimBox(carpetRoot, "back border", new Vector3(FloorWordmarkCarpetWidth + 0.02f, borderThickness, 0.026f), new Vector3(0f, borderCenterY, FloorWordmarkCarpetDepth * 0.5f), palette.Trim, 0.002f, false, false);
+            CreateTrimBox(carpetRoot, "left border", new Vector3(0.026f, borderThickness, FloorWordmarkCarpetDepth), new Vector3(-FloorWordmarkCarpetWidth * 0.5f, borderCenterY, 0f), palette.Trim, 0.002f, false, false);
+            CreateTrimBox(carpetRoot, "right border", new Vector3(0.026f, borderThickness, FloorWordmarkCarpetDepth), new Vector3(FloorWordmarkCarpetWidth * 0.5f, borderCenterY, 0f), palette.Trim, 0.002f, false, false);
 
             var texture = Resources.Load<Texture2D>(FloorWordmarkTextureResource);
             if (texture == null)
@@ -1192,7 +1270,7 @@ namespace TsukiVox.AudioPrototype
 
             var logo = new GameObject("complete TsukiVox logo");
             logo.transform.SetParent(carpetRoot, false);
-            logo.transform.localPosition = new Vector3(0f, 0.044f, 0f);
+            logo.transform.localPosition = new Vector3(0f, FloorSurfaceHeight + logoSurfaceOffset, 0f);
             logo.AddComponent<MeshFilter>().sharedMesh = CreateFloorQuadMesh(3.96f, 0.99f);
             var renderer = logo.AddComponent<MeshRenderer>();
             renderer.sharedMaterial = material;
