@@ -54,6 +54,8 @@ namespace TsukiVox.AudioPrototype.Editor
             ValidateCoffeeTableStructure(coffeeTable, tabletBody, moonstoneTop);
             ValidateCoffeeTableContrast(tabletBody, moonstoneTop, RoomTheme.Dark);
             ValidateStableTableFrame(tableRimFront);
+            ValidateCoffeeTableControlSymmetry(coffeeTable);
+            ValidateStageLightingInteraction(stageLighting);
             ValidatePointerIsolation(QuestUiPointer.EnsureScenePointer(), moonstoneTop);
 
             var shader = Shader.Find(QuestStylizedMaterial.ShaderName);
@@ -753,6 +755,107 @@ namespace TsukiVox.AudioPrototype.Editor
             if (rig.Find("truss upper rail") != null || rig.Find("truss lower rail") != null)
             {
                 throw new InvalidOperationException("Legacy full-width truss rails still obstruct the ceiling logo.");
+            }
+        }
+
+        private static void ValidateCoffeeTableControlSymmetry(Transform coffeeTable)
+        {
+            var leftHousing = FindRequiredDescendant(coffeeTable, "room controls switch housing");
+            var rightHousing = FindRequiredDescendant(coffeeTable, "tablet tilt switch housing");
+            var leftBounds = leftHousing.GetComponent<MeshRenderer>()?.bounds ?? default;
+            var rightBounds = rightHousing.GetComponent<MeshRenderer>()?.bounds ?? default;
+            if (Mathf.Abs(leftBounds.size.x - rightBounds.size.x) > 0.01f ||
+                Mathf.Abs(leftBounds.center.x + rightBounds.center.x) > 0.01f)
+            {
+                throw new InvalidOperationException("Coffee-table switch housings are not horizontally symmetric.");
+            }
+
+            var themeCanvas = GameObject.Find(QuestRoomThemeController.SwitchCanvasName);
+            var lightingCanvas = GameObject.Find(QuestStageLightingSwitchController.SwitchCanvasName);
+            var tiltCanvas = GameObject.Find(QuestTabletTiltController.SwitchCanvasName);
+            if (themeCanvas == null || lightingCanvas == null || tiltCanvas == null)
+            {
+                throw new InvalidOperationException("One or more coffee-table switch canvases were not generated.");
+            }
+
+            var leftButtons = new[]
+            {
+                themeCanvas.transform.Find("Dock/Theme 0"),
+                themeCanvas.transform.Find("Dock/Theme 1"),
+                lightingCanvas.transform.Find("Dock/Lighting 0"),
+                lightingCanvas.transform.Find("Dock/Lighting 1"),
+            };
+            var rightButtons = new[]
+            {
+                tiltCanvas.transform.Find("Dock/Angle 0"),
+                tiltCanvas.transform.Find("Dock/Angle 1"),
+                tiltCanvas.transform.Find("Dock/Angle 2"),
+                tiltCanvas.transform.Find("Dock/Angle 3"),
+            };
+            for (var index = 0; index < leftButtons.Length; index += 1)
+            {
+                var left = leftButtons[index];
+                var right = rightButtons[rightButtons.Length - 1 - index];
+                if (left == null || right == null ||
+                    Mathf.Abs(left.position.x + right.position.x) > 0.002f ||
+                    Mathf.Abs(left.position.y - right.position.y) > 0.002f ||
+                    Mathf.Abs(left.position.z - right.position.z) > 0.002f)
+                {
+                    throw new InvalidOperationException("Coffee-table switch buttons are not arranged symmetrically.");
+                }
+            }
+        }
+
+        private static void ValidateStageLightingInteraction(QuestStageLightingPrototype stageLighting)
+        {
+            var rig = stageLighting.transform.Find(QuestStageLightingPrototype.RigRootName);
+            QuestStageLightingFixtureTarget firstTarget = null;
+            for (var index = 0; index < 6; index += 1)
+            {
+                var aimPivot = rig?.Find($"fixture {index}/aim pivot");
+                var hitCollider = aimPivot?.GetComponent<BoxCollider>();
+                var target = aimPivot?.GetComponent<QuestStageLightingFixtureTarget>();
+                if (hitCollider == null || target == null || !hitCollider.enabled || hitCollider.isTrigger)
+                {
+                    throw new InvalidOperationException($"Stage-lighting fixture {index} has no direct pointer target.");
+                }
+
+                firstTarget ??= target;
+            }
+
+            var initialState = stageLighting.LightingEnabled;
+            var pointer = QuestUiPointer.EnsureScenePointer();
+            var raycastTargets = typeof(QuestUiPointer).GetMethod(
+                "TryRaycastTargets",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            var targetTransform = firstTarget.transform;
+            var raycastArguments = new object[]
+            {
+                new Ray(targetTransform.position - targetTransform.forward, targetTransform.forward),
+                Vector3.zero,
+                null,
+                default(UnityEngine.EventSystems.RaycastResult),
+            };
+            if (raycastTargets == null ||
+                !(bool)raycastTargets.Invoke(pointer, raycastArguments) ||
+                raycastArguments[2] as GameObject != firstTarget.gameObject)
+            {
+                throw new InvalidOperationException("The controller pointer did not resolve the stage-lighting fixture target.");
+            }
+
+            firstTarget.OnPointerClick(null);
+            if (stageLighting.LightingEnabled == initialState)
+            {
+                throw new InvalidOperationException("Clicking a stage-lighting fixture did not toggle the master state.");
+            }
+
+            firstTarget.OnPointerClick(null);
+            var switchController = UnityEngine.Object.FindAnyObjectByType<QuestStageLightingSwitchController>();
+            if (stageLighting.LightingEnabled != initialState ||
+                switchController == null ||
+                switchController.LightingEnabled != initialState)
+            {
+                throw new InvalidOperationException("Stage-lighting controls did not return to a synchronized state.");
             }
         }
 

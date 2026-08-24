@@ -5,122 +5,106 @@ using UnityEngine.UI;
 namespace TsukiVox.AudioPrototype
 {
     /// <summary>
-    /// Two-button room theme switch on the coffee table's left-front corner,
-    /// mirroring the tablet tilt switch on the right-front corner. Clicking a
-    /// button applies the matching room palette and celestial set, then persists the choice.
+    /// Two-button master stage-lighting switch beside the room theme switch.
     /// </summary>
-    public sealed class QuestRoomThemeController : MonoBehaviour
+    public sealed class QuestStageLightingSwitchController : MonoBehaviour
     {
-        public const string SwitchCanvasName = "Room Theme Switch Canvas";
+        public const string SwitchCanvasName = "Stage Lighting Switch Canvas";
 
-        public static readonly Vector3 SwitchWorldPosition = new Vector3(-0.89f, 0.621f, 0.659f);
+        public static readonly Vector3 SwitchWorldPosition = new Vector3(-0.69f, 0.621f, 0.659f);
         public static readonly Quaternion SwitchWorldRotation = Quaternion.Euler(78f, 0f, 0f);
 
         private const float SwitchCanvasScale = 0.001f;
 
-        private static readonly string[] ThemeLabels = { "月夜", "日光" };
-
+        private static readonly string[] LightingLabels = { "开灯", "关灯" };
 
         [Header("Scene References")]
         [SerializeField] private QuestKtvRoomPrototype roomPrototype;
+        [SerializeField] private QuestStageLightingPrototype stageLightingPrototype;
         [SerializeField] private Canvas switchCanvas;
 
-        private readonly Button[] themeButtons = new Button[2];
-        private readonly QuestUiSurface[] themeSurfaces = new QuestUiSurface[2];
-        private readonly TMP_Text[] themeLabels = new TMP_Text[2];
-        private readonly QuestUiSurface[] themeLights = new QuestUiSurface[2];
+        private readonly Button[] lightingButtons = new Button[2];
+        private readonly QuestUiSurface[] lightingSurfaces = new QuestUiSurface[2];
+        private readonly TMP_Text[] lightingLabels = new TMP_Text[2];
+        private readonly QuestUiSurface[] lightingLights = new QuestUiSurface[2];
 
         private QuestUiSurface dockSurface;
         private QuestKtvRoomPrototype subscribedRoom;
-
+        private QuestStageLightingPrototype subscribedStageLighting;
         private RoomTheme currentTheme = RoomTheme.Dark;
+        private bool lightingEnabled = true;
         private TMP_FontAsset uiFont;
 
-        public RoomTheme CurrentTheme => currentTheme;
+        public bool LightingEnabled => lightingEnabled;
 
-        public void Configure(QuestKtvRoomPrototype room)
+        public void Configure(QuestKtvRoomPrototype room, QuestStageLightingPrototype stageLighting)
         {
             var nextRoom = room != null ? room : roomPrototype;
-            if (nextRoom == null)
-            {
-                nextRoom = FindAnyObjectByType<QuestKtvRoomPrototype>();
-            }
-
+            nextRoom = nextRoom != null ? nextRoom : FindAnyObjectByType<QuestKtvRoomPrototype>();
             if (roomPrototype != nextRoom)
             {
                 UnsubscribeRoom();
                 roomPrototype = nextRoom;
             }
 
+            var nextStageLighting = stageLighting != null ? stageLighting : stageLightingPrototype;
+            nextStageLighting = nextStageLighting != null
+                ? nextStageLighting
+                : FindAnyObjectByType<QuestStageLightingPrototype>();
+            if (stageLightingPrototype != nextStageLighting)
+            {
+                UnsubscribeStageLighting();
+                stageLightingPrototype = nextStageLighting;
+            }
+
             uiFont = ResolveUiFont();
-            currentTheme = roomPrototype != null ? roomPrototype.CurrentTheme : LoadPersistedTheme();
+            currentTheme = roomPrototype != null ? roomPrototype.CurrentTheme : RoomTheme.Dark;
+            lightingEnabled = stageLightingPrototype == null || stageLightingPrototype.LightingEnabled;
             EnsureSwitchCanvas();
             SubscribeRoom();
-            RefreshThemeVisuals();
+            SubscribeStageLighting();
+            RefreshLightingVisuals();
         }
 
         private void OnEnable()
         {
             SubscribeRoom();
-            if (roomPrototype != null)
-            {
-                currentTheme = roomPrototype.CurrentTheme;
-                RefreshThemeVisuals();
-            }
+            SubscribeStageLighting();
+            currentTheme = roomPrototype != null ? roomPrototype.CurrentTheme : currentTheme;
+            lightingEnabled = stageLightingPrototype != null
+                ? stageLightingPrototype.LightingEnabled
+                : lightingEnabled;
+            RefreshLightingVisuals();
         }
 
         private void OnDisable()
         {
             UnsubscribeRoom();
+            UnsubscribeStageLighting();
         }
 
-        public void SetTheme(int themeIndex)
+        public void SetLightingEnabled(bool enabled)
         {
-            var theme = themeIndex == (int)RoomTheme.Bright ? RoomTheme.Bright : RoomTheme.Dark;
-            var changed = theme != currentTheme;
-
-            if (Application.isPlaying)
+            if (stageLightingPrototype == null)
             {
-                PlayerPrefs.SetInt(QuestKtvRoomPrototype.ThemePrefsKey, (int)theme);
-                PlayerPrefs.Save();
+                stageLightingPrototype = FindAnyObjectByType<QuestStageLightingPrototype>();
+                SubscribeStageLighting();
             }
 
-            if (roomPrototype == null)
+            if (stageLightingPrototype == null)
             {
-                roomPrototype = FindAnyObjectByType<QuestKtvRoomPrototype>();
-                SubscribeRoom();
+                RefreshLightingVisuals();
+                return;
             }
 
-            if (roomPrototype != null)
-            {
-                roomPrototype.ApplyTheme(theme);
-                currentTheme = roomPrototype.CurrentTheme;
-            }
-            else
-            {
-                currentTheme = theme;
-            }
-
-            RefreshThemeVisuals();
+            var changed = stageLightingPrototype.LightingEnabled != enabled;
+            stageLightingPrototype.SetLightingEnabled(enabled);
+            lightingEnabled = stageLightingPrototype.LightingEnabled;
+            RefreshLightingVisuals();
             if (changed)
             {
                 SendSwitchHaptic();
             }
-        }
-
-        public void RestoreDefaultSetting()
-        {
-            PlayerPrefs.DeleteKey(QuestKtvRoomPrototype.ThemePrefsKey);
-            currentTheme = RoomTheme.Dark;
-            if (roomPrototype == null)
-            {
-                roomPrototype = FindAnyObjectByType<QuestKtvRoomPrototype>();
-                SubscribeRoom();
-            }
-
-            roomPrototype?.ApplyTheme(RoomTheme.Dark);
-            currentTheme = roomPrototype != null ? roomPrototype.CurrentTheme : RoomTheme.Dark;
-            RefreshThemeVisuals();
         }
 
         private void LateUpdate()
@@ -134,17 +118,6 @@ namespace TsukiVox.AudioPrototype
             switchRect.position = SwitchWorldPosition;
             switchRect.rotation = SwitchWorldRotation;
             switchRect.localScale = Vector3.one * SwitchCanvasScale;
-        }
-
-        private static RoomTheme LoadPersistedTheme()
-        {
-            if (!Application.isPlaying)
-            {
-                return RoomTheme.Dark;
-            }
-
-            var stored = PlayerPrefs.GetInt(QuestKtvRoomPrototype.ThemePrefsKey, (int)RoomTheme.Dark);
-            return stored == (int)RoomTheme.Bright ? RoomTheme.Bright : RoomTheme.Dark;
         }
 
         private void EnsureSwitchCanvas()
@@ -186,7 +159,7 @@ namespace TsukiVox.AudioPrototype
                 BuildSwitchUi(switchRect);
             }
 
-            WireThemeButtons();
+            WireLightingButtons();
         }
 
         private bool TryBindExistingSwitch()
@@ -203,21 +176,21 @@ namespace TsukiVox.AudioPrototype
                 return false;
             }
 
-            for (var index = 0; index < themeButtons.Length; index += 1)
+            for (var index = 0; index < lightingButtons.Length; index += 1)
             {
-                var themeOption = dock.Find($"Theme {index}");
-                if (themeOption == null ||
-                    !themeOption.TryGetComponent<Button>(out var button) ||
-                    !themeOption.TryGetComponent<QuestUiSurface>(out var surface))
+                var lightingOption = dock.Find($"Lighting {index}");
+                if (lightingOption == null ||
+                    !lightingOption.TryGetComponent<Button>(out var button) ||
+                    !lightingOption.TryGetComponent<QuestUiSurface>(out var surface))
                 {
                     return false;
                 }
 
-                themeButtons[index] = button;
-                themeSurfaces[index] = surface;
-                themeLabels[index] = themeOption.Find("Label")?.GetComponent<TMP_Text>();
-                themeLights[index] = themeOption.Find("Selected Light")?.GetComponent<QuestUiSurface>();
-                if (themeLabels[index] == null || themeLights[index] == null)
+                lightingButtons[index] = button;
+                lightingSurfaces[index] = surface;
+                lightingLabels[index] = lightingOption.Find("Label")?.GetComponent<TMP_Text>();
+                lightingLights[index] = lightingOption.Find("Selected Light")?.GetComponent<QuestUiSurface>();
+                if (lightingLabels[index] == null || lightingLights[index] == null)
                 {
                     return false;
                 }
@@ -241,10 +214,16 @@ namespace TsukiVox.AudioPrototype
             dock.raycastTarget = false;
             dockSurface = dock;
 
-            for (var index = 0; index < themeButtons.Length; index += 1)
+            for (var index = 0; index < lightingButtons.Length; index += 1)
             {
                 var x = -50f + index * 100f;
-                var surface = CreateSurface(dock.rectTransform, $"Theme {index}", new Vector2(88f, 88f), new Vector2(x, 0f), palette.ButtonSurface, 8f);
+                var surface = CreateSurface(
+                    dock.rectTransform,
+                    $"Lighting {index}",
+                    new Vector2(88f, 88f),
+                    new Vector2(x, 0f),
+                    palette.ButtonSurface,
+                    8f);
                 var button = surface.gameObject.AddComponent<Button>();
                 button.targetGraphic = surface;
                 button.transition = Selectable.Transition.None;
@@ -252,35 +231,48 @@ namespace TsukiVox.AudioPrototype
                 button.colors = CreateButtonColors(palette);
                 surface.raycastTarget = true;
 
-                var label = CreateText(surface.rectTransform, "Label", ThemeLabels[index], 19, palette.DockTextPrimary, Vector2.zero, new Vector2(82f, 72f));
-                var light = CreateSurface(surface.rectTransform, "Selected Light", new Vector2(42f, 4f), new Vector2(0f, -37f), palette.DockAccent, 2f);
+                var label = CreateText(
+                    surface.rectTransform,
+                    "Label",
+                    LightingLabels[index],
+                    19,
+                    palette.DockTextPrimary,
+                    Vector2.zero,
+                    new Vector2(82f, 72f));
+                var light = CreateSurface(
+                    surface.rectTransform,
+                    "Selected Light",
+                    new Vector2(42f, 4f),
+                    new Vector2(0f, -37f),
+                    palette.DockAccent,
+                    2f);
                 light.raycastTarget = false;
 
                 var feedback = surface.gameObject.AddComponent<QuestUiButtonFeedback>();
                 feedback.Configure((TMP_Text)null, string.Empty);
 
-                themeButtons[index] = button;
-                themeSurfaces[index] = surface;
-                themeLabels[index] = label;
-                themeLights[index] = light;
+                lightingButtons[index] = button;
+                lightingSurfaces[index] = surface;
+                lightingLabels[index] = label;
+                lightingLights[index] = light;
             }
         }
 
-        private void WireThemeButtons()
+        private void WireLightingButtons()
         {
-            for (var index = 0; index < themeButtons.Length; index += 1)
+            for (var index = 0; index < lightingButtons.Length; index += 1)
             {
-                var capturedIndex = index;
-                themeButtons[index].transition = Selectable.Transition.None;
-                var feedback = themeButtons[index].GetComponent<QuestUiButtonFeedback>() ??
-                               themeButtons[index].gameObject.AddComponent<QuestUiButtonFeedback>();
+                var enableLighting = index == 0;
+                lightingButtons[index].transition = Selectable.Transition.None;
+                var feedback = lightingButtons[index].GetComponent<QuestUiButtonFeedback>() ??
+                               lightingButtons[index].gameObject.AddComponent<QuestUiButtonFeedback>();
                 feedback.Configure((TMP_Text)null, string.Empty);
-                themeButtons[index].onClick.RemoveAllListeners();
-                themeButtons[index].onClick.AddListener(() => SetTheme(capturedIndex));
+                lightingButtons[index].onClick.RemoveAllListeners();
+                lightingButtons[index].onClick.AddListener(() => SetLightingEnabled(enableLighting));
             }
         }
 
-        private void RefreshThemeVisuals()
+        private void RefreshLightingVisuals()
         {
             var palette = QuestUiThemePalette.For(currentTheme);
             if (dockSurface != null)
@@ -288,22 +280,27 @@ namespace TsukiVox.AudioPrototype
                 dockSurface.color = palette.DockSurface;
             }
 
-            for (var index = 0; index < themeButtons.Length; index += 1)
+            for (var index = 0; index < lightingButtons.Length; index += 1)
             {
-                if (themeSurfaces[index] == null || themeLabels[index] == null || themeLights[index] == null)
+                if (lightingButtons[index] == null ||
+                    lightingSurfaces[index] == null ||
+                    lightingLabels[index] == null ||
+                    lightingLights[index] == null)
                 {
                     continue;
                 }
 
-                var isActive = index == (int)currentTheme;
-                themeLabels[index].text = ThemeLabels[index];
-                themeSurfaces[index].color = isActive ? palette.ActiveSurface : palette.ButtonSurface;
-                themeLabels[index].color = isActive ? palette.DockAccentInk : palette.DockTextPrimary;
-                themeLights[index].color = new Color(palette.DockAccent.r, palette.DockAccent.g, palette.DockAccent.b, isActive ? 1f : 0f);
-                if (themeButtons[index] != null)
-                {
-                    themeButtons[index].colors = CreateButtonColors(palette);
-                }
+                var isActive = lightingEnabled == (index == 0);
+                lightingButtons[index].interactable = stageLightingPrototype != null;
+                lightingLabels[index].text = LightingLabels[index];
+                lightingSurfaces[index].color = isActive ? palette.ActiveSurface : palette.ButtonSurface;
+                lightingLabels[index].color = isActive ? palette.DockAccentInk : palette.DockTextPrimary;
+                lightingLights[index].color = new Color(
+                    palette.DockAccent.r,
+                    palette.DockAccent.g,
+                    palette.DockAccent.b,
+                    isActive ? 1f : 0f);
+                lightingButtons[index].colors = CreateButtonColors(palette);
             }
         }
 
@@ -330,10 +327,41 @@ namespace TsukiVox.AudioPrototype
             subscribedRoom = null;
         }
 
+        private void SubscribeStageLighting()
+        {
+            if (!isActiveAndEnabled ||
+                stageLightingPrototype == null ||
+                subscribedStageLighting == stageLightingPrototype)
+            {
+                return;
+            }
+
+            UnsubscribeStageLighting();
+            subscribedStageLighting = stageLightingPrototype;
+            subscribedStageLighting.LightingEnabledChanged += HandleLightingEnabledChanged;
+        }
+
+        private void UnsubscribeStageLighting()
+        {
+            if (subscribedStageLighting == null)
+            {
+                return;
+            }
+
+            subscribedStageLighting.LightingEnabledChanged -= HandleLightingEnabledChanged;
+            subscribedStageLighting = null;
+        }
+
         private void HandleRoomThemeChanged(RoomTheme theme)
         {
             currentTheme = theme;
-            RefreshThemeVisuals();
+            RefreshLightingVisuals();
+        }
+
+        private void HandleLightingEnabledChanged(bool enabled)
+        {
+            lightingEnabled = enabled;
+            RefreshLightingVisuals();
         }
 
         private static QuestUiSurface CreateSurface(

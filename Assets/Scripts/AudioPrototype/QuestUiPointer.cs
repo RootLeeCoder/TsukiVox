@@ -257,7 +257,7 @@ namespace TsukiVox.AudioPrototype
 
             var pressed = IsControllerTriggerPressed(device);
             var ray = new Ray(origin, rotation * Vector3.forward);
-            var hasCanvasHit = TryRaycastCanvases(ray, out var canvasHitPoint, out var currentTarget, out var currentRaycast);
+            var hasTargetHit = TryRaycastTargets(ray, out var targetHitPoint, out var currentTarget, out var currentRaycast);
 
             ProcessHover(currentTarget);
 
@@ -275,7 +275,7 @@ namespace TsukiVox.AudioPrototype
             }
 
             wasPressed = pressed;
-            UpdatePointerVisuals(origin, hasCanvasHit ? canvasHitPoint : origin + ray.direction * maxPointerDistance, hasCanvasHit, currentTarget != null, pressed);
+            UpdatePointerVisuals(origin, hasTargetHit ? targetHitPoint : origin + ray.direction * maxPointerDistance, hasTargetHit, currentTarget != null, pressed);
         }
 
         private void ProcessPointerPress(GameObject currentTarget, RaycastResult currentRaycast)
@@ -470,7 +470,7 @@ namespace TsukiVox.AudioPrototype
             return currentRaycast.gameObject;
         }
 
-        private bool TryRaycastCanvases(
+        private bool TryRaycastTargets(
             Ray ray,
             out Vector3 hitPoint,
             out GameObject currentTarget,
@@ -517,6 +517,31 @@ namespace TsukiVox.AudioPrototype
                 currentRaycast = candidateRaycast;
             }
 
+            if (Physics.Raycast(
+                    ray,
+                    out var physicsHit,
+                    maxPointerDistance,
+                    Physics.DefaultRaycastLayers,
+                    QueryTriggerInteraction.Ignore))
+            {
+                var physicsTarget = ExecuteEvents.GetEventHandler<IPointerClickHandler>(physicsHit.collider.gameObject);
+                if (physicsTarget != null && physicsHit.distance < nearestTargetDistance)
+                {
+                    hasSurfaceHit = true;
+                    nearestTargetDistance = physicsHit.distance;
+                    nearestTargetPoint = physicsHit.point;
+                    nearestTargetCanvas = null;
+                    currentTarget = physicsTarget;
+                    currentRaycast = new RaycastResult
+                    {
+                        gameObject = physicsTarget,
+                        distance = physicsHit.distance,
+                        worldPosition = physicsHit.point,
+                        worldNormal = physicsHit.normal,
+                    };
+                }
+            }
+
             if (!hasSurfaceHit)
             {
                 return false;
@@ -524,7 +549,7 @@ namespace TsukiVox.AudioPrototype
 
             var selectedCanvas = currentTarget != null ? nearestTargetCanvas : nearestSurfaceCanvas;
             hitPoint = currentTarget != null ? nearestTargetPoint : nearestSurfacePoint;
-            if (selectedCanvas != null && PreparePointerEventData(selectedCanvas, hitPoint))
+            if ((selectedCanvas != null || currentTarget != null) && PreparePointerEventData(selectedCanvas, hitPoint))
             {
                 pointerEventData.pointerCurrentRaycast = currentRaycast;
                 lastPointerPosition = pointerEventData.position;
@@ -1063,7 +1088,8 @@ namespace TsukiVox.AudioPrototype
                 var canvas = canvases[index];
                 if (canvas.name != "Prototype Canvas" &&
                     canvas.name != QuestTabletTiltController.SwitchCanvasName &&
-                    canvas.name != QuestRoomThemeController.SwitchCanvasName)
+                    canvas.name != QuestRoomThemeController.SwitchCanvasName &&
+                    canvas.name != QuestStageLightingSwitchController.SwitchCanvasName)
                 {
                     continue;
                 }
@@ -1080,8 +1106,8 @@ namespace TsukiVox.AudioPrototype
 
         private bool NeedsCanvasRefresh()
         {
-            // Expect the control panel, the tilt switch and the room theme switch.
-            if (interactionCanvases.Count < 3)
+            // Expect the control panel, tilt switch, room theme switch and lighting switch.
+            if (interactionCanvases.Count < 4)
             {
                 return true;
             }

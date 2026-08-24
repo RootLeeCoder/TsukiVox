@@ -38,6 +38,7 @@ namespace TsukiVox.AudioPrototype
         [SerializeField] private QuestConsumerUiPrototype consumerUi;
         [SerializeField] private QuestTabletTiltController tabletTiltController;
         [SerializeField] private QuestRoomThemeController roomThemeController;
+        [SerializeField] private QuestStageLightingSwitchController stageLightingSwitchController;
         [SerializeField] private QuestStageLightingPrototype stageLightingPrototype;
 
         [Header("Runtime")]
@@ -115,6 +116,13 @@ namespace TsukiVox.AudioPrototype
                 ? roomThemeController
                 : gameObject.AddComponent<QuestRoomThemeController>();
             roomThemeController.Configure(ktvRoom);
+            stageLightingSwitchController = stageLightingSwitchController != null
+                ? stageLightingSwitchController
+                : GetComponent<QuestStageLightingSwitchController>();
+            stageLightingSwitchController = stageLightingSwitchController != null
+                ? stageLightingSwitchController
+                : gameObject.AddComponent<QuestStageLightingSwitchController>();
+            stageLightingSwitchController.Configure(ktvRoom, stageLightingPrototype);
             EnsureEventSystem();
             QuestUiPointer.EnsureScenePointer();
 

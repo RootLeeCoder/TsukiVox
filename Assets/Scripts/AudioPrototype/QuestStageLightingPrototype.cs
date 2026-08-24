@@ -30,7 +30,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestStageLightingPrototype : MonoBehaviour
     {
         public const string RigRootName = "Livehouse Stage Lighting";
-        public const int CurrentDesignRevision = 2;
+        public const int CurrentDesignRevision = 3;
 
         private const string EnabledPrefsKey = "TsukiVox.StageLighting.Enabled";
         private const string PresetPrefsKey = "TsukiVox.StageLighting.Preset";
@@ -117,6 +117,8 @@ namespace TsukiVox.AudioPrototype
         public bool BeatPulse => beatPulse;
         public bool BeamsVisible => beamsVisible;
 
+        public event Action<bool> LightingEnabledChanged;
+
         public static QuestStageLightingPrototype EnsureSceneLighting(
             QuestKtvRoomPrototype room,
             QuestAudioPrototype audio)
@@ -192,13 +194,19 @@ namespace TsukiVox.AudioPrototype
 
         public void SetLightingEnabled(bool enabled)
         {
+            var changed = enabled != lightingEnabled;
             lightingEnabled = enabled;
             PersistBool(EnabledPrefsKey, enabled);
             UpdateLighting(Time.unscaledTime);
+            if (changed)
+            {
+                LightingEnabledChanged?.Invoke(enabled);
+            }
         }
 
         public void ApplyPreset(StageLightingPreset preset)
         {
+            var lightingWasEnabled = lightingEnabled;
             switch (preset)
             {
                 case StageLightingPreset.Atmosphere:
@@ -245,6 +253,10 @@ namespace TsukiVox.AudioPrototype
             currentPreset = preset;
             PersistAll();
             UpdateLighting(Time.unscaledTime);
+            if (!lightingWasEnabled)
+            {
+                LightingEnabledChanged?.Invoke(true);
+            }
         }
 
         public void SetColorLook(StageLightingColorLook look)
@@ -429,6 +441,7 @@ namespace TsukiVox.AudioPrototype
                     PoolRenderer = pool,
                     SpotLight = aimPivot.Find("spot light")?.GetComponent<Light>(),
                 };
+                ConfigureFixtureInteraction(aimPivot);
             }
         }
 
@@ -452,6 +465,7 @@ namespace TsukiVox.AudioPrototype
             var lens = CreateCylinder(aimPivot, "lens", 0.108f, 0.018f, new Vector3(0f, 0f, 0.13f), lensMaterial);
             lens.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
             var lensRenderer = lens.GetComponent<MeshRenderer>();
+            ConfigureFixtureInteraction(aimPivot);
 
             var beamObject = new GameObject("beam");
             beamObject.transform.SetParent(aimPivot, false);
@@ -487,6 +501,32 @@ namespace TsukiVox.AudioPrototype
                 PoolRenderer = poolRenderer,
                 SpotLight = spotLight,
             };
+        }
+
+        private void ConfigureFixtureInteraction(Transform aimPivot)
+        {
+            if (aimPivot == null)
+            {
+                return;
+            }
+
+            var hitCollider = aimPivot.GetComponent<BoxCollider>();
+            if (hitCollider == null)
+            {
+                hitCollider = aimPivot.gameObject.AddComponent<BoxCollider>();
+            }
+
+            hitCollider.center = new Vector3(0f, 0.035f, 0f);
+            hitCollider.size = new Vector3(0.36f, 0.38f, 0.42f);
+            hitCollider.isTrigger = false;
+
+            var interactionTarget = aimPivot.GetComponent<QuestStageLightingFixtureTarget>();
+            if (interactionTarget == null)
+            {
+                interactionTarget = aimPivot.gameObject.AddComponent<QuestStageLightingFixtureTarget>();
+            }
+
+            interactionTarget.Configure(this);
         }
 
         private void CreateResources()

@@ -25,7 +25,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 35;
+        public const int CurrentDesignRevision = 36;
         public const string ThemePrefsKey = "TsukiVox.RoomTheme";
         public const string StarsPrefsKey = "TsukiVox.CeilingStarsEnabled";
         public const string AuroraPrefsKey = "TsukiVox.CeilingAuroraEnabled";
@@ -840,12 +840,12 @@ namespace TsukiVox.AudioPrototype
                 0.012f);
             tiltSwitchHousing.transform.localRotation = Quaternion.Euler(-12f, 0f, 0f);
 
-            // Mirrors the tilt switch housing on the left-front corner and carries
-            // the two-button room theme switch canvas.
+            // The two left switch groups share a housing that mirrors the four-button
+            // tablet tilt switch on the right-front corner.
             var themeSwitchHousing = CreateBeveledBox(
                 tableRoot,
-                "room theme switch housing",
-                new Vector3(0.24f, 0.035f, 0.13f),
+                "room controls switch housing",
+                new Vector3(0.44f, 0.035f, 0.13f),
                 new Vector3(-0.79f, 0.598f, -0.436f),
                 palette.Table,
                 0.012f);
