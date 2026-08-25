@@ -50,9 +50,11 @@ namespace TsukiVox.AudioPrototype.Editor
             var coffeeTable = FindRequiredDescendant(room.transform, "coffee table");
             var tabletPivot = FindRequiredDescendant(coffeeTable, QuestTabletTiltController.TabletPivotName);
             var tabletBody = FindRequiredDescendant(tabletPivot, "tablet body");
+            var tabletScreen = FindRequiredDescendant(tabletPivot, "tablet screen");
             var moonstoneTop = FindRequiredDescendant(coffeeTable, "moonstone top");
             var tableRimFront = FindRequiredDescendant(coffeeTable, "table rim front");
             ValidateCoffeeTableStructure(coffeeTable, tabletBody, moonstoneTop);
+            ValidateStableControlPanelShell(tabletBody, tabletScreen);
             ValidateCoffeeTableContrast(tabletBody, moonstoneTop, RoomTheme.Dark);
             ValidateStableTableFrame(tableRimFront);
             ValidateCoffeeTableControlSymmetry(coffeeTable);
@@ -346,6 +348,17 @@ namespace TsukiVox.AudioPrototype.Editor
                 material.GetFloat("_StableLighting") < 0.999f)
             {
                 throw new InvalidOperationException("The user-facing coffee-table rim must use stable theme lighting.");
+            }
+        }
+
+        private static void ValidateStableControlPanelShell(Transform tabletBody, Transform tabletScreen)
+        {
+            var bodyMaterial = GetRequiredMaterial(tabletBody);
+            var screenMaterial = GetRequiredMaterial(tabletScreen);
+            if (!bodyMaterial.HasProperty("_StableLighting") || bodyMaterial.GetFloat("_StableLighting") < 0.999f ||
+                !screenMaterial.HasProperty("_StableLighting") || screenMaterial.GetFloat("_StableLighting") < 0.999f)
+            {
+                throw new InvalidOperationException("The control-panel shell must keep stable theme lighting.");
             }
         }
 

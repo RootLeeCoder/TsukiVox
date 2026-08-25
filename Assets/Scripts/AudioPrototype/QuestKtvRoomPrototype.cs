@@ -25,7 +25,7 @@ namespace TsukiVox.AudioPrototype
     public sealed class QuestKtvRoomPrototype : MonoBehaviour
     {
         public const string RoomRootName = "V0.5 KTV Room";
-        public const int CurrentDesignRevision = 38;
+        public const int CurrentDesignRevision = 39;
         public const string ThemePrefsKey = "TsukiVox.RoomTheme";
         public const string StarsPrefsKey = "TsukiVox.CeilingStarsEnabled";
         public const string AuroraPrefsKey = "TsukiVox.CeilingAuroraEnabled";
@@ -2982,6 +2982,10 @@ namespace TsukiVox.AudioPrototype
                 QuestStylizedMaterial.ConfigureDetail(palette.SofaHighlight, QuestMaterialDetailMode.Fabric, 44f, 0.05f, 0.08f);
                 QuestStylizedMaterial.ConfigureDetail(palette.Pillow, QuestMaterialDetailMode.Fabric, 48f, 0.06f, 0.1f);
                 QuestStylizedMaterial.ConfigureDetail(palette.TabletBody, QuestMaterialDetailMode.BrushedMetal, 54f, 0.045f, 0.06f);
+                // The user-facing panel shell must keep its theme color when stage
+                // lights move across the interaction surface.
+                QuestStylizedMaterial.ConfigureStableLighting(palette.TabletBody);
+                QuestStylizedMaterial.ConfigureStableLighting(palette.ScreenFrame);
                 QuestStylizedMaterial.ConfigureDetail(palette.Stone, QuestMaterialDetailMode.Stone, 2.6f, 0.11f, 0.06f);
                 QuestStylizedMaterial.ConfigureStableLighting(palette.Stone);
                 QuestStylizedMaterial.ConfigureDetail(palette.SpeakerGrille, QuestMaterialDetailMode.Perforated, 28f, 0.24f);

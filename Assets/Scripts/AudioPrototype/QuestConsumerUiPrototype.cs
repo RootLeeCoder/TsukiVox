@@ -1259,7 +1259,8 @@ namespace TsukiVox.AudioPrototype
                     "Preparation Progress",
                     new Vector2(-82f, -23f),
                     new Vector2(270f, 10f),
-                    false);
+                    false,
+                    trackThickness: 4f);
                 queueProgressTexts[index] = CreateText(
                     row,
                     "Preparation Percent",
@@ -1462,7 +1463,12 @@ namespace TsukiVox.AudioPrototype
             icon.gameObject.SetActive(false);
             var chevron = EnsureIcon(button.transform, "Chevron", QuestUiIconKind.ChevronRight, new Vector2(460f, 0f), new Vector2(24f, 24f), TextSecondary);
             chevron.gameObject.SetActive(true);
-            CreateText(button.transform, "Title", label, 19, FontStyle.Bold, new Vector2(-40f, 15f), new Vector2(820f, 30f), TextAnchor.MiddleLeft, TextPrimary);
+            const float textLeft = -486f;
+            const float textRight = 420f;
+            var textWidth = textRight - textLeft;
+            var textX = (textLeft + textRight) * 0.5f;
+            var title = CreateText(button.transform, "Title", label, 19, FontStyle.Bold, new Vector2(textX, 15f), new Vector2(textWidth, 28f), TextAnchor.MiddleLeft, TextPrimary);
+            title.characterSpacing = 1f;
             var descriptions = label switch
             {
                 "房间氛围" => "星空、极光与包厢主题",
@@ -1471,7 +1477,8 @@ namespace TsukiVox.AudioPrototype
                 "防碰撞" => "靠近嘴部时提供触觉反馈",
                 _ => string.Empty,
             };
-            CreateText(button.transform, "Description", descriptions, 14, FontStyle.Normal, new Vector2(-40f, -14f), new Vector2(820f, 24f), TextAnchor.MiddleLeft, TextSecondary);
+            var description = CreateText(button.transform, "Description", descriptions, 14, FontStyle.Normal, new Vector2(textX, -15f), new Vector2(textWidth, 22f), TextAnchor.MiddleLeft, TextSecondary);
+            description.characterSpacing = 0.5f;
             CreateDivider(button.transform, "Divider", new Vector2(0f, rowHeight * 0.5f), new Vector2(ContentWidth, 1f));
             SetChildActive(button.transform, "Divider", showTopDivider);
 
@@ -3919,7 +3926,12 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
-            var visible = page == UiPage.Home || page == UiPage.SongSearch || page == UiPage.Voice;
+            var visible = page == UiPage.Home || page == UiPage.SongSearch;
+            var buttonRect = queueDrawerButton.GetComponent<RectTransform>();
+            var buttonX = page == UiPage.SongSearch
+                ? ContentWidth * 0.5f - buttonRect.sizeDelta.x * 0.5f
+                : 296f;
+            buttonRect.anchoredPosition = new Vector2(buttonX, buttonRect.anchoredPosition.y);
             if (!visible && queueDrawerVisible)
             {
                 SetQueueDrawerImmediate(false);
@@ -4414,19 +4426,23 @@ namespace TsukiVox.AudioPrototype
             Vector2 size,
             bool showHandle,
             Color? fillColor = null,
-            Color? handleColor = null)
+            Color? handleColor = null,
+            float trackThickness = 10f)
         {
             var resolvedFillColor = fillColor ?? Accent;
             var resolvedHandleColor = handleColor ?? AccentStrong;
+            trackThickness = Mathf.Clamp(trackThickness, 1f, size.y);
+            var trackSize = new Vector2(size.x, trackThickness);
+            var trackRadius = trackThickness * 0.5f;
             var root = EnsureRect(parent, name, position, size);
-            var backgroundRect = EnsureRect(root, "Track", Vector2.zero, new Vector2(size.x, 10f));
-            var background = EnsureSurface(backgroundRect, palette.SliderTrack, 5f, true);
-            var fillArea = EnsureRect(root, "Fill Area", Vector2.zero, new Vector2(size.x, 10f));
+            var backgroundRect = EnsureRect(root, "Track", Vector2.zero, trackSize);
+            var background = EnsureSurface(backgroundRect, palette.SliderTrack, trackRadius, true);
+            var fillArea = EnsureRect(root, "Fill Area", Vector2.zero, trackSize);
             var fillRect = EnsureRect(fillArea, "Fill", Vector2.zero, fillArea.sizeDelta);
             fillRect.anchorMin = new Vector2(0f, 0.5f);
             fillRect.anchorMax = new Vector2(1f, 0.5f);
-            fillRect.sizeDelta = new Vector2(0f, 10f);
-            var fill = EnsureSurface(fillRect, resolvedFillColor, 5f, false);
+            fillRect.sizeDelta = new Vector2(0f, trackThickness);
+            var fill = EnsureSurface(fillRect, resolvedFillColor, trackRadius, false);
             RectTransform handleRect = null;
             QuestUiSurface handle = null;
             if (showHandle)
