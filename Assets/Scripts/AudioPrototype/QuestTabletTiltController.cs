@@ -14,9 +14,13 @@ namespace TsukiVox.AudioPrototype
         public static readonly Quaternion SwitchWorldRotation = Quaternion.Euler(78f, 0f, 0f);
 
         private const string TiltStepPrefsKey = "TsukiVox.TabletTiltStep.v2";
-        private const int DefaultStepIndex = 1;
+        private const int DefaultStepIndex = 2;
         private const float CanvasCenterFromHinge = 0.39f;
         private const float SwitchCanvasScale = 0.001f;
+        private const string TabletAnchorName = "Tablet Anchor";
+        private const string TabletBodyName = "tablet body";
+        private const string TabletHingeLeftName = "tablet hinge left";
+        private const string TabletHingeRightName = "tablet hinge right";
 
         private static readonly float[] TiltAngles = { 0f, 30f, 60f, 90f };
         private static readonly string[] TiltLabels = { "0°\n平放", "30°\n低角", "60°\n阅读", "90°\n直立" };
@@ -31,7 +35,7 @@ namespace TsukiVox.AudioPrototype
 
         [Header("Motion")]
         [SerializeField, Range(0, 3)] private int currentStepIndex = DefaultStepIndex;
-        [SerializeField] private float currentTiltAngle = 30f;
+        [SerializeField] private float currentTiltAngle = 60f;
         [SerializeField] private bool isAnimating;
 
         private readonly Button[] stepButtons = new Button[4];
@@ -150,6 +154,11 @@ namespace TsukiVox.AudioPrototype
             SetTiltStep(DefaultStepIndex);
         }
 
+        public void ToggleTiltFromModel()
+        {
+            SetTiltStep(currentStepIndex == 0 ? DefaultStepIndex : 0);
+        }
+
         private void Update()
         {
             if (tabletPivot == null && Time.unscaledTime >= nextHierarchyResolveAt)
@@ -204,7 +213,7 @@ namespace TsukiVox.AudioPrototype
                 return false;
             }
 
-            var tabletAnchor = tabletPivot.Find("Tablet Anchor");
+            var tabletAnchor = tabletPivot.Find(TabletAnchorName);
             if (controlCanvas != null)
             {
                 var rect = controlCanvas.GetComponent<RectTransform>();
@@ -225,7 +234,38 @@ namespace TsukiVox.AudioPrototype
                 tabletAnchor.localRotation = Quaternion.identity;
             }
 
+            if (Application.isPlaying)
+            {
+                ConfigureModelTargets(tabletAnchor);
+            }
+
             return true;
+        }
+
+        private void ConfigureModelTargets(Transform tabletAnchor)
+        {
+            ConfigureModelTarget(
+                tabletAnchor != null ? tabletAnchor.Find(TabletBodyName) : null,
+                new Vector3(1.42f, 0.78f, 0.045f));
+            ConfigureModelTarget(tabletPivot.Find(TabletHingeLeftName), new Vector3(1f, 2f, 1f));
+            ConfigureModelTarget(tabletPivot.Find(TabletHingeRightName), new Vector3(1f, 2f, 1f));
+        }
+
+        private void ConfigureModelTarget(Transform target, Vector3 colliderSize)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            var hitCollider = target.GetComponent<BoxCollider>() ?? target.gameObject.AddComponent<BoxCollider>();
+            hitCollider.center = Vector3.zero;
+            hitCollider.size = colliderSize;
+            hitCollider.isTrigger = false;
+
+            var interactionTarget = target.GetComponent<QuestTabletTiltModelTarget>() ??
+                                    target.gameObject.AddComponent<QuestTabletTiltModelTarget>();
+            interactionTarget.Configure(this);
         }
 
         private bool IsControlCanvasAttached()
@@ -235,7 +275,7 @@ namespace TsukiVox.AudioPrototype
                 return true;
             }
 
-            var tabletAnchor = tabletPivot.Find("Tablet Anchor");
+            var tabletAnchor = tabletPivot.Find(TabletAnchorName);
             var expectedParent = tabletAnchor != null ? tabletAnchor : tabletPivot;
             return controlCanvas.transform.parent == expectedParent &&
                    Quaternion.Angle(controlCanvas.transform.localRotation, Quaternion.identity) < 0.01f;

@@ -162373,8 +162373,8 @@ MonoBehaviour:
   tabletPivot: {fileID: 0}
   switchCanvas: {fileID: 1657370398}
   roomPrototype: {fileID: 1669320527}
-  currentStepIndex: 1
-  currentTiltAngle: 30
+  currentStepIndex: 2
+  currentTiltAngle: 60
   isAnimating: 0
 --- !u!114 &2111684826
 MonoBehaviour:
