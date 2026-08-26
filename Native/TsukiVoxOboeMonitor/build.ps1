@@ -70,4 +70,4 @@ if ($LASTEXITCODE -ne 0) {
 
 Copy-Item -Force -Path $OutputSo -Destination $PluginDir
 Copy-Item -Force -Path $CxxShared -Destination $PluginDir
-Write-Host "Copied TsukiVox native audio API v3 (Oboe 1.10.0) to $PluginDir"
+Write-Host "Copied TsukiVox native audio API v4 (Oboe 1.10.0) to $PluginDir"

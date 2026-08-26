@@ -1,0 +1,5 @@
+{
+    "name": "TsukiVox.NativeAudio",
+    "rootNamespace": "TsukiVox.AudioPrototype",
+    "autoReferenced": true
+}

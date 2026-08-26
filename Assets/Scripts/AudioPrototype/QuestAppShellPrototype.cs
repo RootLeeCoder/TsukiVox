@@ -326,17 +326,48 @@ namespace TsukiVox.AudioPrototype
                 debugBuilder.AppendLine($"audioBackend {audioPrototype.ActiveBackendName}");
                 var nativeStats = audioPrototype.NativeStats;
                 debugBuilder.AppendLine($"audioNativeApiVersion {nativeStats.version}/{NativeOboeDryMonitor.RequiredApiVersion}");
+                debugBuilder.AppendLine(
+                    $"audioNativeAbiSize parameters {NativeOboeDryMonitor.ManagedParameterSize}/{NativeOboeDryMonitor.ExpectedParameterSize} " +
+                    $"stats {NativeOboeDryMonitor.ManagedStatsSize}/{NativeOboeDryMonitor.ExpectedStatsSize}");
                 debugBuilder.AppendLine($"audioNativeApi {audioPrototype.NativeApiName}");
                 debugBuilder.AppendLine($"audioNativeError {audioPrototype.NativeError}");
                 debugBuilder.AppendLine(
-                    $"audioNativeStats running {nativeStats.IsRunning} rate {nativeStats.sampleRate} burst {nativeStats.framesPerBurst} " +
-                    $"sharing {nativeStats.inputSharingMode}/{nativeStats.outputSharingMode} preset {nativeStats.inputPreset} " +
+                    $"audioNativeProfile session {audioPrototype.NativeMonitorProfileName} requested {nativeStats.RequestedProfile} " +
+                    $"resolved {nativeStats.ResolvedProfile} fallback {nativeStats.FallbackStageName} " +
+                    $"configurationFallback {audioPrototype.NativeConfigurationFallbackReason}");
+                debugBuilder.AppendLine(
+                    $"audioNativeStreams running {nativeStats.IsRunning} rate {nativeStats.sampleRate} api {nativeStats.AudioApiName} " +
+                    $"performance {nativeStats.inputPerformanceMode}/{nativeStats.outputPerformanceMode} " +
+                    $"sharing {(nativeStats.IsInputExclusive ? "exclusive" : "shared")}/{(nativeStats.IsOutputExclusive ? "exclusive" : "shared")} " +
+                    $"mmap {nativeStats.IsInputMMapUsed}/{nativeStats.IsOutputMMapUsed} preset {nativeStats.InputPresetName} " +
+                    $"channels {nativeStats.inputChannelCount}/{nativeStats.outputChannelCount} " +
+                    $"format {nativeStats.inputFormat}/{nativeStats.outputFormat}");
+                debugBuilder.AppendLine(
+                    $"audioNativeBuffers burst {nativeStats.inputFramesPerBurst}/{nativeStats.outputFramesPerBurst} " +
                     $"capacity {nativeStats.inputCapacityFrames}/{nativeStats.outputCapacityFrames} " +
                     $"requestedBuffers {nativeStats.requestedInputBufferFrames}/{nativeStats.requestedOutputBufferFrames} " +
-                    $"actualBuffers {nativeStats.inputBufferFrames}/{nativeStats.outputBufferFrames} xruns {nativeStats.inputXRunCount}/{nativeStats.outputXRunCount} " +
+                    $"actualBuffers {nativeStats.inputBufferFrames}/{nativeStats.outputBufferFrames} cushion {nativeStats.inputBurstsCushion} " +
+                    $"callback {nativeStats.lastCallbackFrames} min/max {nativeStats.minCallbackFrames}/{nativeStats.maxCallbackFrames}");
+                debugBuilder.AppendLine(
+                    $"audioNativeCounters xruns {nativeStats.inputXRunCount}/{nativeStats.outputXRunCount} " +
+                    $"supported {nativeStats.inputXRunSupported}/{nativeStats.outputXRunSupported} " +
                     $"callbacks {nativeStats.callbackCount} short {nativeStats.shortReadCount} ({nativeStats.ShortReadRatio:P2}) " +
                     $"mismatch {nativeStats.frameMismatchCount} inputFill {nativeStats.InputFrameFillRatio:P2} " +
                     $"frames {nativeStats.receivedInputFrameCount}/{nativeStats.requestedInputFrameCount} streamError {nativeStats.lastStreamError}");
+                var inputLatency = audioPrototype.NativeInputLatencySummary;
+                var outputLatency = audioPrototype.NativeOutputLatencySummary;
+                var roundTripLatency = audioPrototype.NativeRoundTripLatencySummary;
+                var currentLatency = nativeStats.IsLatencyValid
+                    ? $"{nativeStats.inputLatencyMs:0.0}/{nativeStats.outputLatencyMs:0.0}/{nativeStats.roundTripLatencyMs:0.0}ms"
+                    : "N/A";
+                debugBuilder.AppendLine(
+                    $"audioNativePlatformStreamLatency valid {nativeStats.IsLatencyValid} " +
+                    $"current {currentLatency} " +
+                    $"errors {nativeStats.latencyErrorCount} startToFirstInput {nativeStats.startToFirstInputMs:0.0}ms");
+                debugBuilder.AppendLine(
+                    $"audioNativeLatency30s input {FormatLatencySummary(inputLatency)} " +
+                    $"output {FormatLatencySummary(outputLatency)} total {FormatLatencySummary(roundTripLatency)}");
+                debugBuilder.AppendLine($"audioNativeFallbackHistory {audioPrototype.NativeFallbackHistory}");
                 debugBuilder.AppendLine(
                     $"audioNativeGains gain {nativeStats.actualGain:0.000} drive {nativeStats.actualInputDrive:0.000} " +
                     $"distance {nativeStats.actualDistanceGain:0.000} safety {nativeStats.actualSafetyGain:0.000}");
@@ -383,6 +414,13 @@ namespace TsukiVox.AudioPrototype
             AppendTextIfPresent("playableUrlText", "Helper Playable URL");
             AppendCacheDirectoryInfo();
             return debugBuilder.ToString();
+        }
+
+        private static string FormatLatencySummary(NativeLatencySummary summary)
+        {
+            return summary.IsAvailable
+                ? $"n={summary.Count} median={summary.Median:0.0}ms p95={summary.P95:0.0}ms"
+                : "N/A";
         }
 
         private void AppendTextIfPresent(string label, string objectName)

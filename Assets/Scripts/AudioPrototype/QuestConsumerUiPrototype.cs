@@ -355,6 +355,9 @@ namespace TsukiVox.AudioPrototype
         private TMP_Text diagnosticsRequestModeText;
         private TMP_Text diagnosticsVideoText;
         private TMP_Text rawDiagnosticsText;
+        private Button previousNativeProfileButton;
+        private Button nextNativeProfileButton;
+        private TMP_Text nativeProfileText;
         private Button clearMediaCacheButton;
         private TMP_Text clearMediaCacheButtonText;
         private QuestUiIcon clearMediaCacheIcon;
@@ -1702,21 +1705,54 @@ namespace TsukiVox.AudioPrototype
             rawDetailsButtonText = CreateText(rawDetailsButton.transform, "Title", "展开原始详情", 17, FontStyle.Bold, new Vector2(-112f, 0f), new Vector2(310f, 36f), TextAnchor.MiddleLeft, TextPrimary);
             EnsureIcon(rawDetailsButton.transform, "Chevron", QuestUiIconKind.ChevronRight, new Vector2(250f, 0f), new Vector2(20f, 20f), TextSecondary);
 
-            rawDetailsRoot = EnsureRect(debugDrawer, "Raw Details", new Vector2(0f, -113f), new Vector2(548f, 100f));
+            rawDetailsRoot = EnsureRect(debugDrawer, "Raw Details", new Vector2(0f, -124f), new Vector2(548f, 122f));
             EnsureSurface(rawDetailsRoot, palette.RawDetailsSurface, 6f, false);
-            rawDiagnosticsText = CreateText(rawDetailsRoot, "Text", string.Empty, 12, FontStyle.Normal, Vector2.zero, new Vector2(510f, 82f), TextAnchor.UpperLeft, TextSecondary);
+            rawDiagnosticsText = CreateText(rawDetailsRoot, "Text", string.Empty, 10, FontStyle.Normal, new Vector2(0f, 4f), new Vector2(510f, 104f), TextAnchor.UpperLeft, TextSecondary);
             rawDiagnosticsText.textWrappingMode = TextWrappingModes.Normal;
             rawDiagnosticsText.overflowMode = TextOverflowModes.Truncate;
 
-            clearMediaCacheButton = CreateSurfaceButton(debugDrawer, "Clear Media Cache", new Vector2(-141f, -190f), new Vector2(266f, 44f), Surface, Line);
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+            rawDiagnosticsText.rectTransform.anchoredPosition = new Vector2(0f, 20f);
+            rawDiagnosticsText.rectTransform.sizeDelta = new Vector2(510f, 70f);
+            previousNativeProfileButton = CreateIconButton(
+                rawDetailsRoot,
+                "Previous Native Profile",
+                QuestUiIconKind.Previous,
+                new Vector2(-232f, -42f),
+                new Vector2(36f, 32f),
+                Surface,
+                TextSecondary,
+                out _);
+            nextNativeProfileButton = CreateIconButton(
+                rawDetailsRoot,
+                "Next Native Profile",
+                QuestUiIconKind.Next,
+                new Vector2(232f, -42f),
+                new Vector2(36f, 32f),
+                Surface,
+                TextSecondary,
+                out _);
+            nativeProfileText = CreateText(
+                rawDetailsRoot,
+                "Native Profile",
+                "Profile · Production",
+                11,
+                FontStyle.Bold,
+                new Vector2(0f, -42f),
+                new Vector2(400f, 30f),
+                TextAnchor.MiddleCenter,
+                AccentStrong);
+#endif
+
+            clearMediaCacheButton = CreateSurfaceButton(debugDrawer, "Clear Media Cache", new Vector2(-141f, -208f), new Vector2(266f, 38f), Surface, Line);
             clearMediaCacheIcon = EnsureIcon(clearMediaCacheButton.transform, "Icon", QuestUiIconKind.Trash, new Vector2(-103f, 0f), new Vector2(20f, 20f), Danger);
             clearMediaCacheButtonText = CreateText(clearMediaCacheButton.transform, "Label", "清除媒体缓存", 15, FontStyle.Bold, new Vector2(16f, 0f), new Vector2(210f, 32f), TextAnchor.MiddleCenter, Danger);
 
-            restoreDefaultSettingsButton = CreateSurfaceButton(debugDrawer, "Restore Default Settings", new Vector2(141f, -190f), new Vector2(266f, 44f), Surface, Line);
+            restoreDefaultSettingsButton = CreateSurfaceButton(debugDrawer, "Restore Default Settings", new Vector2(141f, -208f), new Vector2(266f, 38f), Surface, Line);
             restoreDefaultSettingsIcon = EnsureIcon(restoreDefaultSettingsButton.transform, "Icon", QuestUiIconKind.Replay, new Vector2(-103f, 0f), new Vector2(20f, 20f), Warm);
             restoreDefaultSettingsButtonText = CreateText(restoreDefaultSettingsButton.transform, "Label", "恢复全部默认设置", 15, FontStyle.Bold, new Vector2(16f, 0f), new Vector2(210f, 32f), TextAnchor.MiddleCenter, TextPrimary);
 
-            copyDiagnosticsButton = CreateTextButton(debugDrawer, "Copy Complete Diagnostics", "复制完整诊断信息", new Vector2(0f, -244f), new Vector2(548f, 40f), palette.DiagnosticsActionSurface, AccentStrong);
+            copyDiagnosticsButton = CreateTextButton(debugDrawer, "Copy Complete Diagnostics", "复制完整诊断信息", new Vector2(0f, -254f), new Vector2(548f, 34f), palette.DiagnosticsActionSurface, AccentStrong);
             copyDiagnosticsButton.GetComponentInChildren<TMP_Text>(true).fontSize = 16f;
             EnsureIcon(copyDiagnosticsButton.transform, "Icon", QuestUiIconKind.Copy, new Vector2(-160f, 0f), new Vector2(20f, 20f), AccentStrong);
 
@@ -1931,6 +1967,8 @@ namespace TsukiVox.AudioPrototype
             WireButton(clearMediaCacheButton, HandleClearMediaCache);
             WireButton(restoreDefaultSettingsButton, HandleRestoreDefaultSettings);
             WireButton(copyDiagnosticsButton, () => appShellPrototype?.CopyCompleteDebugInfoToClipboard());
+            WireButton(previousNativeProfileButton, () => CycleNativeProfile(-1));
+            WireButton(nextNativeProfileButton, () => CycleNativeProfile(1));
 
             var switchVisuals = consumerRoot.GetComponentsInChildren<QuestUiSwitchVisual>(true);
             for (var index = 0; index < switchVisuals.Length; index += 1)
@@ -2170,7 +2208,7 @@ namespace TsukiVox.AudioPrototype
             }
             if (lowLatencyModeButton != null)
             {
-                lowLatencyModeButton.interactable = audioPrototype.IsNativeBackendSelectable || !spatialSelected;
+                lowLatencyModeButton.interactable = true;
                 var lowLatencyLabel = lowLatencyModeButton.GetComponentInChildren<TMP_Text>(true);
                 if (lowLatencyLabel != null)
                 {
@@ -2192,7 +2230,9 @@ namespace TsukiVox.AudioPrototype
             }
             else if (!audioPrototype.IsMicrophoneDistanceTracked)
             {
-                distanceMonitoringStatusText.text = "等待右手麦克风 · 返听已静音";
+                distanceMonitoringStatusText.text = audioPrototype.ActiveMonitorMode == MonitorMode.OboeLowLatency
+                    ? "等待右手麦克风 · 低延迟返听保持可用"
+                    : "等待右手麦克风 · 返听已静音";
                 distanceMonitoringStatusText.color = Warm;
             }
             else
@@ -2207,6 +2247,11 @@ namespace TsukiVox.AudioPrototype
                 if (audioPrototype.IsNativeFallbackActive)
                 {
                     voiceMixerFooterText.text = $"低延迟不可用，已回退空间音箱 · {ShortenStatusReason(audioPrototype.NativeFallbackReason)}";
+                    voiceMixerFooterText.color = Warm;
+                }
+                else if (!string.IsNullOrEmpty(audioPrototype.NativeConfigurationFallbackReason))
+                {
+                    voiceMixerFooterText.text = $"低延迟已使用兼容配置 · {audioPrototype.NativeConfigurationFallbackReason}";
                     voiceMixerFooterText.color = Warm;
                 }
                 else if (audioPrototype.IsSafetyReducingGain)
@@ -2766,22 +2811,47 @@ namespace TsukiVox.AudioPrototype
 
             RefreshMaintenanceButtons(clearConfirmationActive, restoreConfirmationActive);
 
+            var nativeStats = audioPrototype?.NativeStats ?? default;
+            var latencySummary = audioPrototype?.NativeRoundTripLatencySummary ?? NativeLatencySummary.Unavailable;
             rawDiagnosticsText.text =
-                $"构建信息  {QuestBuildInfo.RawSummary}\n" +
-                $"音频后端  {audioPrototype?.ActiveBackendName ?? "missing"}\n" +
-                $"人声定位  {(audioPrototype == null ? "missing" : audioPrototype.IsSpatialVoiceEnabled ? "墙面音箱" : "off")}\n" +
-                $"人声预设  {audioPrototype?.CurrentPresetName ?? "missing"}\n" +
-                $"输入/输出  {(audioPrototype?.InputLevel ?? 0f):P0} / {(audioPrototype?.OutputLevel ?? 0f):P0}\n" +
-                $"主页音量  视频 {(videoScreenPrototype?.VideoVolume ?? 0f):P0} · 人声 {(audioPrototype?.MonitorVolume ?? 0f):P0} · 前级 {(audioPrototype?.MonitorPreGainDecibels ?? -80f):+0.0;-0.0;0.0} dB\n" +
-                $"人声参数  空间 {(audioPrototype?.AmbienceAmount ?? 0f):P0} · 回声 {(audioPrototype?.EchoAmount ?? 0f):P0} · 稳定 {(audioPrototype?.DynamicsAmount ?? 0f):P0}\n" +
-                $"距离返听  {(audioPrototype == null ? "missing" : $"{(audioPrototype.IsDistanceMonitoringEnabled ? "on" : "off")} · {(audioPrototype.IsMicrophoneDistanceTracked ? $"{audioPrototype.MicrophoneSurfaceClearance * 100f:0.0}cm" : "untracked")} · {audioPrototype.DistanceMonitorGain:P0}")}\n" +
-                $"防碰撞  {(handheldPropsPrototype == null ? "missing" : $"{handheldPropsPrototype.MicFaceWarningClearance * 100f:0.0}/{handheldPropsPrototype.MicFaceCriticalClearance * 100f:0.0}cm {handheldPropsPrototype.MicFaceHapticStrength:P0}")}\n" +
-                $"嘴部定位  {(handheldPropsPrototype == null ? "missing" : handheldPropsPrototype.MicFaceMouthLocalOffset.ToString("F3"))}\n" +
-                $"内容接口  {BilibiliDirectClient.ApiOrigin}\n" +
-                $"视频状态  {SingleLine(videoScreenPrototype?.StatusSummary)}" +
+                $"构建  {QuestBuildInfo.RawSummary}\n" +
+                $"返听  {(audioPrototype == null ? "missing" : $"{audioPrototype.SelectedMonitorMode} -> {audioPrototype.ActiveMonitorMode}")} · {audioPrototype?.ActiveBackendName ?? "missing"}\n" +
+                $"原生  {audioPrototype?.NativeMonitorProfileName ?? "missing"} · {nativeStats.RequestedProfile}->{nativeStats.ResolvedProfile} · {nativeStats.FallbackStageName}\n" +
+                $"流  {nativeStats.AudioApiName} · {nativeStats.InputPresetName} · {(nativeStats.IsInputExclusive ? "Ex" : "Sh")}/{(nativeStats.IsOutputExclusive ? "Ex" : "Sh")} · MMAP {nativeStats.IsInputMMapUsed}/{nativeStats.IsOutputMMapUsed}\n" +
+                $"平台流延迟估算  {(nativeStats.IsLatencyValid ? $"{nativeStats.inputLatencyMs:0.0}/{nativeStats.outputLatencyMs:0.0}/{nativeStats.roundTripLatencyMs:0.0} ms" : "N/A")} · 30s {FormatLatencySummaryCompact(latencySummary)}\n" +
+                $"稳定性  XRun {nativeStats.inputXRunCount}/{nativeStats.outputXRunCount} · short {nativeStats.shortReadCount} · mismatch {nativeStats.frameMismatchCount}\n" +
+                $"视频  {SingleLine(videoScreenPrototype?.StatusSummary)}" +
                 (string.IsNullOrEmpty(lastMaintenanceDetails)
                     ? string.Empty
                     : $"\n存储操作  {SingleLine(lastMaintenanceDetails)}");
+
+            if (nativeProfileText != null)
+            {
+                nativeProfileText.text = $"Profile · {audioPrototype?.NativeMonitorProfileName ?? "missing"}";
+                previousNativeProfileButton.interactable = audioPrototype != null;
+                nextNativeProfileButton.interactable = audioPrototype != null;
+            }
+        }
+
+        private void CycleNativeProfile(int direction)
+        {
+            if (audioPrototype == null)
+            {
+                return;
+            }
+
+            var count = Enum.GetValues(typeof(NativeMonitorProfile)).Length;
+            var next = ((int)audioPrototype.NativeMonitorProfile + direction + count) % count;
+            audioPrototype.SetNativeMonitorProfile((NativeMonitorProfile)next);
+            RefreshDiagnostics();
+            RefreshVoice();
+        }
+
+        private static string FormatLatencySummaryCompact(NativeLatencySummary summary)
+        {
+            return summary.IsAvailable
+                ? $"中位 {summary.Median:0.0} / P95 {summary.P95:0.0} ms"
+                : "N/A";
         }
 
         private void HandleMicrophoneToggle(bool enabled)

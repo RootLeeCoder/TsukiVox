@@ -1,79 +1,14 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 
 namespace TsukiVox.AudioPrototype
 {
-    public enum NativeAudioBackend
-    {
-        UnityMicrophone,
-        NativeOboeLowLatency,
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct TsukiVoxNativeParameters
-    {
-        public uint size;
-        public uint version;
-        public float gain;
-        public float inputDrive;
-        public float distanceGain;
-        public float safetyGain;
-        public float ambience;
-        public float echo;
-        public float dynamics;
-        public int muted;
-        public float highPassHz;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct TsukiVoxNativeStats
-    {
-        public uint size;
-        public uint version;
-        public int running;
-        public int sampleRate;
-        public int audioApi;
-        public int inputSharingMode;
-        public int outputSharingMode;
-        public int inputPreset;
-        public int framesPerBurst;
-        public int inputCapacityFrames;
-        public int outputCapacityFrames;
-        public int requestedInputBufferFrames;
-        public int requestedOutputBufferFrames;
-        public int inputBufferFrames;
-        public int outputBufferFrames;
-        public int inputXRunCount;
-        public int outputXRunCount;
-        public int lastStreamError;
-        public float actualGain;
-        public float actualInputDrive;
-        public float actualDistanceGain;
-        public float actualSafetyGain;
-        public float preDspLevel;
-        public float postDspLevel;
-        public float outputLevel;
-        public float compressorReductionDb;
-        public float limiterReductionDb;
-        public ulong callbackCount;
-        public ulong shortReadCount;
-        public ulong frameMismatchCount;
-        public ulong requestedInputFrameCount;
-        public ulong receivedInputFrameCount;
-
-        public bool IsRunning => running != 0;
-        public bool IsInputExclusive => inputSharingMode == 1;
-        public bool IsOutputExclusive => outputSharingMode == 1;
-        public string AudioApiName => audioApi == 2 ? "AAudio" : audioApi == 1 ? "OpenSLES" : "Unknown";
-        public float ShortReadRatio => callbackCount > 0 ? (float)shortReadCount / callbackCount : 0f;
-        public float InputFrameFillRatio => requestedInputFrameCount > 0
-            ? (float)Math.Min(receivedInputFrameCount, requestedInputFrameCount) / requestedInputFrameCount
-            : 1f;
-    }
-
     public static class NativeOboeDryMonitor
     {
-        public const int RequiredApiVersion = 3;
+        public const int RequiredApiVersion = NativeAudioAbi.ApiVersion;
+        public const int ExpectedParameterSize = NativeAudioAbi.ParameterSize;
+        public const int ExpectedStatsSize = NativeAudioAbi.StatsSize;
+
         private const string PluginName = "tsukivox_oboe_monitor";
         private static bool isInvalid;
         private static string invalidReason = string.Empty;
@@ -92,8 +27,12 @@ namespace TsukiVox.AudioPrototype
 
         public static bool IsInvalid => isInvalid;
         public static string InvalidReason => invalidReason;
+        public static int ManagedParameterSize => Marshal.SizeOf<TsukiVoxNativeParameters>();
+        public static int ManagedStatsSize => Marshal.SizeOf<TsukiVoxNativeStats>();
 
         public static TsukiVoxNativeParameters CreateParameters(
+            NativeMonitorProfile profile,
+            bool forceSafeConfiguration,
             float gain,
             float inputDrive,
             float distanceGain,
@@ -105,8 +44,10 @@ namespace TsukiVox.AudioPrototype
         {
             return new TsukiVoxNativeParameters
             {
-                size = (uint)Marshal.SizeOf<TsukiVoxNativeParameters>(),
+                size = (uint)ManagedParameterSize,
                 version = RequiredApiVersion,
+                requestedProfile = (int)NativeMonitorProfiles.Normalize((int)profile),
+                forceSafeConfiguration = forceSafeConfiguration ? 1 : 0,
                 gain = gain,
                 inputDrive = inputDrive,
                 distanceGain = distanceGain,
@@ -115,7 +56,7 @@ namespace TsukiVox.AudioPrototype
                 echo = echo,
                 dynamics = dynamics,
                 muted = muted ? 1 : 0,
-                highPassHz = MathfLerp(70f, 110f, dynamics),
+                highPassHz = Lerp(70f, 110f, dynamics),
             };
         }
 
@@ -123,10 +64,18 @@ namespace TsukiVox.AudioPrototype
         {
             error = string.Empty;
 #if UNITY_ANDROID && !UNITY_EDITOR
-            if (!TryHandshake(out error)) return false;
+            if (!TryHandshake(out error))
+            {
+                return false;
+            }
+
             try
             {
-                if (TsukiVoxAudio_StartV3(ref parameters, parameters.size) != 0) return true;
+                if (TsukiVoxAudio_StartV4(ref parameters, parameters.size) != 0)
+                {
+                    return true;
+                }
+
                 error = GetLastErrorSafe("Native Oboe start failed.");
             }
             catch (Exception exception) when (IsInteropException(exception))
@@ -143,9 +92,19 @@ namespace TsukiVox.AudioPrototype
         public static bool TrySetParameters(TsukiVoxNativeParameters parameters)
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
-            if (!IsAvailable) return false;
-            try { return TsukiVoxAudio_SetParametersV3(ref parameters, parameters.size) != 0; }
-            catch (Exception exception) when (IsInteropException(exception)) { Invalidate(exception.Message); }
+            if (!IsAvailable)
+            {
+                return false;
+            }
+
+            try
+            {
+                return TsukiVoxAudio_SetParametersV4(ref parameters, parameters.size) != 0;
+            }
+            catch (Exception exception) when (IsInteropException(exception))
+            {
+                Invalidate(exception.Message);
+            }
 #endif
             return false;
         }
@@ -153,9 +112,19 @@ namespace TsukiVox.AudioPrototype
         public static void Stop()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
-            if (!IsAvailable) return;
-            try { TsukiVoxAudio_Stop(); }
-            catch (Exception exception) when (IsInteropException(exception)) { Invalidate(exception.Message); }
+            if (!IsAvailable)
+            {
+                return;
+            }
+
+            try
+            {
+                TsukiVoxAudio_Stop();
+            }
+            catch (Exception exception) when (IsInteropException(exception))
+            {
+                Invalidate(exception.Message);
+            }
 #endif
         }
 
@@ -163,14 +132,23 @@ namespace TsukiVox.AudioPrototype
         {
             stats = default;
 #if UNITY_ANDROID && !UNITY_EDITOR
-            if (!IsAvailable) return false;
+            if (!IsAvailable)
+            {
+                return false;
+            }
+
             try
             {
-                stats.size = (uint)Marshal.SizeOf<TsukiVoxNativeStats>();
+                stats.size = (uint)ManagedStatsSize;
                 stats.version = RequiredApiVersion;
-                return TsukiVoxAudio_GetStatsV3(ref stats, stats.size) != 0 && stats.version == RequiredApiVersion;
+                return TsukiVoxAudio_GetStatsV4(ref stats, stats.size) != 0 &&
+                       stats.version == RequiredApiVersion &&
+                       stats.size == ManagedStatsSize;
             }
-            catch (Exception exception) when (IsInteropException(exception)) { Invalidate(exception.Message); }
+            catch (Exception exception) when (IsInteropException(exception))
+            {
+                Invalidate(exception.Message);
+            }
 #endif
             return false;
         }
@@ -188,14 +166,36 @@ namespace TsukiVox.AudioPrototype
         private static bool TryHandshake(out string error)
         {
             error = string.Empty;
-            if (isInvalid) { error = invalidReason; return false; }
+            if (isInvalid)
+            {
+                error = invalidReason;
+                return false;
+            }
+
+            if (ManagedParameterSize != ExpectedParameterSize || ManagedStatsSize != ExpectedStatsSize)
+            {
+                Invalidate(
+                    $"Managed native audio ABI size mismatch: parameters {ManagedParameterSize}/{ExpectedParameterSize}, " +
+                    $"stats {ManagedStatsSize}/{ExpectedStatsSize}.");
+                error = invalidReason;
+                return false;
+            }
+
             try
             {
                 var actualVersion = TsukiVoxAudio_GetApiVersion();
-                if (actualVersion == RequiredApiVersion) return true;
+                if (actualVersion == RequiredApiVersion)
+                {
+                    return true;
+                }
+
                 Invalidate($"Native audio API mismatch: expected {RequiredApiVersion}, got {actualVersion}.");
             }
-            catch (Exception exception) when (IsInteropException(exception)) { Invalidate(exception.Message); }
+            catch (Exception exception) when (IsInteropException(exception))
+            {
+                Invalidate(exception.Message);
+            }
+
             error = invalidReason;
             return false;
         }
@@ -216,24 +216,33 @@ namespace TsukiVox.AudioPrototype
         }
 #endif
 
-        private static float MathfLerp(float a, float b, float t) => a + (b - a) * Math.Max(0f, Math.Min(1f, t));
+        private static float Lerp(float a, float b, float t)
+        {
+            return a + (b - a) * Math.Max(0f, Math.Min(1f, t));
+        }
 
-        private static bool IsInteropException(Exception exception) =>
-            exception is DllNotFoundException || exception is EntryPointNotFoundException ||
-            exception is BadImageFormatException || exception is MarshalDirectiveException;
+        private static bool IsInteropException(Exception exception)
+        {
+            return exception is DllNotFoundException ||
+                   exception is EntryPointNotFoundException ||
+                   exception is BadImageFormatException ||
+                   exception is MarshalDirectiveException;
+        }
 
         private static void Invalidate(string reason)
         {
             isInvalid = true;
-            invalidReason = string.IsNullOrWhiteSpace(reason) ? "Native audio backend became unavailable." : reason;
+            invalidReason = string.IsNullOrWhiteSpace(reason)
+                ? "Native audio backend became unavailable."
+                : reason;
         }
 
 #if UNITY_ANDROID && !UNITY_EDITOR
         [DllImport(PluginName)] private static extern int TsukiVoxAudio_GetApiVersion();
-        [DllImport(PluginName)] private static extern int TsukiVoxAudio_StartV3(ref TsukiVoxNativeParameters parameters, uint size);
-        [DllImport(PluginName)] private static extern int TsukiVoxAudio_SetParametersV3(ref TsukiVoxNativeParameters parameters, uint size);
+        [DllImport(PluginName)] private static extern int TsukiVoxAudio_StartV4(ref TsukiVoxNativeParameters parameters, uint size);
+        [DllImport(PluginName)] private static extern int TsukiVoxAudio_SetParametersV4(ref TsukiVoxNativeParameters parameters, uint size);
         [DllImport(PluginName)] private static extern void TsukiVoxAudio_Stop();
-        [DllImport(PluginName)] private static extern int TsukiVoxAudio_GetStatsV3(ref TsukiVoxNativeStats stats, uint size);
+        [DllImport(PluginName)] private static extern int TsukiVoxAudio_GetStatsV4(ref TsukiVoxNativeStats stats, uint size);
         [DllImport(PluginName)] private static extern IntPtr TsukiVoxAudio_GetLastError();
 #endif
     }

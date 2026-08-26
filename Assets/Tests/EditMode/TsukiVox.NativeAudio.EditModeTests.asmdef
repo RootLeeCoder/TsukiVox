@@ -1,0 +1,14 @@
+{
+    "name": "TsukiVox.NativeAudio.EditModeTests",
+    "rootNamespace": "TsukiVox.AudioPrototype.Tests",
+    "references": [
+        "TsukiVox.NativeAudio"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "autoReferenced": false
+}
