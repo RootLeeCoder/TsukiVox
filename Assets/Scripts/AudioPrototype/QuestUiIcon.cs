@@ -32,6 +32,8 @@ namespace TsukiVox.AudioPrototype
         Crosshair,
         SlidersHorizontal,
         Spotlight,
+        SeekBackward10,
+        SeekForward10,
     }
 
     /// <summary>
@@ -179,6 +181,18 @@ namespace TsukiVox.AudioPrototype
                     AddPolyline(vertexHelper, rect, thickness, 12f, 3f, 9.2f, 3.5f, 6.8f, 4.7f, 5.25f, 5.75f, 3f, 8f);
                     AddPolyline(vertexHelper, rect, thickness, 3f, 3f, 3f, 8f, 8f, 8f);
                     break;
+                case QuestUiIconKind.SeekBackward10:
+                    AddArc(vertexHelper, rect, 12f, 12f, 9f, 180f, -270f, thickness);
+                    AddPolyline(vertexHelper, rect, thickness, 12f, 3f, 9.2f, 3.5f, 6.8f, 4.7f, 5.25f, 5.75f, 3f, 8f);
+                    AddPolyline(vertexHelper, rect, thickness, 3f, 3f, 3f, 8f, 8f, 8f);
+                    AddSeekTen(vertexHelper, rect, thickness);
+                    break;
+                case QuestUiIconKind.SeekForward10:
+                    AddArc(vertexHelper, rect, 12f, 12f, 9f, 0f, 270f, thickness);
+                    AddPolyline(vertexHelper, rect, thickness, 12f, 3f, 14.8f, 3.5f, 17.2f, 4.7f, 18.75f, 5.75f, 21f, 8f);
+                    AddPolyline(vertexHelper, rect, thickness, 21f, 3f, 21f, 8f, 16f, 8f);
+                    AddSeekTen(vertexHelper, rect, thickness);
+                    break;
                 case QuestUiIconKind.Previous:
                     AddLine(vertexHelper, rect, 5f, 5f, 5f, 19f, thickness);
                     AddPolyline(vertexHelper, rect, thickness, 19f, 4f, 9f, 12f, 19f, 20f, 19f, 4f);
@@ -254,6 +268,13 @@ namespace TsukiVox.AudioPrototype
             AddArcPoints(x + radius, y + height - radius, radius, 90f, 90f, 4);
             points.Add(points[0]);
             AddPointLines(vertexHelper, rect, thickness);
+        }
+
+        private void AddSeekTen(VertexHelper vertexHelper, Rect rect, float thickness)
+        {
+            var digitThickness = Mathf.Max(1f, thickness * 0.65f);
+            AddPolyline(vertexHelper, rect, digitThickness, 7.6f, 10f, 9.2f, 8.7f, 9.2f, 15.3f);
+            AddRoundedRect(vertexHelper, rect, 11.6f, 8.7f, 4.8f, 6.6f, 2.3f, digitThickness);
         }
 
         private void AddCircle(VertexHelper vertexHelper, Rect rect, float centerX, float centerY, float radius, float thickness)

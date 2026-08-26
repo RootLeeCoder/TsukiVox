@@ -174,7 +174,9 @@ namespace TsukiVox.AudioPrototype
         private Button settingsPageButton;
         private Button replayButton;
         private Button previousButton;
+        private Button seekBackwardButton;
         private Button playPauseButton;
+        private Button seekForwardButton;
         private Button nextButton;
         private Button microphoneButton;
         private Button voicePageButton;
@@ -605,15 +607,21 @@ namespace TsukiVox.AudioPrototype
             }
 
             transportHoverText = CreateText(homePage, "Transport Hover Label", string.Empty, 16, FontStyle.Bold, new Vector2(0f, -132f), new Vector2(320f, 30f), TextAnchor.MiddleCenter, AccentStrong);
-            replayButton = CreateIconButton(homePage, "Replay", QuestUiIconKind.Replay, new Vector2(-220f, -45f), new Vector2(90f, 90f), Surface, TextPrimary, out _);
-            previousButton = CreateIconButton(homePage, "Previous", QuestUiIconKind.Previous, new Vector2(-110f, -45f), new Vector2(90f, 90f), Surface, TextPrimary, out _);
-            playPauseButton = CreateIconButton(homePage, "Play Pause", QuestUiIconKind.Play, new Vector2(0f, -45f), new Vector2(104f, 104f), Accent, AccentInk, out playPauseIcon);
-            nextButton = CreateIconButton(homePage, "Next", QuestUiIconKind.Next, new Vector2(110f, -45f), new Vector2(90f, 90f), Surface, TextPrimary, out _);
-            microphoneButton = CreateIconButton(homePage, "Microphone", QuestUiIconKind.Microphone, new Vector2(220f, -45f), new Vector2(90f, 90f), WarmSurface, Warm, out microphoneIcon);
+            replayButton = CreateIconButton(homePage, "Replay", QuestUiIconKind.Replay, new Vector2(-300f, -45f), new Vector2(82f, 82f), Surface, TextSecondary, out _);
+            previousButton = CreateIconButton(homePage, "Previous", QuestUiIconKind.Previous, new Vector2(-200f, -45f), new Vector2(82f, 82f), Surface, TextPrimary, out _);
+            seekBackwardButton = CreateIconButton(homePage, "Seek Backward 10 Seconds", QuestUiIconKind.SeekBackward10, new Vector2(-100f, -45f), new Vector2(82f, 82f), Surface, TextPrimary, out var seekBackwardIcon);
+            playPauseButton = CreateIconButton(homePage, "Play Pause", QuestUiIconKind.Play, new Vector2(0f, -45f), new Vector2(98f, 98f), Accent, AccentInk, out playPauseIcon);
+            seekForwardButton = CreateIconButton(homePage, "Seek Forward 10 Seconds", QuestUiIconKind.SeekForward10, new Vector2(100f, -45f), new Vector2(82f, 82f), Surface, TextPrimary, out var seekForwardIcon);
+            nextButton = CreateIconButton(homePage, "Next", QuestUiIconKind.Next, new Vector2(200f, -45f), new Vector2(82f, 82f), Surface, TextPrimary, out _);
+            microphoneButton = CreateIconButton(homePage, "Microphone", QuestUiIconKind.Microphone, new Vector2(300f, -45f), new Vector2(82f, 82f), WarmSurface, Warm, out microphoneIcon);
+            seekBackwardIcon.StrokeWidth = 1.9f;
+            seekForwardIcon.StrokeWidth = 1.9f;
             microphoneSurface = microphoneButton.targetGraphic as QuestUiSurface;
             ConfigureHover(replayButton, transportHoverText, "重播");
             ConfigureHover(previousButton, transportHoverText, "上一首");
+            ConfigureHover(seekBackwardButton, transportHoverText, "快退 10 秒");
             ConfigureHover(playPauseButton, transportHoverText, "播放");
+            ConfigureHover(seekForwardButton, transportHoverText, "快进 10 秒");
             ConfigureHover(nextButton, transportHoverText, "下一首");
             ConfigureHover(microphoneButton, transportHoverText, "麦克风");
 
@@ -1785,7 +1793,9 @@ namespace TsukiVox.AudioPrototype
 
             WireButton(replayButton, () => playlistPrototype?.SendReplay());
             WireButton(previousButton, () => playlistPrototype?.SendPrevious());
+            WireButton(seekBackwardButton, () => SeekHomeVideo(-10d));
             WireButton(playPauseButton, () => playlistPrototype?.SendPlayPause());
+            WireButton(seekForwardButton, () => SeekHomeVideo(10d));
             WireButton(nextButton, () => playlistPrototype?.SendNext());
             WireButton(microphoneButton, () => audioPrototype?.ToggleMonitoring());
             WireButton(spatialSpeakersModeButton, () =>
@@ -2046,9 +2056,15 @@ namespace TsukiVox.AudioPrototype
 
             var canSend = playlistPrototype != null && playlistPrototype.CanSendControl;
             var hasReadyItem = item != null && item.IsReady;
+            var canSeek = hasReadyItem &&
+                          videoScreenPrototype != null &&
+                          videoScreenPrototype.CanSeek &&
+                          string.Equals(videoScreenPrototype.ActiveItemId, item.id, StringComparison.Ordinal);
             replayButton.interactable = canSend && hasReadyItem;
             previousButton.interactable = canSend && count > 0;
+            seekBackwardButton.interactable = canSeek;
             playPauseButton.interactable = canSend && hasReadyItem;
+            seekForwardButton.interactable = canSeek;
             nextButton.interactable = canSend && count > 0;
 
             var micLive = audioPrototype != null && audioPrototype.IsMonitoring;
@@ -2068,6 +2084,20 @@ namespace TsukiVox.AudioPrototype
                 waveBars[index].rectTransform.sizeDelta = new Vector2(6f, height);
                 waveBars[index].color = micLive ? Accent : palette.InactiveMeter;
             }
+        }
+
+        private void SeekHomeVideo(double offsetSeconds)
+        {
+            var itemId = playlistPrototype?.CurrentState?.CurrentItem?.id;
+            if (videoScreenPrototype == null ||
+                string.IsNullOrWhiteSpace(itemId) ||
+                !string.Equals(videoScreenPrototype.ActiveItemId, itemId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            videoScreenPrototype.SeekBySeconds(offsetSeconds);
+            RefreshHome();
         }
 
         private void RefreshSongSearch()

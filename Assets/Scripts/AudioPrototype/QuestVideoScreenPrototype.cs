@@ -27,6 +27,8 @@ namespace TsukiVox.AudioPrototype
         private const float StallSuppressionSeconds = 2f;
         private const float DefaultVideoVolume = 0.75f;
         private const float VideoPreferencesSaveDelay = 0.5f;
+        private const double SeekEndPaddingSeconds = 0.1d;
+        private const double SeekComparisonEpsilonSeconds = 0.001d;
         private const string VideoVolumePrefsKey = "TsukiVox.Video.Volume.v1";
 
         private static readonly Vector3 DefaultScreenPosition = new Vector3(0f, 3.35f, 3.45f);
@@ -236,6 +238,22 @@ namespace TsukiVox.AudioPrototype
 
         public bool IsPlaying => videoPlayer != null && videoPlayer.isPlaying;
 
+        public bool CanSeek
+        {
+            get
+            {
+                if (videoPlayer == null || isPreparingVideo || !videoPlayer.isPrepared || !videoPlayer.canSetTime)
+                {
+                    return false;
+                }
+
+                var duration = videoPlayer.length;
+                return !double.IsNaN(duration) &&
+                       !double.IsInfinity(duration) &&
+                       duration > SeekEndPaddingSeconds;
+            }
+        }
+
         public bool IsPlayingBuiltInDefault => isPlayingBuiltInDefault;
 
         public bool IsBuiltInDefaultPreparing => isPlayingBuiltInDefault && isPreparingVideo;
@@ -273,6 +291,44 @@ namespace TsukiVox.AudioPrototype
         public void RestoreDefaultVolume()
         {
             SetVideoVolume(DefaultVideoVolume);
+        }
+
+        public bool SeekBySeconds(double offsetSeconds)
+        {
+            if (!CanSeek ||
+                double.IsNaN(offsetSeconds) ||
+                double.IsInfinity(offsetSeconds) ||
+                Math.Abs(offsetSeconds) <= SeekComparisonEpsilonSeconds)
+            {
+                return false;
+            }
+
+            var currentTime = videoPlayer.time;
+            if (double.IsNaN(currentTime) || double.IsInfinity(currentTime))
+            {
+                return false;
+            }
+
+            var maximumTime = Math.Max(0d, videoPlayer.length - SeekEndPaddingSeconds);
+            var targetTime = Math.Max(0d, Math.Min(currentTime + offsetSeconds, maximumTime));
+            if (Math.Abs(targetTime - currentTime) <= SeekComparisonEpsilonSeconds)
+            {
+                return false;
+            }
+
+            if (sendNextRoutine != null)
+            {
+                StopCoroutine(sendNextRoutine);
+                sendNextRoutine = null;
+            }
+
+            videoPlayer.time = targetTime;
+            sentNextForCurrentClip = false;
+            suppressStallDetectionUntil = Time.unscaledTime + StallSuppressionSeconds;
+            ResetStallObservation();
+            Debug.Log(
+                $"[TsukiVox Video] Seeked {offsetSeconds:+0.0;-0.0}s from {currentTime:0.0}s to {targetTime:0.0}s via {activeTransport}.");
+            return true;
         }
 
         public void SetStatusOverlayVisible(bool visible)
