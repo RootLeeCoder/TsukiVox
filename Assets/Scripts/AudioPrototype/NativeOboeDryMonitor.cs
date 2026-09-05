@@ -33,8 +33,7 @@ namespace TsukiVox.AudioPrototype
         public static TsukiVoxNativeParameters CreateParameters(
             NativeMonitorProfile profile,
             bool forceSafeConfiguration,
-            float gain,
-            float inputDrive,
+            float requestedPreGain,
             float distanceGain,
             float safetyGain,
             float ambience,
@@ -48,15 +47,15 @@ namespace TsukiVox.AudioPrototype
                 version = RequiredApiVersion,
                 requestedProfile = (int)NativeMonitorProfiles.Normalize((int)profile),
                 forceSafeConfiguration = forceSafeConfiguration ? 1 : 0,
-                gain = gain,
-                inputDrive = inputDrive,
+                gain = NativeFeedbackSafetyTuning.CalculateOutputGain(requestedPreGain),
+                inputDrive = NativeFeedbackSafetyTuning.CalculateInputDrive(dynamics),
                 distanceGain = distanceGain,
                 safetyGain = safetyGain,
                 ambience = ambience,
                 echo = echo,
                 dynamics = dynamics,
                 muted = muted ? 1 : 0,
-                highPassHz = Lerp(70f, 110f, dynamics),
+                highPassHz = NativeFeedbackSafetyTuning.CalculateHighPassHz(dynamics),
             };
         }
 
@@ -215,11 +214,6 @@ namespace TsukiVox.AudioPrototype
             }
         }
 #endif
-
-        private static float Lerp(float a, float b, float t)
-        {
-            return a + (b - a) * Math.Max(0f, Math.Min(1f, t));
-        }
 
         private static bool IsInteropException(Exception exception)
         {

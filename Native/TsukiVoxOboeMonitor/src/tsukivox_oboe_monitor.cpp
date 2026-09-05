@@ -265,14 +265,15 @@ public:
     }
     void SetDspParameters(const TsukiVoxNativeParameters& p)
     {
-        gain_.store(ClampFinite(p.gain, 0.0f, 3.0f, 1.0f), std::memory_order_relaxed);
-        inputDrive_.store(ClampFinite(p.inputDrive, 1.0f, 7.2f, 1.0f), std::memory_order_relaxed);
+        // This path reaches the Quest speakers without Unity distance attenuation.
+        gain_.store(ClampFinite(p.gain, 0.0f, 1.0f, 0.65f), std::memory_order_relaxed);
+        inputDrive_.store(ClampFinite(p.inputDrive, 1.0f, 5.0f, 1.0f), std::memory_order_relaxed);
         distanceGain_.store(ClampFinite(p.distanceGain, 0.0f, 1.0f, 1.0f), std::memory_order_relaxed);
         safetyGain_.store(ClampFinite(p.safetyGain, 0.0f, 1.0f, 1.0f), std::memory_order_relaxed);
         ambience_.store(ClampFinite(p.ambience, 0.0f, 1.0f, 0.0f), std::memory_order_relaxed);
         echo_.store(ClampFinite(p.echo, 0.0f, 1.0f, 0.0f), std::memory_order_relaxed);
         dynamics_.store(ClampFinite(p.dynamics, 0.0f, 1.0f, 0.0f), std::memory_order_relaxed);
-        highPassHz_.store(ClampFinite(p.highPassHz, 50.0f, 180.0f, 90.0f), std::memory_order_relaxed);
+        highPassHz_.store(ClampFinite(p.highPassHz, 60.0f, 100.0f, 72.0f), std::memory_order_relaxed);
         muted_.store(p.muted != 0, std::memory_order_relaxed);
     }
     TsukiVoxNativeStats GetStats()
@@ -354,14 +355,14 @@ public:
             const float attack = 1.0f - std::exp(-1.0f / (0.006f * sampleRate_));
             const float release = 1.0f - std::exp(-1.0f / (0.120f * sampleRate_));
             envelope_ += (absDriven - envelope_) * (absDriven > envelope_ ? attack : release); envelope_ = Sanitize(envelope_);
-            const float thresholdDb = Lerp(-10.0f, -31.0f, smoothDynamics_);
-            const float ratio = Lerp(1.1f, 6.2f, smoothDynamics_);
+            const float thresholdDb = Lerp(-8.0f, -20.0f, smoothDynamics_);
+            const float ratio = Lerp(1.1f, 3.2f, smoothDynamics_);
             const float envDb = 20.0f * std::log10(std::max(envelope_, 1.0e-7f));
             const float over = envDb - thresholdDb; const float knee = 6.0f; float reductionDb = 0.0f;
             if (over > knee * 0.5f) reductionDb = over * (1.0f - 1.0f / ratio);
             else if (over > -knee * 0.5f) { const float x = over + knee * 0.5f; reductionDb = (1.0f - 1.0f / ratio) * x * x / (2.0f * knee); }
             const float compGain = std::pow(10.0f, -reductionDb / 20.0f);
-            const float makeup = Lerp(1.0f, 3.8f, smoothDynamics_);
+            const float makeup = Lerp(1.0f, 1.45f, smoothDynamics_);
             const float dry = Sanitize(driven * compGain * makeup); postPeak = std::max(postPeak, std::fabs(dry)); compReduction = std::max(compReduction, reductionDb);
             float wetL, wetR; ProcessReverb(dry, wetL, wetR);
             const float postGain = smoothDistanceGain_ * smoothSafetyGain_;
@@ -497,8 +498,8 @@ private:
         early_.Write(dry); const float earlyL = early_.Read(static_cast<int>(sr * 0.013f)) * 0.42f + early_.Read(static_cast<int>(sr * 0.029f)) * 0.24f;
         const float earlyR = early_.Read(static_cast<int>(sr * 0.019f)) * 0.38f + early_.Read(static_cast<int>(sr * 0.037f)) * 0.26f;
         echoDelay_.Write(dry); const int echoFrames = static_cast<int>(sr * Lerp(0.052f, 0.118f, e)); const float echoTap = echoDelay_.Read(echoFrames);
-        const float feedback = std::min(0.78f, Lerp(0.48f, 0.76f, a)); const float damping = Lerp(0.42f, 0.26f, a);
-        const float excitation = dry * (0.18f + 0.20f * a);
+        const float feedback = Lerp(0.34f, 0.56f, a); const float damping = Lerp(0.62f, 0.45f, a);
+        const float excitation = dry * (0.14f + 0.12f * a);
         float revL = combL_[0].ProcessComb(excitation, static_cast<int>(sr * 0.0297f), feedback, damping)
                    + combL_[1].ProcessComb(excitation, static_cast<int>(sr * 0.0371f), feedback * 0.97f, damping)
                    + combL_[2].ProcessComb(excitation, static_cast<int>(sr * 0.0411f), feedback * 0.95f, damping)
@@ -510,9 +511,9 @@ private:
         revL *= 0.25f; revR *= 0.25f;
         revL = allpassL_[1].ProcessAllpass(allpassL_[0].ProcessAllpass(revL, static_cast<int>(sr * 0.0050f), 0.5f), static_cast<int>(sr * 0.0017f), 0.5f);
         revR = allpassR_[1].ProcessAllpass(allpassR_[0].ProcessAllpass(revR, static_cast<int>(sr * 0.0053f), 0.5f), static_cast<int>(sr * 0.0019f), 0.5f);
-        const float ambienceWet = a * 0.62f; const float echoWet = e * 0.34f;
-        wetL = Sanitize(revL * ambienceWet + earlyL * (0.08f + 0.24f * e) + echoTap * echoWet);
-        wetR = Sanitize(revR * ambienceWet + earlyR * (0.08f + 0.24f * e) + echoTap * echoWet * 0.92f);
+        const float ambienceWet = a * 0.48f; const float echoWet = e * 0.22f;
+        wetL = Sanitize(revL * ambienceWet + earlyL * (0.10f + 0.18f * e) + echoTap * echoWet);
+        wetR = Sanitize(revR * ambienceWet + earlyR * (0.10f + 0.18f * e) + echoTap * echoWet * 0.92f);
     }
     void SmoothParameters(float k)
     {

@@ -144,6 +144,49 @@ namespace TsukiVox.AudioPrototype
         }
     }
 
+    public static class NativeFeedbackSafetyTuning
+    {
+        public const float DefaultOutputGain = 0.65f;
+        public const float MaximumOutputGain = 1f;
+        public const float MaximumInputDrive = 5f;
+        public const float MinimumHighPassHz = 65f;
+        public const float MaximumHighPassHz = 85f;
+
+        public static float CalculateOutputGain(float requestedPreGain)
+        {
+            if (float.IsNaN(requestedPreGain) || float.IsInfinity(requestedPreGain) || requestedPreGain <= 0f)
+            {
+                return 0f;
+            }
+
+            return Math.Min(
+                MaximumOutputGain,
+                DefaultOutputGain * (float)Math.Sqrt(requestedPreGain));
+        }
+
+        public static float CalculateInputDrive(float dynamics)
+        {
+            return Lerp(1f, MaximumInputDrive, Clamp01(dynamics));
+        }
+
+        public static float CalculateHighPassHz(float dynamics)
+        {
+            return Lerp(MinimumHighPassHz, MaximumHighPassHz, Clamp01(dynamics));
+        }
+
+        private static float Clamp01(float value)
+        {
+            return float.IsNaN(value) || float.IsInfinity(value)
+                ? 0f
+                : Math.Max(0f, Math.Min(1f, value));
+        }
+
+        private static float Lerp(float a, float b, float t)
+        {
+            return a + (b - a) * t;
+        }
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     public struct TsukiVoxNativeParameters
     {

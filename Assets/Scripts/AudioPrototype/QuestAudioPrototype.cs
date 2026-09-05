@@ -994,7 +994,6 @@ namespace TsukiVox.AudioPrototype
                 nativeMonitorProfile,
                 nativeSafeConfigurationForced,
                 MonitorPreGain,
-                Mathf.Lerp(1f, 7.2f, dynamicsAmount),
                 distanceMonitorGain,
                 safetyMonitorGain,
                 ambienceAmount,

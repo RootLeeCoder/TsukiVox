@@ -56,6 +56,27 @@ namespace TsukiVox.AudioPrototype.Tests
         }
 
         [Test]
+        public void NativeFeedbackSafetyKeepsDefaultAndMaximumOutputBelowUnity()
+        {
+            Assert.That(
+                NativeFeedbackSafetyTuning.CalculateOutputGain(1f),
+                Is.EqualTo(NativeFeedbackSafetyTuning.DefaultOutputGain).Within(0.0001f));
+            Assert.That(
+                NativeFeedbackSafetyTuning.CalculateOutputGain(3f),
+                Is.EqualTo(NativeFeedbackSafetyTuning.MaximumOutputGain).Within(0.0001f));
+            Assert.That(NativeFeedbackSafetyTuning.CalculateOutputGain(float.NaN), Is.Zero);
+        }
+
+        [Test]
+        public void NativeFeedbackSafetyLimitsToneControlsWithoutRemovingBody()
+        {
+            Assert.That(NativeFeedbackSafetyTuning.CalculateInputDrive(0.65f), Is.EqualTo(3.6f).Within(0.0001f));
+            Assert.That(NativeFeedbackSafetyTuning.CalculateInputDrive(2f), Is.EqualTo(5f).Within(0.0001f));
+            Assert.That(NativeFeedbackSafetyTuning.CalculateHighPassHz(0.65f), Is.EqualTo(78f).Within(0.0001f));
+            Assert.That(NativeFeedbackSafetyTuning.CalculateHighPassHz(-1f), Is.EqualTo(65f).Within(0.0001f));
+        }
+
+        [Test]
         public void LatencyWindowRejectsInvalidSamplesAndCalculatesMedianAndP95()
         {
             var window = new NativeLatencyWindow();

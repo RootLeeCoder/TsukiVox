@@ -357,9 +357,6 @@ namespace TsukiVox.AudioPrototype
         private TMP_Text diagnosticsRequestModeText;
         private TMP_Text diagnosticsVideoText;
         private TMP_Text rawDiagnosticsText;
-        private Button previousNativeProfileButton;
-        private Button nextNativeProfileButton;
-        private TMP_Text nativeProfileText;
         private Button clearMediaCacheButton;
         private TMP_Text clearMediaCacheButtonText;
         private QuestUiIcon clearMediaCacheIcon;
@@ -1718,39 +1715,9 @@ namespace TsukiVox.AudioPrototype
             rawDiagnosticsText = CreateText(rawDetailsRoot, "Text", string.Empty, 10, FontStyle.Normal, new Vector2(0f, 4f), new Vector2(510f, 104f), TextAnchor.UpperLeft, TextSecondary);
             rawDiagnosticsText.textWrappingMode = TextWrappingModes.Normal;
             rawDiagnosticsText.overflowMode = TextOverflowModes.Truncate;
-
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
-            rawDiagnosticsText.rectTransform.anchoredPosition = new Vector2(0f, 20f);
-            rawDiagnosticsText.rectTransform.sizeDelta = new Vector2(510f, 70f);
-            previousNativeProfileButton = CreateIconButton(
-                rawDetailsRoot,
-                "Previous Native Profile",
-                QuestUiIconKind.Previous,
-                new Vector2(-232f, -42f),
-                new Vector2(36f, 32f),
-                Surface,
-                TextSecondary,
-                out _);
-            nextNativeProfileButton = CreateIconButton(
-                rawDetailsRoot,
-                "Next Native Profile",
-                QuestUiIconKind.Next,
-                new Vector2(232f, -42f),
-                new Vector2(36f, 32f),
-                Surface,
-                TextSecondary,
-                out _);
-            nativeProfileText = CreateText(
-                rawDetailsRoot,
-                "Native Profile",
-                "Profile · Production",
-                11,
-                FontStyle.Bold,
-                new Vector2(0f, -42f),
-                new Vector2(400f, 30f),
-                TextAnchor.MiddleCenter,
-                AccentStrong);
-#endif
+            SetChildActive(rawDetailsRoot, "Previous Native Profile", false);
+            SetChildActive(rawDetailsRoot, "Next Native Profile", false);
+            SetChildActive(rawDetailsRoot, "Native Profile", false);
 
             clearMediaCacheButton = CreateSurfaceButton(debugDrawer, "Clear Media Cache", new Vector2(-141f, -208f), new Vector2(266f, 38f), Surface, Line);
             clearMediaCacheIcon = EnsureIcon(clearMediaCacheButton.transform, "Icon", QuestUiIconKind.Trash, new Vector2(-103f, 0f), new Vector2(20f, 20f), Danger);
@@ -1977,8 +1944,6 @@ namespace TsukiVox.AudioPrototype
             WireButton(clearMediaCacheButton, HandleClearMediaCache);
             WireButton(restoreDefaultSettingsButton, HandleRestoreDefaultSettings);
             WireButton(copyDiagnosticsButton, () => appShellPrototype?.CopyCompleteDebugInfoToClipboard());
-            WireButton(previousNativeProfileButton, () => CycleNativeProfile(-1));
-            WireButton(nextNativeProfileButton, () => CycleNativeProfile(1));
 
             var switchVisuals = consumerRoot.GetComponentsInChildren<QuestUiSwitchVisual>(true);
             for (var index = 0; index < switchVisuals.Length; index += 1)
@@ -2855,26 +2820,6 @@ namespace TsukiVox.AudioPrototype
                     ? string.Empty
                     : $"\n存储操作  {SingleLine(lastMaintenanceDetails)}");
 
-            if (nativeProfileText != null)
-            {
-                nativeProfileText.text = $"Profile · {audioPrototype?.NativeMonitorProfileName ?? "missing"}";
-                previousNativeProfileButton.interactable = audioPrototype != null;
-                nextNativeProfileButton.interactable = audioPrototype != null;
-            }
-        }
-
-        private void CycleNativeProfile(int direction)
-        {
-            if (audioPrototype == null)
-            {
-                return;
-            }
-
-            var count = Enum.GetValues(typeof(NativeMonitorProfile)).Length;
-            var next = ((int)audioPrototype.NativeMonitorProfile + direction + count) % count;
-            audioPrototype.SetNativeMonitorProfile((NativeMonitorProfile)next);
-            RefreshDiagnostics();
-            RefreshVoice();
         }
 
         private static string FormatLatencySummaryCompact(NativeLatencySummary summary)
