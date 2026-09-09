@@ -38,6 +38,7 @@ namespace TsukiVox.AudioPrototype
         private const string DynamicsPrefsKey = "TsukiVox.Audio.Dynamics.v1";
         private const string DistanceMonitoringPrefsKey = "TsukiVox.Audio.DistanceMonitoring.v1";
         private const string MonitorModePrefsKey = "TsukiVox.Audio.MonitorMode";
+        private const string NativeInputModePrefsKey = "TsukiVox.Audio.NativeInputMode.v1";
 
         [Header("Signal Chain")]
         [SerializeField] private AudioSource monitorSource;
@@ -64,8 +65,8 @@ namespace TsukiVox.AudioPrototype
         [Header("Runtime Defaults")]
         [SerializeField, Range(0f, MaximumMonitorVolume)] private float monitorVolume = DefaultMonitorVolume;
         [SerializeField] private bool safetyLimiterEnabled = true;
-        [SerializeField] private bool preferNativeOboeBackend = true;
-        [SerializeField] private MonitorMode selectedMonitorMode = MonitorMode.OboeLowLatency;
+        [SerializeField] private bool preferNativeOboeBackend = false;
+        [SerializeField] private MonitorMode selectedMonitorMode = MonitorMode.UnitySpatialSpeakers;
         [SerializeField] private bool requestLowLatencyAudio = true;
         [SerializeField] private PrototypePreset initialPreset = PrototypePreset.KtvRoom;
 
@@ -114,14 +115,21 @@ namespace TsukiVox.AudioPrototype
         private bool nativeFallbackActive;
         private string nativeFallbackReason = string.Empty;
         private TsukiVoxNativeStats nativeStats;
+        private TsukiVoxNativeStats lastNativeStats;
         private string backendNote = "Backend not started.";
         private double estimatedMicrophoneLagMs = double.NaN;
         private NativeMonitorProfile nativeMonitorProfile = NativeMonitorProfile.Production;
+        private NativeInputProcessingMode nativeInputMode = NativeInputProcessingMode.Natural;
+        private int nativeRestartCount;
+        private string lastNativeRestartReason = string.Empty;
+        private bool isApplicationPaused;
+        private bool resumeMonitoringAfterPause;
+        private int monitoringGeneration;
+        private float nextPermissionCheckAt;
         private bool nativeSafeConfigurationForced;
         private float nextNativeStatsPollAt;
         private string nativeConfigurationKey = string.Empty;
         private string nativeConfigurationFallbackReason = string.Empty;
-        private bool nativeExperimentIssueLogged;
         private string audioConfigurationNote = "Audio configuration not requested yet.";
         private QuestHandheldPropsPrototype handheldPropsPrototype;
         private float microphoneSurfaceClearance = float.PositiveInfinity;
@@ -185,13 +193,17 @@ namespace TsukiVox.AudioPrototype
 
         public string NativeFallbackReason => nativeFallbackReason;
 
-        public TsukiVoxNativeStats NativeStats => nativeStats;
+        public TsukiVoxNativeStats NativeStats => nativeStats.version != 0 ? nativeStats : lastNativeStats;
 
-        public string NativeApiName => nativeStats.AudioApiName;
+        public string NativeApiName => NativeStats.AudioApiName;
 
         public string NativeError => NativeOboeDryMonitor.IsInvalid ? NativeOboeDryMonitor.InvalidReason : NativeOboeDryMonitor.GetLastError();
 
         public NativeMonitorProfile NativeMonitorProfile => nativeMonitorProfile;
+
+        public NativeInputProcessingMode NativeInputMode => nativeInputMode;
+        public int NativeRestartCount => nativeRestartCount;
+        public TsukiVoxNativeParameters NativeParameters => BuildNativeParameters();
 
         public string NativeMonitorProfileName => NativeMonitorProfiles.GetDisplayName(nativeMonitorProfile);
 
@@ -321,6 +333,15 @@ namespace TsukiVox.AudioPrototype
 
         private void Update()
         {
+            if (isMonitoring && Time.unscaledTime >= nextPermissionCheckAt)
+            {
+                nextPermissionCheckAt = Time.unscaledTime + 1f;
+                if (!HasMicrophonePermission())
+                {
+                    StopMonitoring();
+                    SetStatus("Microphone permission revoked; monitoring stopped.");
+                }
+            }
             UpdateDistanceMonitoring();
             UpdateLevels();
             UpdateEstimatedLag();
@@ -338,14 +359,29 @@ namespace TsukiVox.AudioPrototype
 
         private void OnApplicationPause(bool paused)
         {
+            isApplicationPaused = paused;
             if (paused)
             {
+                resumeMonitoringAfterPause = isMonitoring || microphoneClip != null;
+                StopMonitoring();
                 SavePendingAudioPreferences();
             }
+            else if (resumeMonitoringAfterPause)
+            {
+                resumeMonitoringAfterPause = false;
+                if (HasMicrophonePermission()) StartMonitoring();
+                else SetStatus("Microphone permission is required to resume monitoring.");
+            }
+        }
+
+        private void OnDisable()
+        {
+            StopMonitoring();
         }
 
         private void OnApplicationQuit()
         {
+            StopMonitoring();
             SavePendingAudioPreferences();
         }
 
@@ -392,7 +428,7 @@ namespace TsukiVox.AudioPrototype
 
         public void StartMonitoring()
         {
-            if (isMonitoring)
+            if (isMonitoring || microphoneClip != null || isApplicationPaused || !isActiveAndEnabled || isWaitingForPermission)
             {
                 return;
             }
@@ -422,11 +458,12 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
-            StartCoroutine(StartSourceWhenMicrophoneIsPrimed());
+            StartCoroutine(StartSourceWhenMicrophoneIsPrimed(monitoringGeneration));
         }
 
         public void StopMonitoring()
         {
+            monitoringGeneration += 1;
             if (monitorSource != null)
             {
                 monitorSource.Stop();
@@ -435,6 +472,7 @@ namespace TsukiVox.AudioPrototype
             }
 
             NativeOboeDryMonitor.Stop();
+            lastNativeStats.running = 0;
             if (!string.IsNullOrEmpty(activeDevice) && Microphone.IsRecording(activeDevice))
             {
                 Microphone.End(activeDevice);
@@ -530,6 +568,22 @@ namespace TsukiVox.AudioPrototype
             ConfigureMonitorMode(AudioMonitorPreference.Resolve(true, (int)mode), true);
         }
 
+        public void SetNativeInputMode(NativeInputProcessingMode mode)
+        {
+            var normalized = NativeInputProcessing.Normalize((int)mode);
+            if (nativeInputMode == normalized) return;
+            nativeInputMode = normalized;
+            PlayerPrefs.SetInt(NativeInputModePrefsKey, (int)normalized);
+            PlayerPrefs.Save();
+            nativeSafeConfigurationForced = false;
+            RecordNativeEvent($"input-selected:{normalized}");
+            if (selectedMonitorMode != MonitorMode.OboeLowLatency || !isMonitoring) return;
+            StopMonitoring();
+            nativeFallbackActive = false;
+            nativeFallbackReason = string.Empty;
+            StartMonitoring();
+        }
+
         public void SetNativeMonitorProfile(NativeMonitorProfile profile)
         {
             var normalized = NativeMonitorProfiles.Normalize((int)profile);
@@ -569,6 +623,8 @@ namespace TsukiVox.AudioPrototype
             dynamicsAmount = defaults.Dynamics;
             distanceMonitoringEnabled = DefaultDistanceMonitoringEnabled;
             nativeMonitorProfile = NativeMonitorProfile.Production;
+            nativeInputMode = NativeInputProcessingMode.Natural;
+            PlayerPrefs.SetInt(NativeInputModePrefsKey, (int)nativeInputMode);
             nativeSafeConfigurationForced = false;
             ResetDistanceTrackingState(false);
             safetyMonitorGain = 1f;
@@ -727,8 +783,9 @@ namespace TsukiVox.AudioPrototype
 
         private IEnumerator RequestPermissionThenStart()
         {
+            var generation = monitoringGeneration;
             yield return RequestMicrophonePermissionIfNeeded();
-            if (HasMicrophonePermission())
+            if (generation == monitoringGeneration && HasMicrophonePermission())
             {
                 StartMonitoring();
             }
@@ -770,14 +827,16 @@ namespace TsukiVox.AudioPrototype
 #endif
         }
 
-        private IEnumerator StartSourceWhenMicrophoneIsPrimed()
+        private IEnumerator StartSourceWhenMicrophoneIsPrimed(int generation)
         {
             SetStatus($"Starting mic: {activeDevice}");
             var startDeadline = Time.realtimeSinceStartup + 2f;
-            while (Microphone.GetPosition(activeDevice) <= 0 && Time.realtimeSinceStartup < startDeadline)
+            while (generation == monitoringGeneration && Microphone.GetPosition(activeDevice) <= 0 && Time.realtimeSinceStartup < startDeadline)
             {
                 yield return null;
             }
+
+            if (generation != monitoringGeneration) yield break;
 
             if (Microphone.GetPosition(activeDevice) <= 0)
             {
@@ -829,7 +888,16 @@ namespace TsukiVox.AudioPrototype
             ResetDistanceTrackingState(true);
             ClearNativeMeasurementState();
             var parameters = BuildNativeParameters();
-            if (NativeOboeDryMonitor.TryStart(parameters, out var error))
+            var started = NativeOboeDryMonitor.TryStart(parameters, out var error);
+            if (!started && !nativeSafeConfigurationForced && !NativeOboeDryMonitor.IsInvalid)
+            {
+                nativeSafeConfigurationForced = true;
+                nativeRestartCount += 1;
+                lastNativeRestartReason = error;
+                RecordNativeEvent($"startup-safe-retry:{error}");
+                started = NativeOboeDryMonitor.TryStart(BuildNativeParameters(), out error);
+            }
+            if (started)
             {
                 if (monitorSource != null)
                 {
@@ -990,8 +1058,9 @@ namespace TsukiVox.AudioPrototype
 
         private TsukiVoxNativeParameters BuildNativeParameters()
         {
-            return NativeOboeDryMonitor.CreateParameters(
+            return NativeParameterFactory.Create(
                 nativeMonitorProfile,
+                (NativeDspPreset)Mathf.Clamp((int)currentPreset, 0, 3),
                 nativeSafeConfigurationForced,
                 MonitorPreGain,
                 distanceMonitorGain,
@@ -999,7 +1068,8 @@ namespace TsukiVox.AudioPrototype
                 ambienceAmount,
                 echoAmount,
                 dynamicsAmount,
-                !monitorOutputEnabled);
+                !monitorOutputEnabled,
+                nativeInputMode);
         }
 
         private void SyncNativeParameters()
@@ -1155,9 +1225,12 @@ namespace TsukiVox.AudioPrototype
             distanceMonitoringEnabled = PlayerPrefs.GetInt(
                 DistanceMonitoringPrefsKey,
                 distanceMonitoringEnabled ? 1 : 0) != 0;
+            AudioModeMigration.Apply(PlayerPrefs.GetInt, PlayerPrefs.SetInt);
+            PlayerPrefs.Save();
             selectedMonitorMode = AudioMonitorPreference.Resolve(
                 PlayerPrefs.HasKey(MonitorModePrefsKey),
                 PlayerPrefs.GetInt(MonitorModePrefsKey, (int)AudioMonitorPreference.DefaultMode));
+            nativeInputMode = NativeInputProcessing.Normalize(PlayerPrefs.GetInt(NativeInputModePrefsKey, 0));
             preferNativeOboeBackend = selectedMonitorMode == MonitorMode.OboeLowLatency;
             spatialVoiceEnabled = selectedMonitorMode == MonitorMode.UnitySpatialSpeakers;
         }
@@ -1268,14 +1341,9 @@ namespace TsukiVox.AudioPrototype
                 }
 
                 nativeStats = latestStats;
+                lastNativeStats = latestStats;
                 UpdateNativeLatencyWindows(timestamp, nativeStats);
                 UpdateNativeConfigurationStatus(nativeStats);
-
-                if (NativeMonitorProfiles.IsExperimental(nativeMonitorProfile))
-                {
-                    RecordExperimentalIssueIfNeeded(nativeStats);
-                    return;
-                }
 
                 var action = nativeStabilityPolicy.Observe(
                     timestamp,
@@ -1333,17 +1401,6 @@ namespace TsukiVox.AudioPrototype
                 ? NativeOboeDryMonitor.InvalidReason
                 : NativeOboeDryMonitor.GetLastError();
             var reason = string.IsNullOrWhiteSpace(error) ? "native statistics unavailable" : error;
-            if (NativeMonitorProfiles.IsExperimental(nativeMonitorProfile))
-            {
-                if (!nativeExperimentIssueLogged)
-                {
-                    nativeExperimentIssueLogged = true;
-                    RecordNativeEvent($"experiment-issue:{reason}");
-                    SetStatus($"Experimental native profile issue: {reason}");
-                }
-                return;
-            }
-
             if (nativeSafeConfigurationForced || nativeStats.IsSafeConfiguration || NativeOboeDryMonitor.IsInvalid)
             {
                 BeginNativeFallback(reason);
@@ -1361,6 +1418,8 @@ namespace TsukiVox.AudioPrototype
                 return;
             }
 
+            nativeRestartCount += 1;
+            lastNativeRestartReason = reason;
             RecordNativeEvent($"runtime-safe-restart:{reason}");
             NativeOboeDryMonitor.Stop();
             nativeSafeConfigurationForced = true;
@@ -1382,23 +1441,6 @@ namespace TsukiVox.AudioPrototype
             SetStatus("Native audio detected instability and restarted once in the safe profile.");
         }
 
-        private void RecordExperimentalIssueIfNeeded(TsukiVoxNativeStats stats)
-        {
-            if (nativeExperimentIssueLogged ||
-                (stats.IsRunning && stats.lastStreamError == 0 && stats.inputXRunCount == 0 &&
-                 stats.outputXRunCount == 0 && stats.shortReadCount == 0 && stats.frameMismatchCount == 0))
-            {
-                return;
-            }
-
-            nativeExperimentIssueLogged = true;
-            RecordNativeEvent($"experiment-issue:{BuildNativeStabilityReason(stats)}");
-            if (!stats.IsRunning || stats.lastStreamError != 0)
-            {
-                SetStatus("Experimental native profile stopped; automatic fallback is disabled for A/B testing.");
-            }
-        }
-
         private void UpdateNativeConfigurationStatus(TsukiVoxNativeStats stats)
         {
             var key = $"{stats.requestedProfile}:{stats.resolvedProfile}:{stats.fallbackStage}:" +
@@ -1417,7 +1459,8 @@ namespace TsukiVox.AudioPrototype
 
             nativeConfigurationFallbackReason = stats.FallbackStage == NativeFallbackStage.None
                 ? string.Empty
-                : $"{stats.FallbackStageName} · {NativeMonitorProfiles.GetDisplayName(stats.ResolvedProfile)}";
+                : $"{stats.FallbackStageName} · {stats.InputPresetName}" +
+                  (nativeSafeConfigurationForced ? $" · {lastNativeRestartReason}" : string.Empty);
         }
 
         private static string BuildNativeStabilityReason(TsukiVoxNativeStats stats)
@@ -1432,7 +1475,8 @@ namespace TsukiVox.AudioPrototype
                 return "native stream stopped unexpectedly";
             }
 
-            return $"XRuns {stats.inputXRunCount}/{stats.outputXRunCount}, short reads {stats.shortReadCount}";
+            return $"XRuns {stats.inputXRunCount}/{stats.outputXRunCount}, short reads {stats.shortReadCount}, " +
+                   $"callback overruns {stats.callbackOverrunCount}, CPU {stats.callbackCpuLoad:P1}";
         }
 
 
@@ -1466,20 +1510,22 @@ namespace TsukiVox.AudioPrototype
             nativeRoundTripLatencyWindow.Clear();
             nativeConfigurationKey = string.Empty;
             nativeConfigurationFallbackReason = string.Empty;
-            nativeExperimentIssueLogged = false;
             nextNativeStatsPollAt = 0f;
         }
 
         private void RecordNativeEvent(string value)
         {
-            var entry = $"{Time.realtimeSinceStartupAsDouble:0.0}s {value}";
+            var entry = $"{DateTime.UtcNow:O} {Time.realtimeSinceStartupAsDouble:0.0}s {value} " +
+                        $"input={nativeInputMode}/{nativeStats.InputPresetName} buffer={nativeStats.inputBufferFrames}/{nativeStats.outputBufferFrames} " +
+                        $"mmap={nativeStats.IsInputMMapUsed}/{nativeStats.IsOutputMMapUsed} " +
+                        $"xruns={nativeStats.inputXRunCount}/{nativeStats.outputXRunCount} overrun={nativeStats.callbackOverrunCount}";
             while (nativeFallbackHistory.Count >= NativeFallbackHistoryCapacity)
             {
                 nativeFallbackHistory.Dequeue();
             }
 
             nativeFallbackHistory.Enqueue(entry);
-            Debug.Log($"[TsukiVox Native Audio] event={value}");
+            Debug.Log($"[TsukiVox Native Audio] event={entry}");
         }
 
         private void ApplySafetyLimiter()
@@ -1568,7 +1614,7 @@ namespace TsukiVox.AudioPrototype
             metricsBuilder.Append(string.IsNullOrEmpty(activeDevice) ? "none" : activeDevice);
             metricsBuilder.Append("\nProcessor ");
             metricsBuilder.Append(activeBackend == NativeAudioBackend.NativeOboeLowLatency
-                ? "native stereo KTV DSP + limiter"
+                ? $"native v5 {nativeStats.dspPreset} dry/wet {nativeStats.dryGain:0.00}/{nativeStats.wetGain:0.00}"
                 : (vocalProcessorEnabled ? "gate/comp/limiter + reverb/echo" : "bypassed"));
             metricsBuilder.Append("\nDistance monitor ");
             metricsBuilder.Append(distanceMonitoringEnabled ? "enabled" : "disabled");
@@ -1783,14 +1829,8 @@ namespace TsukiVox.AudioPrototype
 
         private static PresetSettings GetPresetSettings(PrototypePreset preset)
         {
-            return preset switch
-            {
-                PrototypePreset.DryReference => new PresetSettings(0f, 0f, 0f),
-                PrototypePreset.KtvRoom => new PresetSettings(0.55f, 0.3f, 0.65f),
-                PrototypePreset.StrongKtv => new PresetSettings(0.86f, 0.62f, 0.9f),
-                PrototypePreset.SafeSmallRoom => new PresetSettings(0.34f, 0.12f, 0.48f),
-                _ => new PresetSettings(0.55f, 0.3f, 0.65f),
-            };
+            var defaults = NativePresetDefaults.ForPreset((NativeDspPreset)preset);
+            return new PresetSettings(defaults.Ambience, defaults.Echo, defaults.Dynamics);
         }
 
         private static string FormatPresetName(PrototypePreset preset)

@@ -105,7 +105,7 @@ namespace TsukiVox.AudioPrototype
         [SerializeField] private Vector3 glowstickLocalEuler = new Vector3(11.46f, 0f, 0f);
 
         [Header("Microphone Face Proximity Haptics")]
-        [SerializeField] private bool micFaceHapticsEnabled = true;
+        [SerializeField] private bool micFaceHapticsEnabled = false;
         [SerializeField] private Vector3 mouthLocalOffset = new Vector3(DefaultMouthOffsetX, DefaultMouthOffsetY, DefaultMouthOffsetZ);
         [SerializeField, Range(MicrophoneGrilleRadius + MinimumWarningClearance, MicrophoneGrilleRadius + MaximumWarningClearance)] private float micFaceWarningDistance = 0.0505f;
         [SerializeField, Range(MicrophoneGrilleRadius + MinimumCriticalClearance, MicrophoneGrilleRadius + MaximumCriticalClearance)] private float micFaceCriticalDistance = 0.0395f;
@@ -313,7 +313,7 @@ namespace TsukiVox.AudioPrototype
             PlayerPrefs.DeleteKey(MicFaceMouthOffsetZPrefsKey);
             PlayerPrefs.Save();
 
-            micFaceHapticsEnabled = true;
+            micFaceHapticsEnabled = false;
             micFaceWarningDistance = DefaultWarningClearance + MicrophoneGrilleRadius;
             micFaceCriticalDistance = DefaultCriticalClearance + MicrophoneGrilleRadius;
             micFaceHapticStrength = DefaultHapticStrength;
@@ -324,7 +324,7 @@ namespace TsukiVox.AudioPrototype
 
         private void LoadMicFacePreferences()
         {
-            micFaceHapticsEnabled = PlayerPrefs.GetInt(MicFaceEnabledPrefsKey, micFaceHapticsEnabled ? 1 : 0) != 0;
+            micFaceHapticsEnabled = PlayerPrefs.GetInt(MicFaceEnabledPrefsKey, 0) != 0;
             var warning = PlayerPrefs.GetFloat(MicFaceWarningClearancePrefsKey, DefaultWarningClearance);
             var critical = PlayerPrefs.GetFloat(MicFaceCriticalClearancePrefsKey, DefaultCriticalClearance);
             warning = Mathf.Clamp(warning, MinimumWarningClearance, MaximumWarningClearance);

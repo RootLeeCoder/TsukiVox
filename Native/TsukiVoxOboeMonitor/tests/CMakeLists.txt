@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.22)
+project(TsukiVoxDspTests LANGUAGES CXX)
+add_executable(vocal_dsp_tests vocal_dsp_tests.cpp)
+target_compile_features(vocal_dsp_tests PRIVATE cxx_std_17)
+target_include_directories(vocal_dsp_tests PRIVATE ../src)
+enable_testing()
+add_test(NAME vocal_dsp_smoke COMMAND vocal_dsp_tests)

@@ -36,14 +36,26 @@ if (!(Test-Path (Join-Path $OboeDir "CMakeLists.txt"))) {
     & git clone --depth 1 --branch 1.10.0 https://github.com/google/oboe.git $OboeDir
     if ($LASTEXITCODE -ne 0 -or !(Test-Path (Join-Path $OboeDir "CMakeLists.txt"))) {
         if (Test-Path $OboeDir) {
-            Remove-Item -LiteralPath $OboeDir -Recurse -Force -ErrorAction SilentlyContinue
+            $resolvedOboe = (Resolve-Path -LiteralPath $OboeDir).Path
+            $allowedThirdParty = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "third_party")) + [IO.Path]::DirectorySeparatorChar
+            if (!$resolvedOboe.StartsWith($allowedThirdParty, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Refusing to remove Oboe source outside third_party: $resolvedOboe"
+            }
+            Remove-Item -LiteralPath $resolvedOboe -Recurse -Force
         }
 
         $Archive = Join-Path (Split-Path $OboeDir) "oboe-1.10.0.zip"
         $ExtractRoot = Join-Path (Split-Path $OboeDir) "oboe-1.10.0"
         Invoke-WebRequest -Uri "https://github.com/google/oboe/archive/refs/tags/1.10.0.zip" -OutFile $Archive
         Expand-Archive -Force -Path $Archive -DestinationPath (Split-Path $OboeDir)
-        Move-Item -Force -Path $ExtractRoot -Destination $OboeDir
+        $resolvedExtract = (Resolve-Path -LiteralPath $ExtractRoot).Path
+        $resolvedDestination = [IO.Path]::GetFullPath($OboeDir)
+        $allowedThirdParty = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "third_party")) + [IO.Path]::DirectorySeparatorChar
+        if (!$resolvedExtract.StartsWith($allowedThirdParty, [StringComparison]::OrdinalIgnoreCase) -or
+            !$resolvedDestination.StartsWith($allowedThirdParty, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to move Oboe source outside third_party."
+        }
+        Move-Item -Force -LiteralPath $resolvedExtract -Destination $resolvedDestination
     }
 }
 
@@ -70,4 +82,4 @@ if ($LASTEXITCODE -ne 0) {
 
 Copy-Item -Force -Path $OutputSo -Destination $PluginDir
 Copy-Item -Force -Path $CxxShared -Destination $PluginDir
-Write-Host "Copied TsukiVox native audio API v4 (Oboe 1.10.0) to $PluginDir"
+Write-Host "Copied TsukiVox native audio API v5 (Oboe 1.10.0) to $PluginDir"

@@ -1,3 +1,5 @@
+#include "audio_abi.h"
+#include "vocal_dsp.h"
 #include <algorithm>
 #include <android/log.h>
 #include <array>
@@ -13,14 +15,13 @@
 
 namespace
 {
-constexpr int32_t ApiVersion = 4;
+using namespace tsukivox;
 constexpr int32_t InputChannels = 1;
 constexpr int32_t OutputChannels = 2;
 constexpr int32_t MaxCallbackFrames = 4096;
-constexpr float Pi = 3.14159265358979323846f;
-constexpr float Epsilon = 1.0e-12f;
 constexpr int NativeSuccess = 1;
 constexpr int NativeFailure = 0;
+static_assert(std::atomic<float>::is_always_lock_free && std::atomic<uint64_t>::is_always_lock_free, "Audio atomics must be lock-free");
 constexpr const char* LogTag = "TsukiVoxNativeAudio";
 
 enum NativeMonitorProfile : int32_t
@@ -41,6 +42,8 @@ enum NativeFallbackStage : int32_t
     GenericSafeShared = 3,
     RuntimeSafe = 4,
     ExperimentShared = 5,
+    SharedFallback = 6,
+    GenericInputFallback = 7,
 };
 
 struct ProfileConfig
@@ -52,46 +55,18 @@ struct ProfileConfig
     int32_t outputBufferBursts;
 };
 
-struct TsukiVoxNativeParameters
-{
-    uint32_t size; uint32_t version;
-    int32_t requestedProfile; int32_t forceSafeConfiguration;
-    float gain; float inputDrive; float distanceGain; float safetyGain;
-    float ambience; float echo; float dynamics;
-    int32_t muted; float highPassHz;
-};
-
-struct TsukiVoxNativeStats
-{
-    uint32_t size; uint32_t version;
-    int32_t running; int32_t requestedProfile; int32_t resolvedProfile; int32_t fallbackStage;
-    int32_t sampleRate; int32_t audioApi;
-    int32_t inputPerformanceMode; int32_t outputPerformanceMode;
-    int32_t inputSharingMode; int32_t outputSharingMode;
-    int32_t inputMMapUsed; int32_t outputMMapUsed; int32_t inputPreset;
-    int32_t inputFramesPerBurst; int32_t outputFramesPerBurst;
-    int32_t inputChannelCount; int32_t outputChannelCount; int32_t inputFormat; int32_t outputFormat;
-    int32_t inputCapacityFrames; int32_t outputCapacityFrames;
-    int32_t requestedInputBufferFrames; int32_t requestedOutputBufferFrames;
-    int32_t inputBufferFrames; int32_t outputBufferFrames;
-    int32_t inputBurstsCushion; int32_t lastCallbackFrames; int32_t minCallbackFrames; int32_t maxCallbackFrames;
-    int32_t inputXRunCount; int32_t outputXRunCount; int32_t inputXRunSupported; int32_t outputXRunSupported;
-    int32_t lastStreamError; int32_t latencyValid; int32_t latencyErrorCount; int32_t fallbackReason;
-    float actualGain; float actualInputDrive; float actualDistanceGain; float actualSafetyGain;
-    float preDspLevel; float postDspLevel; float outputLevel;
-    float compressorReductionDb; float limiterReductionDb;
-    float inputLatencyMs; float outputLatencyMs; float roundTripLatencyMs; float startToFirstInputMs;
-    uint64_t callbackCount; uint64_t shortReadCount; uint64_t frameMismatchCount;
-    uint64_t requestedInputFrameCount; uint64_t receivedInputFrameCount;
-};
-static_assert(sizeof(TsukiVoxNativeParameters) == 52, "Parameter ABI changed");
-static_assert(sizeof(TsukiVoxNativeStats) == 248, "Stats ABI changed");
-
 template <typename T> T ClampFinite(T v, T lo, T hi, T fallback)
 { return std::isfinite(v) ? std::clamp(v, lo, hi) : fallback; }
-inline float Lerp(float a, float b, float t) { return a + (b - a) * t; }
-inline float Sanitize(float v) { return std::isfinite(v) && std::fabs(v) > Epsilon ? v : 0.0f; }
 int32_t ValueOrZero(const oboe::ResultWithValue<int32_t>& r) { return r ? r.value() : 0; }
+
+int32_t ResolveInputPreset(int32_t mode)
+{
+    switch (mode)
+    {
+        case 1: case 6: case 9: case 10: return mode;
+        default: return 9; // Natural
+    }
+}
 
 int32_t NormalizeProfile(int32_t profile)
 {
@@ -113,6 +88,7 @@ ProfileConfig ResolveProfile(int32_t profile)
         case VoicePerformanceCushion0Output1:
             return {VoicePerformanceCushion0Output1, oboe::InputPreset::VoicePerformance, 0, 2, 1};
         case Production:
+            return {Production, oboe::InputPreset::Unprocessed, 0, 2, 2};
         case VoicePerformanceCushion0:
         default:
             return {VoicePerformanceCushion0, oboe::InputPreset::VoicePerformance, 0, 2, 2};
@@ -140,7 +116,7 @@ const char* ProfileName(int32_t profile)
 {
     switch (profile)
     {
-        case Production: return "production";
+        case Production: return "natural-unprocessed-c0-o2";
         case BaselineGenericCushion1: return "generic-c1-o2";
         case VoiceRecognitionCushion0: return "recognition-c0-o2";
         case VoicePerformanceCushion0: return "performance-c0-o2";
@@ -161,37 +137,6 @@ int64_t NowNanos()
         std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-template <size_t Capacity> class Delay
-{
-public:
-    void Reset() { data_.fill(0.0f); write_ = 0; filter_ = 0.0f; }
-    float Read(int frames) const
-    {
-        const int d = std::clamp(frames, 1, static_cast<int>(Capacity) - 1);
-        return data_[(write_ + Capacity - static_cast<size_t>(d)) % Capacity];
-    }
-    void Write(float value) { data_[write_] = Sanitize(value); write_ = (write_ + 1) % Capacity; }
-    float ProcessComb(float input, int frames, float feedback, float damping)
-    {
-        const float delayed = Read(frames);
-        filter_ += (delayed - filter_) * (1.0f - damping);
-        filter_ = Sanitize(filter_);
-        Write(input + filter_ * feedback);
-        return delayed;
-    }
-    float ProcessAllpass(float input, int frames, float feedback)
-    {
-        const float delayed = Read(frames);
-        const float output = delayed - input;
-        Write(input + delayed * feedback);
-        return output;
-    }
-private:
-    std::array<float, Capacity> data_{};
-    size_t write_ = 0;
-    float filter_ = 0.0f;
-};
-
 class OboeMonitor final : public oboe::FullDuplexStream, public oboe::AudioStreamErrorCallback
 {
 public:
@@ -199,46 +144,44 @@ public:
     {
         Stop(); requestedProfile_ = NormalizeProfile(p.requestedProfile);
         forceSafeConfiguration_ = p.forceSafeConfiguration != 0;
-        SetDspParameters(p); ResetDsp(); ResetStats();
-        const auto requestedConfig = ResolveProfile(requestedProfile_);
-        const auto safeConfig = MakeSafeConfig(requestedConfig);
-        const ProfileConfig genericSafe{BaselineGenericCushion1, oboe::InputPreset::Generic, 1, 2, 2};
-        oboe::Result result = oboe::Result::ErrorInternal;
-
-        if (requestedProfile_ == Production)
+        SetDspParameters(p); ResetStats();
+        auto requestedConfig = ResolveProfile(requestedProfile_);
+        requestedConfig.inputPreset = static_cast<oboe::InputPreset>(ResolveInputPreset(p.inputProcessingMode));
+        const auto config = forceSafeConfiguration_ ? MakeSafeConfig(requestedConfig) : requestedConfig;
+        oboe::Result result = TryOpenStreams(config, oboe::SharingMode::Exclusive,
+            forceSafeConfiguration_ ? RuntimeSafe : NoFallback);
+        if (result != oboe::Result::OK)
+            result = TryOpenStreams(config, oboe::SharingMode::Shared,
+                forceSafeConfiguration_ ? RuntimeSafe : SharedFallback);
+        // Unsupported Natural/other input source: keep the same buffers when trying Generic.
+        if (result != oboe::Result::OK && config.inputPreset != oboe::InputPreset::Generic)
         {
-            if (!forceSafeConfiguration_)
-            {
-                result = TryOpenStreams(requestedConfig, oboe::SharingMode::Exclusive, NoFallback);
-            }
+            auto generic = config;
+            generic.inputPreset = oboe::InputPreset::Generic;
+            result = TryOpenStreams(generic, oboe::SharingMode::Exclusive, GenericInputFallback);
             if (result != oboe::Result::OK)
-            {
-                result = TryOpenStreams(safeConfig, oboe::SharingMode::Exclusive,
-                    forceSafeConfiguration_ ? RuntimeSafe : SafeExclusive);
-            }
-            if (result != oboe::Result::OK)
-            {
-                result = TryOpenStreams(safeConfig, oboe::SharingMode::Shared,
-                    forceSafeConfiguration_ ? RuntimeSafe : SafeShared);
-            }
-            if (result != oboe::Result::OK)
-            {
-                result = TryOpenStreams(genericSafe, oboe::SharingMode::Shared, GenericSafeShared);
-            }
+                result = TryOpenStreams(generic, oboe::SharingMode::Shared, GenericInputFallback);
         }
-        else
+        if (result != oboe::Result::OK && !forceSafeConfiguration_)
         {
-            result = TryOpenStreams(requestedConfig, oboe::SharingMode::Exclusive, NoFallback);
+            const auto safeConfig = MakeSafeConfig(config);
+            result = TryOpenStreams(safeConfig, oboe::SharingMode::Exclusive, SafeExclusive);
+            if (result != oboe::Result::OK)
+                result = TryOpenStreams(safeConfig, oboe::SharingMode::Shared, SafeShared);
             if (result != oboe::Result::OK)
             {
-                result = TryOpenStreams(requestedConfig, oboe::SharingMode::Shared, ExperimentShared);
+                auto generic = safeConfig;
+                generic.inputPreset = oboe::InputPreset::Generic;
+                result = TryOpenStreams(generic, oboe::SharingMode::Shared, GenericSafeShared);
             }
         }
 
-        if (result != oboe::Result::OK) { SetError(result); CloseOwnedStreams(); return false; }
+        if (result != oboe::Result::OK) { running_.store(false); SetError(result); CloseOwnedStreams(); return false; }
+        dsp_.Prepare(sampleRate_, ReadDspParameters());
         streamStartNanos_ = NowNanos();
+        running_.store(true, std::memory_order_release);
         result = oboe::FullDuplexStream::start();
-        if (result != oboe::Result::OK) { SetError(result); CloseOwnedStreams(); return false; }
+        if (result != oboe::Result::OK) { running_.store(false); SetError(result); CloseOwnedStreams(); return false; }
         __android_log_print(
             ANDROID_LOG_INFO,
             LogTag,
@@ -250,30 +193,42 @@ public:
             IsMMapUsed(inputStream_.get()) ? 1 : 0, IsMMapUsed(outputStream_.get()) ? 1 : 0,
             inputFramesPerBurst_, outputFramesPerBurst_, inputStream_->getBufferSizeInFrames(),
             outputStream_->getBufferSizeInFrames(), inputBurstsCushion_);
-        running_.store(true, std::memory_order_release); return true;
+        return running_.load(std::memory_order_acquire);
     }
     void Stop()
     {
         running_.store(false, std::memory_order_release);
-        oboe::FullDuplexStream::stop(); CloseOwnedStreams();
+        oboe::FullDuplexStream::stop(); CloseOwnedStreams(); dsp_.Reset();
     }
     bool SetParameters(const TsukiVoxNativeParameters& p)
     {
         if (NormalizeProfile(p.requestedProfile) != requestedProfile_ ||
-            (p.forceSafeConfiguration != 0) != forceSafeConfiguration_) return false;
+            (p.forceSafeConfiguration != 0) != forceSafeConfiguration_ ||
+            p.inputProcessingMode != inputProcessingMode_.load()) return false;
         SetDspParameters(p); return true;
     }
     void SetDspParameters(const TsukiVoxNativeParameters& p)
     {
         // This path reaches the Quest speakers without Unity distance attenuation.
         gain_.store(ClampFinite(p.gain, 0.0f, 1.0f, 0.65f), std::memory_order_relaxed);
-        inputDrive_.store(ClampFinite(p.inputDrive, 1.0f, 5.0f, 1.0f), std::memory_order_relaxed);
+        inputDrive_.store(ClampFinite(p.inputDrive, 1.0f, 6.0f, 1.0f), std::memory_order_relaxed);
         distanceGain_.store(ClampFinite(p.distanceGain, 0.0f, 1.0f, 1.0f), std::memory_order_relaxed);
         safetyGain_.store(ClampFinite(p.safetyGain, 0.0f, 1.0f, 1.0f), std::memory_order_relaxed);
         ambience_.store(ClampFinite(p.ambience, 0.0f, 1.0f, 0.0f), std::memory_order_relaxed);
         echo_.store(ClampFinite(p.echo, 0.0f, 1.0f, 0.0f), std::memory_order_relaxed);
         dynamics_.store(ClampFinite(p.dynamics, 0.0f, 1.0f, 0.0f), std::memory_order_relaxed);
-        highPassHz_.store(ClampFinite(p.highPassHz, 60.0f, 100.0f, 72.0f), std::memory_order_relaxed);
+        inputProcessingMode_.store(p.inputProcessingMode, std::memory_order_relaxed);
+        dspPreset_.store(std::clamp(p.dspPreset, 0, 3), std::memory_order_relaxed);
+        dryGain_.store(ClampFinite(p.dryGain, 0.0f, 1.25f, 1.0f), std::memory_order_relaxed);
+        reverbSend_.store(ClampFinite(p.reverbSend, 0.0f, 1.0f, 0.0f), std::memory_order_relaxed);
+        reverbPreDelayMs_.store(ClampRoomPreDelay(p.reverbPreDelayMs), std::memory_order_relaxed);
+        reverbDecay_.store(ClampRoomDecay(p.reverbDecay), std::memory_order_relaxed);
+        reverbWidth_.store(ClampFinite(p.reverbWidth, 0.0f, 1.0f, 0.0f), std::memory_order_relaxed);
+        echoDelayMs_.store(ClampFinite(p.echoDelayMs, 45.0f, 120.0f, 48.0f), std::memory_order_relaxed);
+        echoFeedback_.store(ClampFinite(p.echoFeedback, 0.0f, 0.6f, 0.0f), std::memory_order_relaxed);
+        echoWet_.store(ClampFinite(p.echoWet, 0.0f, 0.4f, 0.0f), std::memory_order_relaxed);
+        doublingAmount_.store(ClampFinite(p.doublingAmount, 0.0f, 0.25f, 0.0f), std::memory_order_relaxed);
+        highPassHz_.store(ClampFinite(p.highPassHz, 70.0f, 100.0f, 80.0f), std::memory_order_relaxed);
         muted_.store(p.muted != 0, std::memory_order_relaxed);
     }
     TsukiVoxNativeStats GetStats()
@@ -311,13 +266,22 @@ public:
         s.outputXRunCount = outputStream_ ? ValueOrZero(outputStream_->getXRunCount()) : 0;
         s.lastStreamError = lastStreamError_.load(std::memory_order_acquire);
         s.latencyErrorCount = latencyErrorCount_.load(); s.fallbackReason = fallbackStage_;
+        s.inputProcessingMode = inputProcessingMode_.load();
+        s.dspPreset = dspPreset_.load();
+        s.dspVersion = VocalDsp::Version;
+        s.callbackOverrunCount = callbackOverrunCount_.load();
         s.actualGain = actualGain_.load(); s.actualInputDrive = actualInputDrive_.load();
         s.actualDistanceGain = actualDistanceGain_.load(); s.actualSafetyGain = actualSafetyGain_.load();
         s.preDspLevel = preDspLevel_.load(); s.postDspLevel = postDspLevel_.load(); s.outputLevel = outputLevel_.load();
         s.compressorReductionDb = compressorReductionDb_.load(); s.limiterReductionDb = limiterReductionDb_.load();
+        s.dspAlgorithmLatencyMs = VocalDsp::AlgorithmLatencyMs;
+        s.callbackCpuLoad = callbackCpuLoad_.load();
+        s.callbackMaxMs = callbackMaxMs_.load();
+        s.callbackAverageMs = callbackAverageMs_.load();
+        s.dryGain = actualDryGain_.load();
+        s.wetGain = actualWetGain_.load();
         s.callbackCount = callbackCount_.load(); s.shortReadCount = shortReadCount_.load(); s.frameMismatchCount = frameMismatchCount_.load();
         s.requestedInputFrameCount = requestedInputFrameCount_.load(); s.receivedInputFrameCount = receivedInputFrameCount_.load();
-        UpdateObservedStartupLatency();
         s.startToFirstInputMs = startToFirstInputMs_.load();
         UpdateLatencyEstimate(s);
         return s;
@@ -325,61 +289,57 @@ public:
 
     int32_t GetLastStreamError() const { return lastStreamError_.load(std::memory_order_acquire); }
 
+    oboe::DataCallbackResult onAudioReady(oboe::AudioStream* stream, void* data, int32_t frames) override
+    {
+        const auto started = NowNanos();
+        const auto result = oboe::FullDuplexStream::onAudioReady(stream, data, frames);
+        if (result == oboe::DataCallbackResult::Stop)
+        {
+            if (lastStreamError_.load() == 0)
+                lastStreamError_.store(lastReadError_ != 0 ? lastReadError_ : static_cast<int32_t>(oboe::Result::ErrorInternal));
+            running_.store(false);
+        }
+        RecordCallbackTiming(started, frames);
+        return result;
+    }
+
+    oboe::ResultWithValue<int32_t> readInput(int32_t frames) override
+    {
+        const auto result = oboe::FullDuplexStream::readInput(frames);
+        lastReadError_ = result ? 0 : static_cast<int32_t>(result.error());
+        return result;
+    }
+
     oboe::DataCallbackResult onBothStreamsReady(const void* inputData, int32_t inFrames, void* outputData, int32_t outFrames) override
     {
-        auto* out = static_cast<float*>(outputData); const auto* in = static_cast<const float*>(inputData);
+        auto* out = static_cast<float*>(outputData);
+        const auto* in = static_cast<const float*>(inputData);
         if (!out || outFrames <= 0) return oboe::DataCallbackResult::Continue;
-        std::fill(out, out + static_cast<size_t>(outFrames) * OutputChannels, 0.0f);
         lastCallbackFrames_.store(outFrames);
         UpdateMinimum(minCallbackFrames_, outFrames); UpdateMaximum(maxCallbackFrames_, outFrames);
         callbackCount_.fetch_add(1); requestedInputFrameCount_.fetch_add(static_cast<uint64_t>(outFrames));
-        const int available = std::max(0, inFrames); receivedInputFrameCount_.fetch_add(static_cast<uint64_t>(std::min(available, outFrames)));
-        if (inFrames < outFrames) shortReadCount_.fetch_add(1);
+        const int available = in ? std::clamp(inFrames, 0, outFrames) : 0;
+        receivedInputFrameCount_.fetch_add(static_cast<uint64_t>(available));
+        if (available < outFrames) shortReadCount_.fetch_add(1);
         if (inFrames != outFrames) frameMismatchCount_.fetch_add(1);
-        if (inFrames > 0) firstValidInputSeen_.store(true, std::memory_order_release);
-        if (!in || muted_.load()) { DecayMeters(); return oboe::DataCallbackResult::Continue; }
-        const int count = std::min({available, outFrames, MaxCallbackFrames});
-        const bool shortRead = count < outFrames;
-        const float parameterSmooth = 1.0f - std::exp(-1.0f / (0.025f * std::max(1, sampleRate_)));
-        float prePeak = 0.0f, postPeak = 0.0f, outputPeak = 0.0f, compReduction = 0.0f, limitReduction = 0.0f;
-        for (int i = 0; i < count; ++i)
-        {
-            SmoothParameters(parameterSmooth);
-            const float source = Sanitize(in[i]);
-            const float cutoff = highPassHz_.load(); const float dt = 1.0f / std::max(1, sampleRate_);
-            const float rc = 1.0f / (2.0f * Pi * cutoff); const float alpha = rc / (rc + dt);
-            const float hp = Sanitize(alpha * (hpOutput_ + source - hpInput_)); hpInput_ = source; hpOutput_ = hp;
-            prePeak = std::max(prePeak, std::fabs(hp));
-            const float driven = Sanitize(hp * smoothGain_ * smoothInputDrive_);
-            const float absDriven = std::fabs(driven);
-            const float attack = 1.0f - std::exp(-1.0f / (0.006f * sampleRate_));
-            const float release = 1.0f - std::exp(-1.0f / (0.120f * sampleRate_));
-            envelope_ += (absDriven - envelope_) * (absDriven > envelope_ ? attack : release); envelope_ = Sanitize(envelope_);
-            const float thresholdDb = Lerp(-8.0f, -20.0f, smoothDynamics_);
-            const float ratio = Lerp(1.1f, 3.2f, smoothDynamics_);
-            const float envDb = 20.0f * std::log10(std::max(envelope_, 1.0e-7f));
-            const float over = envDb - thresholdDb; const float knee = 6.0f; float reductionDb = 0.0f;
-            if (over > knee * 0.5f) reductionDb = over * (1.0f - 1.0f / ratio);
-            else if (over > -knee * 0.5f) { const float x = over + knee * 0.5f; reductionDb = (1.0f - 1.0f / ratio) * x * x / (2.0f * knee); }
-            const float compGain = std::pow(10.0f, -reductionDb / 20.0f);
-            const float makeup = Lerp(1.0f, 1.45f, smoothDynamics_);
-            const float dry = Sanitize(driven * compGain * makeup); postPeak = std::max(postPeak, std::fabs(dry)); compReduction = std::max(compReduction, reductionDb);
-            float wetL, wetR; ProcessReverb(dry, wetL, wetR);
-            const float postGain = smoothDistanceGain_ * smoothSafetyGain_;
-            float mixedL = Sanitize((dry + wetL) * postGain); float mixedR = Sanitize((dry + wetR) * postGain);
-            if (shortRead && count - i <= 32) { const float fade = static_cast<float>(count - i) / std::min(32, count); mixedL *= fade; mixedR *= fade; }
-            const float ceiling = Lerp(0.96f, 0.90f, smoothDynamics_);
-            const float limitedL = SoftLimit(mixedL, ceiling); const float limitedR = SoftLimit(mixedR, ceiling);
-            const float mixedPeak = std::max(std::fabs(mixedL), std::fabs(mixedR)); const float limitedPeak = std::max(std::fabs(limitedL), std::fabs(limitedR));
-            if (mixedPeak > 1.0e-7f) limitReduction = std::max(limitReduction, -20.0f * std::log10(std::max(limitedPeak / mixedPeak, 1.0e-7f)));
-            outputPeak = std::max(outputPeak, limitedPeak); out[i * 2] = limitedL; out[i * 2 + 1] = limitedR;
-        }
-        SmoothMeter(preDspLevel_, prePeak); SmoothMeter(postDspLevel_, postPeak); SmoothMeter(outputLevel_, outputPeak);
-        compressorReductionDb_.store(compReduction); limiterReductionDb_.store(limitReduction);
-        actualGain_.store(smoothGain_); actualInputDrive_.store(smoothInputDrive_); actualDistanceGain_.store(smoothDistanceGain_); actualSafetyGain_.store(smoothSafetyGain_);
+        if (available > 0 && startToFirstInputMs_.load() < 0)
+            startToFirstInputMs_.store(static_cast<float>((NowNanos() - streamStartNanos_) / 1000000.0));
+        const auto meters = dsp_.Process(in, available, out, outFrames, ReadDspParameters());
+        SmoothMeter(preDspLevel_, meters.pre); SmoothMeter(postDspLevel_, meters.post);
+        SmoothMeter(outputLevel_, meters.output);
+        compressorReductionDb_.store(meters.compressionDb); limiterReductionDb_.store(meters.limiterDb);
+        const auto& smooth = dsp_.Smoothed();
+        actualGain_.store(smooth.gain); actualInputDrive_.store(smooth.inputDrive);
+        actualDistanceGain_.store(smooth.distanceGain); actualSafetyGain_.store(smooth.safetyGain);
+        actualDryGain_.store(dsp_.DryGain()); actualWetGain_.store(dsp_.WetGain());
         return oboe::DataCallbackResult::Continue;
     }
-    bool onError(oboe::AudioStream*, oboe::Result error) override { SetError(error); running_.store(false); return false; }
+
+    bool onError(oboe::AudioStream*, oboe::Result error) override
+    {
+        // Unity's main thread owns stop/close/reopen; Oboe must not close underneath GetStats.
+        SetError(error); running_.store(false); return true;
+    }
 
 private:
     static bool IsMMapUsed(oboe::AudioStream* stream)
@@ -400,14 +360,25 @@ private:
         while (value > current && !target.compare_exchange_weak(current, value, std::memory_order_relaxed)) {}
     }
 
-    void UpdateObservedStartupLatency()
+    void RecordCallbackTiming(int64_t callbackStartNanos, int32_t frames)
     {
-        if (!firstValidInputSeen_.load(std::memory_order_acquire) || startToFirstInputMs_.load() >= 0.0f || streamStartNanos_ <= 0)
+        if (callbackStartNanos <= 0 || frames <= 0 || sampleRate_ <= 0)
         {
             return;
         }
-        const auto elapsedMs = static_cast<float>((NowNanos() - streamStartNanos_) / 1000000.0);
-        startToFirstInputMs_.store(std::max(0.0f, elapsedMs));
+        const float elapsedMs = static_cast<float>((NowNanos() - callbackStartNanos) / 1000000.0);
+        const float budgetMs = static_cast<float>(frames) * 1000.0f / static_cast<float>(sampleRate_);
+        const float load = budgetMs > 0.0f ? elapsedMs / budgetMs : 0.0f;
+        callbackCpuLoad_.store(callbackCpuLoad_.load(std::memory_order_relaxed) * 0.9f + load * 0.1f, std::memory_order_relaxed);
+        auto previousMax = callbackMaxMs_.load(std::memory_order_relaxed);
+        while (elapsedMs > previousMax && !callbackMaxMs_.compare_exchange_weak(previousMax, elapsedMs, std::memory_order_relaxed)) {}
+        timingCount_ += 1;
+        timingTotalMs_ += elapsedMs;
+        callbackAverageMs_.store(static_cast<float>(timingTotalMs_ / timingCount_));
+        if (load > 1.0f)
+        {
+            callbackOverrunCount_.fetch_add(1, std::memory_order_relaxed);
+        }
     }
 
     void UpdateLatencyEstimate(TsukiVoxNativeStats& stats)
@@ -442,7 +413,7 @@ private:
         if (result == oboe::Result::OK)
         {
             resolvedProfile_ = config.resolvedProfile;
-            fallbackStage_ = fallbackStage;
+            fallbackStage_ = inputPreset_ != static_cast<int32_t>(config.inputPreset) ? GenericInputFallback : fallbackStage;
         }
         else
         {
@@ -460,9 +431,12 @@ private:
     {
         oboe::AudioStreamBuilder output;
         output.setDirection(oboe::Direction::Output)->setPerformanceMode(oboe::PerformanceMode::LowLatency)->setSharingMode(sharing)
+            ->setAudioApi(oboe::AudioApi::AAudio)->setSampleRate(48000)
             ->setFormat(oboe::AudioFormat::Float)->setChannelCount(OutputChannels)->setUsage(oboe::Usage::Media)
             ->setContentType(oboe::ContentType::Music)->setDataCallback(this)->setErrorCallback(this);
         auto result = output.openStream(outputStream_); if (result != oboe::Result::OK) return result;
+        if (outputStream_->getSampleRate() != 48000 || outputStream_->getFormat() != oboe::AudioFormat::Float ||
+            outputStream_->getChannelCount() != OutputChannels) return oboe::Result::ErrorInvalidFormat;
         sampleRate_ = outputStream_->getSampleRate(); outputFramesPerBurst_ = std::max(1, outputStream_->getFramesPerBurst());
         outputCapacityFrames_ = outputStream_->getBufferCapacityInFrames();
         requestedOutputBufferFrames_ = outputFramesPerBurst_ * std::max(1, config.outputBufferBursts);
@@ -475,9 +449,12 @@ private:
         const int requestedInputCapacity = std::max(outputFramesPerBurst_ * std::max(2, config.inputBufferBursts), outputCapacityFrames_ * 2);
         oboe::AudioStreamBuilder input;
         input.setDirection(oboe::Direction::Input)->setPerformanceMode(oboe::PerformanceMode::LowLatency)->setSharingMode(sharing)
+            ->setAudioApi(oboe::AudioApi::AAudio)
             ->setFormat(oboe::AudioFormat::Float)->setChannelCount(InputChannels)->setSampleRate(sampleRate_)
             ->setBufferCapacityInFrames(requestedInputCapacity)->setInputPreset(config.inputPreset);
         result = input.openStream(inputStream_); if (result != oboe::Result::OK) return result;
+        if (inputStream_->getSampleRate() != sampleRate_ || inputStream_->getFormat() != oboe::AudioFormat::Float ||
+            inputStream_->getChannelCount() != InputChannels) return oboe::Result::ErrorInvalidFormat;
         inputPreset_ = static_cast<int32_t>(inputStream_->getInputPreset());
         inputFramesPerBurst_ = std::max(1, inputStream_->getFramesPerBurst());
         inputCapacityFrames_ = inputStream_->getBufferCapacityInFrames();
@@ -492,60 +469,52 @@ private:
         setInputStream(inputStream_.get()); setOutputStream(outputStream_.get());
         setNumInputBurstsCushion(inputBurstsCushion_); return oboe::Result::OK;
     }
-    void ProcessReverb(float dry, float& wetL, float& wetR)
+    TsukiVoxNativeParameters ReadDspParameters() const
     {
-        const int sr = std::max(1, sampleRate_); const float a = smoothAmbience_; const float e = smoothEcho_;
-        early_.Write(dry); const float earlyL = early_.Read(static_cast<int>(sr * 0.013f)) * 0.42f + early_.Read(static_cast<int>(sr * 0.029f)) * 0.24f;
-        const float earlyR = early_.Read(static_cast<int>(sr * 0.019f)) * 0.38f + early_.Read(static_cast<int>(sr * 0.037f)) * 0.26f;
-        echoDelay_.Write(dry); const int echoFrames = static_cast<int>(sr * Lerp(0.052f, 0.118f, e)); const float echoTap = echoDelay_.Read(echoFrames);
-        const float feedback = Lerp(0.34f, 0.56f, a); const float damping = Lerp(0.62f, 0.45f, a);
-        const float excitation = dry * (0.14f + 0.12f * a);
-        float revL = combL_[0].ProcessComb(excitation, static_cast<int>(sr * 0.0297f), feedback, damping)
-                   + combL_[1].ProcessComb(excitation, static_cast<int>(sr * 0.0371f), feedback * 0.97f, damping)
-                   + combL_[2].ProcessComb(excitation, static_cast<int>(sr * 0.0411f), feedback * 0.95f, damping)
-                   + combL_[3].ProcessComb(excitation, static_cast<int>(sr * 0.0437f), feedback * 0.93f, damping);
-        float revR = combR_[0].ProcessComb(excitation, static_cast<int>(sr * 0.0307f), feedback, damping)
-                   + combR_[1].ProcessComb(excitation, static_cast<int>(sr * 0.0383f), feedback * 0.97f, damping)
-                   + combR_[2].ProcessComb(excitation, static_cast<int>(sr * 0.0422f), feedback * 0.95f, damping)
-                   + combR_[3].ProcessComb(excitation, static_cast<int>(sr * 0.0451f), feedback * 0.93f, damping);
-        revL *= 0.25f; revR *= 0.25f;
-        revL = allpassL_[1].ProcessAllpass(allpassL_[0].ProcessAllpass(revL, static_cast<int>(sr * 0.0050f), 0.5f), static_cast<int>(sr * 0.0017f), 0.5f);
-        revR = allpassR_[1].ProcessAllpass(allpassR_[0].ProcessAllpass(revR, static_cast<int>(sr * 0.0053f), 0.5f), static_cast<int>(sr * 0.0019f), 0.5f);
-        const float ambienceWet = a * 0.48f; const float echoWet = e * 0.22f;
-        wetL = Sanitize(revL * ambienceWet + earlyL * (0.10f + 0.18f * e) + echoTap * echoWet);
-        wetR = Sanitize(revR * ambienceWet + earlyR * (0.10f + 0.18f * e) + echoTap * echoWet * 0.92f);
+        TsukiVoxNativeParameters p{};
+        p.gain = gain_.load(std::memory_order_relaxed);
+        p.inputDrive = inputDrive_.load(std::memory_order_relaxed);
+        p.distanceGain = distanceGain_.load(std::memory_order_relaxed);
+        p.safetyGain = safetyGain_.load(std::memory_order_relaxed);
+        p.ambience = ambience_.load(std::memory_order_relaxed);
+        p.echo = echo_.load(std::memory_order_relaxed);
+        p.dynamics = dynamics_.load(std::memory_order_relaxed);
+        p.highPassHz = highPassHz_.load(std::memory_order_relaxed);
+        p.dryGain = dryGain_.load(std::memory_order_relaxed);
+        p.reverbSend = reverbSend_.load(std::memory_order_relaxed);
+        p.reverbPreDelayMs = reverbPreDelayMs_.load(std::memory_order_relaxed);
+        p.reverbDecay = reverbDecay_.load(std::memory_order_relaxed);
+        p.reverbWidth = reverbWidth_.load(std::memory_order_relaxed);
+        p.echoDelayMs = echoDelayMs_.load(std::memory_order_relaxed);
+        p.echoFeedback = echoFeedback_.load(std::memory_order_relaxed);
+        p.echoWet = echoWet_.load(std::memory_order_relaxed);
+        p.doublingAmount = doublingAmount_.load(std::memory_order_relaxed);
+        p.dspPreset = dspPreset_.load(std::memory_order_relaxed);
+        p.inputProcessingMode = inputProcessingMode_.load(std::memory_order_relaxed);
+        p.muted = muted_.load(std::memory_order_relaxed);
+        return p;
     }
-    void SmoothParameters(float k)
+    static void SmoothMeter(std::atomic<float>& meter, float peak)
     {
-        smoothGain_ += (gain_.load() - smoothGain_) * k; smoothInputDrive_ += (inputDrive_.load() - smoothInputDrive_) * k;
-        smoothDistanceGain_ += (distanceGain_.load() - smoothDistanceGain_) * k; smoothSafetyGain_ += (safetyGain_.load() - smoothSafetyGain_) * k;
-        smoothAmbience_ += (ambience_.load() - smoothAmbience_) * k; smoothEcho_ += (echo_.load() - smoothEcho_) * k; smoothDynamics_ += (dynamics_.load() - smoothDynamics_) * k;
-    }
-    static float SoftLimit(float v, float ceiling)
-    {
-        if (!std::isfinite(v)) return 0.0f; const float a = std::fabs(v); if (a <= ceiling) return v;
-        const float headroom = std::max(0.001f, 0.999f - ceiling); return std::copysign(std::min(0.999f, ceiling + headroom * std::tanh((a - ceiling) / headroom)), v);
-    }
-    static void SmoothMeter(std::atomic<float>& m, float peak) { m.store(m.load() * 0.82f + std::min(8.0f, peak) * 0.18f); }
-    void DecayMeters() { preDspLevel_.store(preDspLevel_.load() * 0.92f); postDspLevel_.store(postDspLevel_.load() * 0.92f); outputLevel_.store(outputLevel_.load() * 0.92f); }
-    void ResetDsp()
-    {
-        early_.Reset(); echoDelay_.Reset(); for (auto& d : combL_) d.Reset(); for (auto& d : combR_) d.Reset(); for (auto& d : allpassL_) d.Reset(); for (auto& d : allpassR_) d.Reset();
-        hpInput_ = hpOutput_ = envelope_ = 0.0f; smoothGain_ = gain_.load(); smoothInputDrive_ = inputDrive_.load(); smoothDistanceGain_ = distanceGain_.load(); smoothSafetyGain_ = safetyGain_.load(); smoothAmbience_ = ambience_.load(); smoothEcho_ = echo_.load(); smoothDynamics_ = dynamics_.load();
+        meter.store(meter.load() * 0.82f + std::min(8.0f, peak) * 0.18f);
     }
     void ResetStats()
     {
         callbackCount_.store(0); shortReadCount_.store(0); frameMismatchCount_.store(0); requestedInputFrameCount_.store(0); receivedInputFrameCount_.store(0);
         preDspLevel_.store(0); postDspLevel_.store(0); outputLevel_.store(0); compressorReductionDb_.store(0); limiterReductionDb_.store(0); lastStreamError_.store(0);
         lastCallbackFrames_.store(0); minCallbackFrames_.store(MaxCallbackFrames); maxCallbackFrames_.store(0);
-        latencyErrorCount_.store(0); firstValidInputSeen_.store(false); startToFirstInputMs_.store(-1.0f); streamStartNanos_ = 0;
+        lastReadError_ = 0;
+        latencyErrorCount_.store(0); startToFirstInputMs_.store(-1.0f); streamStartNanos_ = 0;
+        callbackOverrunCount_.store(0); callbackCpuLoad_.store(0.0f); callbackMaxMs_.store(0.0f); callbackAverageMs_.store(0.0f); timingCount_ = 0; timingTotalMs_ = 0; actualDryGain_.store(1.0f); actualWetGain_.store(0.0f);
     }
     void CloseOwnedStreams()
     {
-        setInputStream(nullptr); setOutputStream(nullptr);
-        if (inputStream_) { inputStream_->requestStop(); inputStream_->close(); inputStream_.reset(); }
+        // Close/join output callbacks before releasing the input or DSP state.
         if (outputStream_) { outputStream_->requestStop(); outputStream_->close(); outputStream_.reset(); }
+        if (inputStream_) { inputStream_->requestStop(); inputStream_->close(); inputStream_.reset(); }
+        setInputStream(nullptr); setOutputStream(nullptr);
     }
+
     void SetError(oboe::Result r) { lastStreamError_.store(static_cast<int32_t>(r), std::memory_order_release); }
 
     std::shared_ptr<oboe::AudioStream> inputStream_, outputStream_;
@@ -555,15 +524,18 @@ private:
     int32_t inputCapacityFrames_ = 0, outputCapacityFrames_ = 0, inputBurstsCushion_ = 0;
     int32_t requestedInputBufferFrames_ = 0, requestedOutputBufferFrames_ = 0;
     int64_t streamStartNanos_ = 0;
-    Delay<8192> early_; Delay<16384> echoDelay_; std::array<Delay<4096>, 4> combL_, combR_; std::array<Delay<1024>, 2> allpassL_, allpassR_;
-    float hpInput_ = 0, hpOutput_ = 0, envelope_ = 0;
-    float smoothGain_ = 1, smoothInputDrive_ = 1, smoothDistanceGain_ = 1, smoothSafetyGain_ = 1, smoothAmbience_ = 0, smoothEcho_ = 0, smoothDynamics_ = 0;
+    VocalDsp dsp_;
+    int32_t lastReadError_ = 0;
+    uint64_t timingCount_ = 0;
+    double timingTotalMs_ = 0;
     std::atomic<float> gain_{1}, inputDrive_{1}, distanceGain_{1}, safetyGain_{1}, ambience_{0}, echo_{0}, dynamics_{0}, highPassHz_{90};
+    std::atomic<float> dryGain_{1}, reverbSend_{0}, reverbPreDelayMs_{0}, reverbDecay_{0.9f}, reverbWidth_{0}, echoDelayMs_{48}, echoFeedback_{0}, echoWet_{0}, doublingAmount_{0};
+    std::atomic<int32_t> inputProcessingMode_{9}, dspPreset_{1};
     std::atomic<bool> muted_{false}, running_{false};
     std::atomic<float> actualGain_{1}, actualInputDrive_{1}, actualDistanceGain_{1}, actualSafetyGain_{1}, preDspLevel_{0}, postDspLevel_{0}, outputLevel_{0}, compressorReductionDb_{0}, limiterReductionDb_{0};
+    std::atomic<float> actualDryGain_{1}, actualWetGain_{0}, callbackAverageMs_{0}, callbackCpuLoad_{0}, callbackMaxMs_{0};
     std::atomic<float> startToFirstInputMs_{-1.0f};
-    std::atomic<bool> firstValidInputSeen_{false};
-    std::atomic<int32_t> lastStreamError_{0}, latencyErrorCount_{0};
+    std::atomic<int32_t> lastStreamError_{0}, latencyErrorCount_{0}, callbackOverrunCount_{0};
     std::atomic<int32_t> lastCallbackFrames_{0}, minCallbackFrames_{MaxCallbackFrames}, maxCallbackFrames_{0};
     std::atomic<uint64_t> callbackCount_{0}, shortReadCount_{0}, frameMismatchCount_{0}, requestedInputFrameCount_{0}, receivedInputFrameCount_{0};
 };
@@ -571,7 +543,7 @@ private:
 OboeMonitor& Monitor() { static OboeMonitor monitor; return monitor; }
 bool CopyParameters(const TsukiVoxNativeParameters* source, uint32_t size, TsukiVoxNativeParameters& destination)
 {
-    if (!source || size < sizeof(TsukiVoxNativeParameters) || source->size < sizeof(TsukiVoxNativeParameters) || source->version != ApiVersion) return false;
+    if (!ValidHeader(source, size, sizeof(TsukiVoxNativeParameters))) return false;
     destination = {}; std::memcpy(&destination, source, sizeof(destination)); destination.size = sizeof(destination); return true;
 }
 }
@@ -579,14 +551,14 @@ bool CopyParameters(const TsukiVoxNativeParameters* source, uint32_t size, Tsuki
 extern "C"
 {
 int TsukiVoxAudio_GetApiVersion() { return ApiVersion; }
-int TsukiVoxAudio_StartV4(const TsukiVoxNativeParameters* p, uint32_t size) { TsukiVoxNativeParameters safe{}; return CopyParameters(p, size, safe) && Monitor().Start(safe) ? NativeSuccess : NativeFailure; }
-int TsukiVoxAudio_SetParametersV4(const TsukiVoxNativeParameters* p, uint32_t size) { TsukiVoxNativeParameters safe{}; return CopyParameters(p, size, safe) && Monitor().SetParameters(safe) ? NativeSuccess : NativeFailure; }
+int TsukiVoxAudio_StartV5(const TsukiVoxNativeParameters* p, uint32_t size) { TsukiVoxNativeParameters safe{}; return CopyParameters(p, size, safe) && Monitor().Start(safe) ? NativeSuccess : NativeFailure; }
+int TsukiVoxAudio_SetParametersV5(const TsukiVoxNativeParameters* p, uint32_t size) { TsukiVoxNativeParameters safe{}; return CopyParameters(p, size, safe) && Monitor().SetParameters(safe) ? NativeSuccess : NativeFailure; }
 void TsukiVoxAudio_Stop() { Monitor().Stop(); }
-int TsukiVoxAudio_GetStatsV4(void* destination, uint32_t size)
+int TsukiVoxAudio_GetStatsV5(void* destination, uint32_t size)
 {
-    if (!destination || size < 8) return NativeFailure; auto stats = Monitor().GetStats();
-    uint32_t requestedVersion = 0; std::memcpy(&requestedVersion, static_cast<uint8_t*>(destination) + sizeof(uint32_t), sizeof(requestedVersion));
-    if (requestedVersion != ApiVersion) return NativeFailure; std::memcpy(destination, &stats, std::min<size_t>(size, sizeof(stats))); return NativeSuccess;
+    if (!ValidHeader(destination, size, sizeof(TsukiVoxNativeStats))) return NativeFailure;
+    const auto stats = Monitor().GetStats();
+    std::memcpy(destination, &stats, sizeof(stats)); return NativeSuccess;
 }
 const char* TsukiVoxAudio_GetLastError()
 {

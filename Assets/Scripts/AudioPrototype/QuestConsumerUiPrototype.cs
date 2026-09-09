@@ -356,6 +356,16 @@ namespace TsukiVox.AudioPrototype
         private TMP_Text diagnosticsHealthText;
         private TMP_Text diagnosticsRequestModeText;
         private TMP_Text diagnosticsVideoText;
+        private RectTransform diagnosticsMainRoot;
+        private RectTransform nativeAudioDetailsRoot;
+        private Button nativeAudioDetailsButton;
+        private Button nativeInputModeButton;
+        private Button nativeBufferButton;
+        private Button nativeDetailsPageButton;
+        private Button nativeCopyButton;
+        private TMP_Text nativeDetailsText;
+        private bool nativeAudioDetailsVisible;
+        private bool nativeParametersPage;
         private TMP_Text rawDiagnosticsText;
         private Button clearMediaCacheButton;
         private TMP_Text clearMediaCacheButtonText;
@@ -1696,21 +1706,31 @@ namespace TsukiVox.AudioPrototype
             CreateText(debugDrawer, "Title", "诊断与支持", 26, FontStyle.Bold, new Vector2(-130f, 248f), new Vector2(310f, 46f), TextAnchor.MiddleLeft, TextPrimary);
             closeDiagnosticsButton = CreateIconButton(debugDrawer, "Close", QuestUiIconKind.Close, new Vector2(250f, 250f), new Vector2(52f, 52f), Surface, TextPrimary, out _);
 
-            diagnosticsHealthText = CreateText(debugDrawer, "Health", "应用正常 · 音频正常 · 视频正常", 18, FontStyle.Bold, new Vector2(0f, 174f), new Vector2(548f, 52f), TextAnchor.MiddleLeft, TextPrimary);
-            CreateDivider(debugDrawer, "Health Divider", new Vector2(0f, 138f), new Vector2(548f, 1f));
-            diagnosticsRequestModeText = CreateText(debugDrawer, "Request Mode", "点歌方式：直接请求", 16, FontStyle.Normal, new Vector2(0f, 104f), new Vector2(548f, 44f), TextAnchor.MiddleLeft, TextSecondary);
-            CreateDivider(debugDrawer, "Request Mode Divider", new Vector2(0f, 70f), new Vector2(548f, 1f));
+            diagnosticsMainRoot = EnsureRect(debugDrawer, "General Details", Vector2.zero, new Vector2(620f, 560f));
+            for (var index = debugDrawer.childCount - 1; index >= 0; index -= 1)
+            {
+                var child = debugDrawer.GetChild(index);
+                if (child == diagnosticsMainRoot || child.name == "Title" || child.name == "Close" ||
+                    child.name == "Header Divider" || child.name == "Audio Details" ||
+                    child.name == "Audio Details Toggle") continue;
+                child.SetParent(diagnosticsMainRoot, false);
+            }
 
-            SetChildActive(debugDrawer, "Video Debug Label", false);
-            SetChildActive(debugDrawer, "Video Debug Switch", false);
-            diagnosticsVideoText = CreateText(debugDrawer, "Video Status", "视频状态：待机", 16, FontStyle.Normal, new Vector2(0f, 34f), new Vector2(548f, 62f), TextAnchor.MiddleLeft, TextSecondary);
-            CreateDivider(debugDrawer, "Video Divider", new Vector2(0f, -3f), new Vector2(548f, 1f));
+            diagnosticsHealthText = CreateText(diagnosticsMainRoot, "Health", "应用正常 · 音频正常 · 视频正常", 16, FontStyle.Bold, new Vector2(-94f, 174f), new Vector2(360f, 52f), TextAnchor.MiddleLeft, TextPrimary);
+            CreateDivider(diagnosticsMainRoot, "Health Divider", new Vector2(0f, 138f), new Vector2(548f, 1f));
+            diagnosticsRequestModeText = CreateText(diagnosticsMainRoot, "Request Mode", "点歌方式：直接请求", 16, FontStyle.Normal, new Vector2(0f, 104f), new Vector2(548f, 44f), TextAnchor.MiddleLeft, TextSecondary);
+            CreateDivider(diagnosticsMainRoot, "Request Mode Divider", new Vector2(0f, 70f), new Vector2(548f, 1f));
 
-            rawDetailsButton = CreateSurfaceButton(debugDrawer, "Raw Details Toggle", new Vector2(0f, -36f), new Vector2(548f, 44f), Color.clear, Color.clear);
+            SetChildActive(diagnosticsMainRoot, "Video Debug Label", false);
+            SetChildActive(diagnosticsMainRoot, "Video Debug Switch", false);
+            diagnosticsVideoText = CreateText(diagnosticsMainRoot, "Video Status", "视频状态：待机", 16, FontStyle.Normal, new Vector2(0f, 34f), new Vector2(548f, 62f), TextAnchor.MiddleLeft, TextSecondary);
+            CreateDivider(diagnosticsMainRoot, "Video Divider", new Vector2(0f, -3f), new Vector2(548f, 1f));
+
+            rawDetailsButton = CreateSurfaceButton(diagnosticsMainRoot, "Raw Details Toggle", new Vector2(0f, -36f), new Vector2(548f, 44f), Color.clear, Color.clear);
             rawDetailsButtonText = CreateText(rawDetailsButton.transform, "Title", "展开原始详情", 17, FontStyle.Bold, new Vector2(-112f, 0f), new Vector2(310f, 36f), TextAnchor.MiddleLeft, TextPrimary);
             EnsureIcon(rawDetailsButton.transform, "Chevron", QuestUiIconKind.ChevronRight, new Vector2(250f, 0f), new Vector2(20f, 20f), TextSecondary);
 
-            rawDetailsRoot = EnsureRect(debugDrawer, "Raw Details", new Vector2(0f, -124f), new Vector2(548f, 122f));
+            rawDetailsRoot = EnsureRect(diagnosticsMainRoot, "Raw Details", new Vector2(0f, -124f), new Vector2(548f, 122f));
             EnsureSurface(rawDetailsRoot, palette.RawDetailsSurface, 6f, false);
             rawDiagnosticsText = CreateText(rawDetailsRoot, "Text", string.Empty, 10, FontStyle.Normal, new Vector2(0f, 4f), new Vector2(510f, 104f), TextAnchor.UpperLeft, TextSecondary);
             rawDiagnosticsText.textWrappingMode = TextWrappingModes.Normal;
@@ -1719,17 +1739,33 @@ namespace TsukiVox.AudioPrototype
             SetChildActive(rawDetailsRoot, "Next Native Profile", false);
             SetChildActive(rawDetailsRoot, "Native Profile", false);
 
-            clearMediaCacheButton = CreateSurfaceButton(debugDrawer, "Clear Media Cache", new Vector2(-141f, -208f), new Vector2(266f, 38f), Surface, Line);
+            clearMediaCacheButton = CreateSurfaceButton(diagnosticsMainRoot, "Clear Media Cache", new Vector2(-141f, -208f), new Vector2(266f, 38f), Surface, Line);
             clearMediaCacheIcon = EnsureIcon(clearMediaCacheButton.transform, "Icon", QuestUiIconKind.Trash, new Vector2(-103f, 0f), new Vector2(20f, 20f), Danger);
             clearMediaCacheButtonText = CreateText(clearMediaCacheButton.transform, "Label", "清除媒体缓存", 15, FontStyle.Bold, new Vector2(16f, 0f), new Vector2(210f, 32f), TextAnchor.MiddleCenter, Danger);
 
-            restoreDefaultSettingsButton = CreateSurfaceButton(debugDrawer, "Restore Default Settings", new Vector2(141f, -208f), new Vector2(266f, 38f), Surface, Line);
+            restoreDefaultSettingsButton = CreateSurfaceButton(diagnosticsMainRoot, "Restore Default Settings", new Vector2(141f, -208f), new Vector2(266f, 38f), Surface, Line);
             restoreDefaultSettingsIcon = EnsureIcon(restoreDefaultSettingsButton.transform, "Icon", QuestUiIconKind.Replay, new Vector2(-103f, 0f), new Vector2(20f, 20f), Warm);
             restoreDefaultSettingsButtonText = CreateText(restoreDefaultSettingsButton.transform, "Label", "恢复全部默认设置", 15, FontStyle.Bold, new Vector2(16f, 0f), new Vector2(210f, 32f), TextAnchor.MiddleCenter, TextPrimary);
 
-            copyDiagnosticsButton = CreateTextButton(debugDrawer, "Copy Complete Diagnostics", "复制完整诊断信息", new Vector2(0f, -254f), new Vector2(548f, 34f), palette.DiagnosticsActionSurface, AccentStrong);
+            copyDiagnosticsButton = CreateTextButton(diagnosticsMainRoot, "Copy Complete Diagnostics", "复制完整诊断信息", new Vector2(0f, -254f), new Vector2(548f, 34f), palette.DiagnosticsActionSurface, AccentStrong);
             copyDiagnosticsButton.GetComponentInChildren<TMP_Text>(true).fontSize = 16f;
             EnsureIcon(copyDiagnosticsButton.transform, "Icon", QuestUiIconKind.Copy, new Vector2(-160f, 0f), new Vector2(20f, 20f), AccentStrong);
+
+            nativeAudioDetailsButton = CreateTextButton(debugDrawer, "Audio Details Toggle", "音频调试",
+                new Vector2(198f, 174f), new Vector2(152f, 44f), Surface, AccentStrong);
+            nativeAudioDetailsRoot = EnsureRect(debugDrawer, "Audio Details", Vector2.zero, new Vector2(620f, 560f));
+            nativeInputModeButton = CreateTextButton(nativeAudioDetailsRoot, "Input Mode", "输入：Natural",
+                new Vector2(0f, 112f), new Vector2(548f, 44f), Surface, AccentStrong);
+            nativeBufferButton = CreateTextButton(nativeAudioDetailsRoot, "Buffer Profile", "缓冲：主配置",
+                new Vector2(0f, 58f), new Vector2(548f, 44f), Surface, AccentStrong);
+            nativeDetailsText = CreateText(nativeAudioDetailsRoot, "Details", string.Empty, 16, FontStyle.Normal,
+                new Vector2(0f, -72f), new Vector2(548f, 200f), TextAnchor.UpperLeft, TextSecondary);
+            nativeDetailsText.overflowMode = TextOverflowModes.Truncate;
+            nativeDetailsPageButton = CreateTextButton(nativeAudioDetailsRoot, "Details Page", "查看效果参数",
+                new Vector2(0f, -208f), new Vector2(548f, 38f), Surface, AccentStrong);
+            nativeCopyButton = CreateTextButton(nativeAudioDetailsRoot, "Copy Audio Diagnostics", "复制完整诊断信息",
+                new Vector2(0f, -254f), new Vector2(548f, 34f), palette.DiagnosticsActionSurface, AccentStrong);
+            SetNativeAudioDetailsVisible(false);
 
             debugScrim.SetAsLastSibling();
             debugDrawer.SetAsLastSibling();
@@ -1941,6 +1977,31 @@ namespace TsukiVox.AudioPrototype
             WireButton(closeDiagnosticsButton, () => SetDebugDrawerVisible(false));
             WireButton(debugScrimButton, () => SetDebugDrawerVisible(false));
             WireButton(rawDetailsButton, ToggleRawDetails);
+            WireButton(nativeAudioDetailsButton, () => SetNativeAudioDetailsVisible(!nativeAudioDetailsVisible));
+            WireButton(nativeInputModeButton, () =>
+            {
+                if (audioPrototype == null) return;
+                var modes = new[] { NativeInputProcessingMode.Natural, NativeInputProcessingMode.VoiceRecognition,
+                    NativeInputProcessingMode.VoicePerformance, NativeInputProcessingMode.Generic };
+                var index = Array.IndexOf(modes, audioPrototype.NativeInputMode);
+                audioPrototype.SetNativeInputMode(modes[(index + 1) % modes.Length]);
+                RefreshDiagnostics();
+            });
+            WireButton(nativeBufferButton, () =>
+            {
+                if (audioPrototype == null) return;
+                var profiles = new[] { NativeMonitorProfile.Production, NativeMonitorProfile.BaselineGenericCushion1,
+                    NativeMonitorProfile.VoicePerformanceCushion0Output1 };
+                var index = Array.IndexOf(profiles, audioPrototype.NativeMonitorProfile);
+                audioPrototype.SetNativeMonitorProfile(profiles[(index + 1) % profiles.Length]);
+                RefreshDiagnostics();
+            });
+            WireButton(nativeDetailsPageButton, () =>
+            {
+                nativeParametersPage = !nativeParametersPage;
+                RefreshDiagnostics();
+            });
+            WireButton(nativeCopyButton, () => appShellPrototype?.CopyCompleteDebugInfoToClipboard());
             WireButton(clearMediaCacheButton, HandleClearMediaCache);
             WireButton(restoreDefaultSettingsButton, HandleRestoreDefaultSettings);
             WireButton(copyDiagnosticsButton, () => appShellPrototype?.CopyCompleteDebugInfoToClipboard());
@@ -2806,6 +2867,7 @@ namespace TsukiVox.AudioPrototype
 
             RefreshMaintenanceButtons(clearConfirmationActive, restoreConfirmationActive);
 
+            RefreshNativeAudioDetails();
             var nativeStats = audioPrototype?.NativeStats ?? default;
             var latencySummary = audioPrototype?.NativeRoundTripLatencySummary ?? NativeLatencySummary.Unavailable;
             rawDiagnosticsText.text =
@@ -2820,6 +2882,48 @@ namespace TsukiVox.AudioPrototype
                     ? string.Empty
                     : $"\n存储操作  {SingleLine(lastMaintenanceDetails)}");
 
+        }
+
+        private void SetNativeAudioDetailsVisible(bool visible)
+        {
+            nativeAudioDetailsVisible = visible;
+            diagnosticsMainRoot.gameObject.SetActive(!visible);
+            nativeAudioDetailsRoot.gameObject.SetActive(visible);
+            nativeAudioDetailsButton.GetComponentInChildren<TMP_Text>(true).text = visible ? "返回诊断" : "音频调试";
+            if (visible) RefreshNativeAudioDetails();
+        }
+
+        private void RefreshNativeAudioDetails()
+        {
+            if (nativeDetailsText == null || audioPrototype == null) return;
+            var stats = audioPrototype.NativeStats;
+            var p = audioPrototype.NativeParameters;
+            var config = NativeMonitorProfiles.Resolve(audioPrototype.NativeMonitorProfile);
+            nativeInputModeButton.GetComponentInChildren<TMP_Text>(true).text = $"输入：{audioPrototype.NativeInputMode}  ·  点击切换";
+            nativeBufferButton.GetComponentInChildren<TMP_Text>(true).text =
+                $"缓冲：I{config.InputBufferBursts} / O{config.OutputBufferBursts} / C{config.InputBurstsCushion}" +
+                (config.OutputBufferBursts == 1 ? "  ·  实验配置" : "  ·  点击切换");
+            nativeDetailsPageButton.GetComponentInChildren<TMP_Text>(true).text =
+                nativeParametersPage ? "查看流与稳定性" : "查看效果参数";
+            nativeDetailsText.text = nativeParametersPage
+                ? $"ABI {NativeAudioAbi.ApiVersion} / 运行 {stats.version} · DSP {stats.dspVersion}\n" +
+                  $"预设 {(NativeDspPreset)p.dspPreset} · dynamics {p.dynamics:0.00}\n" +
+                  $"dry / room {p.dryGain:0.00} / {p.reverbSend:0.00}\n" +
+                  $"room pre / decay {p.reverbPreDelayMs:0.0} ms / {p.reverbDecay:0.00} s\n" +
+                  $"width {p.reverbWidth:0.00} · doubling {p.doublingAmount:0.00}\n" +
+                  $"echo {p.echoDelayMs:0.0} ms · fb / wet {p.echoFeedback:0.00} / {p.echoWet:0.00}\n" +
+                  $"算法延迟 {stats.dspAlgorithmLatencyMs:0.00} ms · 直通干声\n" +
+                  $"当前 dry / wet {stats.dryGain:0.00} / {stats.wetGain:0.00}\n" +
+                  $"高通 {p.highPassHz:0} Hz · drive {p.inputDrive:0.00}"
+                : $"{stats.AudioApiName} · {stats.InputPresetName} · {(stats.IsInputExclusive ? "Ex" : "Sh")}/{(stats.IsOutputExclusive ? "Ex" : "Sh")}\n" +
+                  $"MMAP {stats.IsInputMMapUsed}/{stats.IsOutputMMapUsed} · {stats.sampleRate} Hz\n" +
+                  $"burst {stats.inputFramesPerBurst}/{stats.outputFramesPerBurst} · cushion {stats.inputBurstsCushion}\n" +
+                  $"buffer {stats.inputBufferFrames}/{stats.outputBufferFrames} frames\n" +
+                  $"XRun {stats.inputXRunCount}/{stats.outputXRunCount} · short {stats.shortReadCount}\n" +
+                  $"mismatch {stats.frameMismatchCount} · 超时 {stats.callbackOverrunCount}\n" +
+                  $"callback 均 / 最大 {stats.callbackAverageMs:0.00}/{stats.callbackMaxMs:0.00} ms\n" +
+                  $"CPU {stats.callbackCpuLoad:P0} · 重启 {audioPrototype.NativeRestartCount}\n" +
+                  $"平台估算 {FormatLatencySummaryCompact(audioPrototype.NativeRoundTripLatencySummary)}";
         }
 
         private static string FormatLatencySummaryCompact(NativeLatencySummary summary)
@@ -4325,7 +4429,12 @@ namespace TsukiVox.AudioPrototype
             debugDrawer.gameObject.SetActive(visible);
             debugScrimGroup.alpha = visible ? 1f : 0f;
             debugDrawerGroup.alpha = visible ? 1f : 0f;
+            debugDrawerGroup.interactable = visible;
+            debugDrawerGroup.blocksRaycasts = visible;
+            debugScrimGroup.interactable = visible;
+            debugScrimGroup.blocksRaycasts = visible;
             debugDrawer.anchoredPosition = new Vector2(visible ? 250f : 310f, 0f);
+            SetNativeAudioDetailsVisible(false);
             rawDetailsVisible = false;
             rawDetailsRoot.gameObject.SetActive(false);
             rawDetailsButtonText.text = "展开原始详情";

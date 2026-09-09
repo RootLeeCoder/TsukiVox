@@ -336,6 +336,11 @@ namespace TsukiVox.AudioPrototype
                     $"resolved {nativeStats.ResolvedProfile} fallback {nativeStats.FallbackStageName} " +
                     $"configurationFallback {audioPrototype.NativeConfigurationFallbackReason}");
                 debugBuilder.AppendLine(
+                    $"audioNativeDsp ABI {NativeAudioAbi.ApiVersion}/{nativeStats.version} version {nativeStats.dspVersion} preset {nativeStats.dspPreset} " +
+                    $"inputProcessing {nativeStats.inputProcessingMode} callbackOverruns {nativeStats.callbackOverrunCount} " +
+                    $"cpuLoad {nativeStats.callbackCpuLoad:P1} average {nativeStats.callbackAverageMs:0.00}ms max {nativeStats.callbackMaxMs:0.00}ms " +
+                    $"algorithmLatency {nativeStats.dspAlgorithmLatencyMs:0.00}ms dry/wet {nativeStats.dryGain:0.000}/{nativeStats.wetGain:0.000}");
+                debugBuilder.AppendLine(
                     $"audioNativeStreams running {nativeStats.IsRunning} rate {nativeStats.sampleRate} api {nativeStats.AudioApiName} " +
                     $"performance {nativeStats.inputPerformanceMode}/{nativeStats.outputPerformanceMode} " +
                     $"sharing {(nativeStats.IsInputExclusive ? "exclusive" : "shared")}/{(nativeStats.IsOutputExclusive ? "exclusive" : "shared")} " +
@@ -367,6 +372,11 @@ namespace TsukiVox.AudioPrototype
                 debugBuilder.AppendLine(
                     $"audioNativeLatency30s input {FormatLatencySummary(inputLatency)} " +
                     $"output {FormatLatencySummary(outputLatency)} total {FormatLatencySummary(roundTripLatency)}");
+                debugBuilder.AppendLine($"audioNativeRestartCount {audioPrototype.NativeRestartCount}");
+                var parameters = audioPrototype.NativeParameters;
+                debugBuilder.AppendLine($"audioNativeEffectParameters requestedInput {audioPrototype.NativeInputMode} dry {parameters.dryGain:0.000} room {parameters.reverbSend:0.000} " +
+                    $"preDelayMs {parameters.reverbPreDelayMs:0.0} decaySeconds {parameters.reverbDecay:0.00} width {parameters.reverbWidth:0.00} " +
+                    $"echoMs {parameters.echoDelayMs:0.0} feedback {parameters.echoFeedback:0.00} echoWet {parameters.echoWet:0.00} doubling {parameters.doublingAmount:0.00}");
                 debugBuilder.AppendLine($"audioNativeFallbackHistory {audioPrototype.NativeFallbackHistory}");
                 debugBuilder.AppendLine(
                     $"audioNativeGains gain {nativeStats.actualGain:0.000} drive {nativeStats.actualInputDrive:0.000} " +

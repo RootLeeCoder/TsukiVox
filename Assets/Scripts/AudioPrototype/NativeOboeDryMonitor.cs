@@ -30,35 +30,6 @@ namespace TsukiVox.AudioPrototype
         public static int ManagedParameterSize => Marshal.SizeOf<TsukiVoxNativeParameters>();
         public static int ManagedStatsSize => Marshal.SizeOf<TsukiVoxNativeStats>();
 
-        public static TsukiVoxNativeParameters CreateParameters(
-            NativeMonitorProfile profile,
-            bool forceSafeConfiguration,
-            float requestedPreGain,
-            float distanceGain,
-            float safetyGain,
-            float ambience,
-            float echo,
-            float dynamics,
-            bool muted)
-        {
-            return new TsukiVoxNativeParameters
-            {
-                size = (uint)ManagedParameterSize,
-                version = RequiredApiVersion,
-                requestedProfile = (int)NativeMonitorProfiles.Normalize((int)profile),
-                forceSafeConfiguration = forceSafeConfiguration ? 1 : 0,
-                gain = NativeFeedbackSafetyTuning.CalculateOutputGain(requestedPreGain),
-                inputDrive = NativeFeedbackSafetyTuning.CalculateInputDrive(dynamics),
-                distanceGain = distanceGain,
-                safetyGain = safetyGain,
-                ambience = ambience,
-                echo = echo,
-                dynamics = dynamics,
-                muted = muted ? 1 : 0,
-                highPassHz = NativeFeedbackSafetyTuning.CalculateHighPassHz(dynamics),
-            };
-        }
-
         public static bool TryStart(TsukiVoxNativeParameters parameters, out string error)
         {
             error = string.Empty;
@@ -70,7 +41,7 @@ namespace TsukiVox.AudioPrototype
 
             try
             {
-                if (TsukiVoxAudio_StartV4(ref parameters, parameters.size) != 0)
+                if (TsukiVoxAudio_StartV5(ref parameters, parameters.size) != 0)
                 {
                     return true;
                 }
@@ -98,7 +69,7 @@ namespace TsukiVox.AudioPrototype
 
             try
             {
-                return TsukiVoxAudio_SetParametersV4(ref parameters, parameters.size) != 0;
+                return TsukiVoxAudio_SetParametersV5(ref parameters, parameters.size) != 0;
             }
             catch (Exception exception) when (IsInteropException(exception))
             {
@@ -140,7 +111,7 @@ namespace TsukiVox.AudioPrototype
             {
                 stats.size = (uint)ManagedStatsSize;
                 stats.version = RequiredApiVersion;
-                return TsukiVoxAudio_GetStatsV4(ref stats, stats.size) != 0 &&
+                return TsukiVoxAudio_GetStatsV5(ref stats, stats.size) != 0 &&
                        stats.version == RequiredApiVersion &&
                        stats.size == ManagedStatsSize;
             }
@@ -183,7 +154,7 @@ namespace TsukiVox.AudioPrototype
             try
             {
                 var actualVersion = TsukiVoxAudio_GetApiVersion();
-                if (actualVersion == RequiredApiVersion)
+                if (NativeAudioAbi.IsCompatible(actualVersion, ManagedParameterSize, ManagedStatsSize))
                 {
                     return true;
                 }
@@ -233,10 +204,10 @@ namespace TsukiVox.AudioPrototype
 
 #if UNITY_ANDROID && !UNITY_EDITOR
         [DllImport(PluginName)] private static extern int TsukiVoxAudio_GetApiVersion();
-        [DllImport(PluginName)] private static extern int TsukiVoxAudio_StartV4(ref TsukiVoxNativeParameters parameters, uint size);
-        [DllImport(PluginName)] private static extern int TsukiVoxAudio_SetParametersV4(ref TsukiVoxNativeParameters parameters, uint size);
+        [DllImport(PluginName)] private static extern int TsukiVoxAudio_StartV5(ref TsukiVoxNativeParameters parameters, uint size);
+        [DllImport(PluginName)] private static extern int TsukiVoxAudio_SetParametersV5(ref TsukiVoxNativeParameters parameters, uint size);
         [DllImport(PluginName)] private static extern void TsukiVoxAudio_Stop();
-        [DllImport(PluginName)] private static extern int TsukiVoxAudio_GetStatsV4(ref TsukiVoxNativeStats stats, uint size);
+        [DllImport(PluginName)] private static extern int TsukiVoxAudio_GetStatsV5(ref TsukiVoxNativeStats stats, uint size);
         [DllImport(PluginName)] private static extern IntPtr TsukiVoxAudio_GetLastError();
 #endif
     }
